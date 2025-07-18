@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Redirect } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import { ActivityIndicator, View } from "react-native";
+import { View, Image } from "react-native";
 
 export default function Index() {
   const [redirectTo, setRedirectTo] = useState<string | null>(null);
@@ -12,11 +12,13 @@ export default function Index() {
       const ip = await SecureStore.getItemAsync("paired_ip");
       const token = await SecureStore.getItemAsync("token");
 
-      if (ip && token) {
-        setRedirectTo("/(tabs)"); // authenticated area
-      } else {
-        setRedirectTo("/(auth)/pairing"); // pairing or login screen
-      }
+      setTimeout(() => {
+        if (ip && token) {
+          setRedirectTo("/(main)/");
+        } else {
+          setRedirectTo("/(auth)/pairing");
+        }
+      }, 2000);
     };
 
     checkAuth();
@@ -24,8 +26,12 @@ export default function Index() {
 
   if (!redirectTo) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" />
+      <View className="flex-1 justify-center items-center bg-white">
+        <Image
+          source={require("../assets/images/splash-icon.png")}
+          className="w-40 h-40"
+          resizeMode="contain"
+        />
       </View>
     );
   }

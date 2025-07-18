@@ -3,13 +3,13 @@ import * as SecureStore from "expo-secure-store";
 
 // Function to dynamically create an axios instance
 export async function createAPI() {
-  const ip = await SecureStore.getItemAsync("paired_ip"); // get saved IP
+  const ip = await SecureStore.getItemAsync("paired_ip");
   const token = await SecureStore.getItemAsync("token");
 
   if (!ip) throw new Error("No paired IP found.");
 
   const instance = axios.create({
-    baseURL: `http://${ip}:8000`, // use user-saved IP
+    baseURL: `http://${ip}:8000`,
     timeout: 5000,
   });
 

@@ -12,3 +12,15 @@ export async function getToken() {
 export async function logout() {
   await SecureStore.deleteItemAsync("token");
 }
+
+export async function saveUserid(user_id: string) {
+  await SecureStore.setItem("user_id", user_id);
+}
+
+export async function getUserid() {
+  return await SecureStore.getItemAsync("user_id");
+}
+
+export async function deleteUserid() {
+  await SecureStore.deleteItemAsync("user_id");
+}
