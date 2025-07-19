@@ -1,5 +1,5 @@
-// app/(main)/index.tsx
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, Alert } from "react-native";
+import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { logout, getUserid, deleteUserid } from "@/utils/auth";
@@ -30,37 +30,73 @@ const routes = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [username, setUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUsername = async () => {
+      const user = await getUserid();
+      setUsername(user);
+    };
+
+    fetchUsername();
+  }, []);
 
   const handleLogout = async () => {
-    await logout();
-    await clearPairing();
-    await deleteUserid();
-    router.replace("/(auth)/pairing");
+    Alert.alert(
+      "Confirm Logout",
+      "Do you want to Logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            await logout();
+            await clearPairing();
+            await deleteUserid();
+            router.replace("/(auth)/pairing");
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   return (
-    <View className="flex-1 justify-center items-center bg-white px-4">
-      {/* Grid of icons (2 per row) */}
-      <View className="flex-wrap flex-row justify-center gap-4">
-        {routes.map((route, index) => (
+    <View className="flex-1 bg-white px-6 pt-20">
+      {/* Top Welcome Text */}
+      <Text className="text-2xl font-semibold text-gray-800 mb-40">
+        Welcome {username ? username : "User"} 👋
+      </Text>
+
+      {/* 2x2 Grid of Main Buttons */}
+      <View className="flex-row flex-wrap justify-between gap-y-4 mb-8">
+        {routes.map((route) => (
           <Pressable
             key={route.path}
             onPress={() => router.push(route.path)}
-            className="w-32 h-32 items-center justify-center bg-gray-100 rounded-xl"
+            className="w-[47%] h-32 items-center justify-center bg-blue-100 rounded-xl"
           >
             <Ionicons name={route.icon as any} size={32} color="#007AFF" />
-            <Text className="text-sm mt-2 text-center">{route.name}</Text>
+            <Text className="text-sm mt-2 text-center font-medium text-blue-900">
+              {route.name}
+            </Text>
           </Pressable>
         ))}
       </View>
 
-      {/* Logout Button */}
-      <Pressable
-        onPress={handleLogout}
-        className="mt-10 px-6 py-3 bg-red-500 rounded-full"
-      >
-        <Text className="text-white text-base font-semibold">Logout</Text>
-      </Pressable>
+      {/* Logout Button (Square & Centered) */}
+      <View className="items-center">
+        <Pressable
+          onPress={handleLogout}
+          className="w-32 h-32 items-center justify-center bg-red-100 rounded-xl"
+        >
+          <Ionicons name="log-out-outline" size={32} color="#FF3B30" />
+          <Text className="text-sm mt-2 text-center font-medium text-red-600">
+            Logout
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
