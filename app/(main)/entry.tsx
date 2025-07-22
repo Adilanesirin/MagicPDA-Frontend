@@ -1,69 +1,112 @@
-import { View, Text, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  FlatList,
+  TextInput,
+  ScrollView,
+} from "react-native";
 import React, { useEffect, useState } from "react";
 import * as SQLite from "expo-sqlite";
+import { useRouter } from "expo-router";
 
 export default function Entry() {
-  const [masterData, setMasterData] = useState<any[]>([]);
-  const [productData, setProductData] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const router = useRouter();
+
   const db = SQLite.openDatabaseSync("magicpedia.db");
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchSuppliers = async () => {
       try {
-        const masterRows = await db.getAllAsync(
-          "SELECT * FROM master_data LIMIT 20"
+        const rows = await db.getAllAsync(
+          "SELECT DISTINCT name FROM master_data"
         );
-        setMasterData(masterRows);
-
-        const productRows = await db.getAllAsync(
-          "SELECT * FROM product_data LIMIT 20"
-        );
-        setProductData(productRows);
+        const names = rows.map((item: any) => item.name);
+        setSuppliers(names);
       } catch (err) {
-        console.error("❌ Error reading DB:", err);
+        console.error("❌ Error fetching suppliers:", err);
       }
     };
-
-    fetchData();
+    fetchSuppliers();
   }, []);
+
+  const filteredSuppliers = suppliers.filter((name) =>
+    name.toLowerCase().includes(searchText.toLowerCase())
+  );
+
+  const handleProceed = () => {
+    if (selectedSupplier) {
+      router.push({
+        pathname: "/barcode-entry",
+        params: { supplier: selectedSupplier },
+      });
+    }
+  };
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 50 }} className="p-4">
-      <Text className="text-2xl font-bold mt-6 mb-3">Stored Master Data</Text>
-      {masterData.length === 0 ? (
-        <Text className="italic text-gray-500">No master data found</Text>
-      ) : (
-        masterData.map((item, index) => (
-          <View
-            key={`master-${index}`}
-            className="mb-4 p-3 bg-gray-200 rounded-lg"
-          >
-            {Object.entries(item).map(([key, value]) => (
-              <Text key={key} className="text-base mb-1">
-                {key}: {String(value)}
-              </Text>
-            ))}
-          </View>
-        ))
-      )}
+      <Text className="text-2xl font-bold mt-24 mb-5">Select Supplier</Text>
 
-      <Text className="text-2xl font-bold mt-6 mb-3">Stored Product Data</Text>
-      {productData.length === 0 ? (
-        <Text className="italic text-gray-500">No product data found</Text>
-      ) : (
-        productData.map((item, index) => (
-          <View
-            key={`product-${index}`}
-            className="mb-4 p-3 bg-gray-200 rounded-lg"
+      <TouchableOpacity
+        className="border p-4 rounded-lg bg-white mb-4"
+        onPress={() => setModalVisible(true)}
+      >
+        <Text className="text-base">
+          {selectedSupplier || "Choose a supplier..."}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Modal Dropdown */}
+      <Modal visible={modalVisible} animationType="slide">
+        <View className="flex-1 p-4 bg-white">
+          <Text className="text-xl font-bold mb-3">Search Supplier</Text>
+          <TextInput
+            placeholder="Type to search..."
+            className="border p-3 rounded-lg mb-4"
+            value={searchText}
+            onChangeText={setSearchText}
+          />
+          <FlatList
+            data={filteredSuppliers}
+            keyExtractor={(item, index) => `${item}-${index}`}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                className="p-3 border-b"
+                onPress={() => {
+                  setSelectedSupplier(item);
+                  setModalVisible(false);
+                  setSearchText("");
+                }}
+              >
+                <Text>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
+          <TouchableOpacity
+            className="mt-4 bg-red-500 p-3 rounded-lg"
+            onPress={() => setModalVisible(false)}
           >
-            {Object.entries(item).map(([key, value]) => (
-              <Text key={key} className="text-base mb-1">
-                {key}: {String(value)}
-              </Text>
-            ))}
-          </View>
-        ))
-      )}
+            <Text className="text-white text-center font-semibold">Close</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      <TouchableOpacity
+        disabled={!selectedSupplier}
+        onPress={handleProceed}
+        className={`p-4 rounded-lg ${
+          selectedSupplier ? "bg-blue-500" : "bg-gray-300"
+        }`}
+      >
+        <Text className="text-white text-center font-semibold">
+          Proceed to Entry
+        </Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }

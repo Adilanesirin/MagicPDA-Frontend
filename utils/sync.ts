@@ -82,3 +82,31 @@ export const saveProductData = async (data: any[]) => {
   });
   return data.length;
 };
+
+export const getLocalDataStats = async () => {
+  const masterCount = await db.getFirstAsync<{ count: number }>(
+    "SELECT COUNT(*) as count FROM master_data"
+  );
+
+  const productCount = await db.getFirstAsync<{ count: number }>(
+    "SELECT COUNT(*) as count FROM product_data"
+  );
+
+  const syncInfo = await db.getFirstAsync<{ last_synced: string }>(
+    "SELECT last_synced FROM sync_info WHERE id = 1"
+  );
+
+  return {
+    masterCount: masterCount?.count ?? 0,
+    productCount: productCount?.count ?? 0,
+    lastSynced: syncInfo?.last_synced ?? null,
+  };
+};
+
+export const updateLastSynced = async () => {
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO sync_info (id, last_synced) VALUES (1, ?)`,
+    [now]
+  );
+};
