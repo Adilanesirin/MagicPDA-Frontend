@@ -5,11 +5,15 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as SQLite from "expo-sqlite";
+import * as SecureStore from "expo-secure-store";
 
 const db = SQLite.openDatabaseSync("magicpedia.db");
 
@@ -19,13 +23,48 @@ export default function BarcodeEntry() {
 
   const [hasPermission, requestPermission] = useCameraPermissions();
   const [scannedItems, setScannedItems] = useState<any[]>([]);
+  const [hardwareScanValue, setHardwareScanValue] = useState("");
   const [scanning, setScanning] = useState(true);
+  const [scanMode, setScanMode] = useState<"camera" | "hardware">("hardware");
+  const [isEditing, setIsEditing] = useState(false);
+  const [scanModeLoaded, setScanModeLoaded] = useState(false);
+
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (hasPermission === null) {
       requestPermission();
     }
   }, [hasPermission]);
+
+  useEffect(() => {
+    const loadScanMode = async () => {
+      const savedMode = await SecureStore.getItemAsync("scanMode");
+      if (savedMode === "hardware" || savedMode === "camera") {
+        setScanMode(savedMode);
+      }
+      setScanModeLoaded(true);
+    };
+    loadScanMode();
+  }, []);
+
+  // Keep hidden input focused for Zebra scanner
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (scanMode === "hardware" && !isEditing) {
+        inputRef.current?.focus();
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [scanMode, isEditing]);
+
+  // Handle Zebra input
+  useEffect(() => {
+    if (hardwareScanValue.length > 0) {
+      handleBarCodeScanned({ data: hardwareScanValue.trim() });
+      setHardwareScanValue("");
+    }
+  }, [hardwareScanValue]);
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (!scanning) return;
@@ -53,7 +92,7 @@ export default function BarcodeEntry() {
       if (typeof product === "object" && product !== null) {
         const newItem = {
           ...product,
-          quantity: product.quantity ?? 1, // use DB value if exists
+          quantity: product.quantity ?? 1,
         };
         setScannedItems((prev) => [...prev, newItem]);
       } else {
@@ -79,14 +118,14 @@ export default function BarcodeEntry() {
       });
       Alert.alert("✅ Success", "Quantities updated successfully!");
       setScannedItems([]);
-      router.back(); // Navigate back to supplier screen
+      router.back();
     } catch (err) {
       console.error("❌ Update failed:", err);
       Alert.alert("Error", "Failed to update quantities.");
     }
   };
 
-  if (hasPermission?.status !== "granted") {
+  if (hasPermission?.status !== "granted" && scanMode === "camera") {
     Alert.alert(
       "Permission Required",
       "Camera access is needed to scan barcodes.",
@@ -96,61 +135,135 @@ export default function BarcodeEntry() {
       ]
     );
   }
+  if (!scanModeLoaded) {
+    return (
+      <View className="flex-1 items-center justify-center">
+        <Text className="text-gray-500">Loading scan mode...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View className="flex-1 p-4">
-      <Text className="text-xl font-bold mb-4 mt-20">
-        Supplier: {String(supplier)}
-      </Text>
-
-      <View className="rounded-xl overflow-hidden h-64 mb-4 border">
-        {scanning && (
-          <CameraView
-            style={{ flex: 1 }}
-            onBarcodeScanned={handleBarCodeScanned}
-            barcodeScannerSettings={{
-              barcodeTypes: ["ean13", "ean8", "code128", "code39", "qr"],
-            }}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1 }}
+    >
+      <View className="flex-1 p-4">
+        {/* Hidden Zebra Scanner Input */}
+        {scanMode === "hardware" && (
+          <TextInput
+            ref={inputRef}
+            autoFocus
+            value={hardwareScanValue}
+            onChangeText={(text) => setHardwareScanValue(text)}
+            style={{ height: 1, width: 1, opacity: 0, position: "absolute" }}
+            showSoftInputOnFocus={false}
+            blurOnSubmit={false}
           />
         )}
-      </View>
 
-      <Text className="text-lg font-semibold mb-2">Scanned Products</Text>
-      <FlatList
-        data={scannedItems}
-        keyExtractor={(item) => item.barcode}
-        renderItem={({ item, index }) => (
-          <View className="mb-2 border p-3 rounded-lg bg-gray-100">
-            <Text className="font-semibold">{item.name}</Text>
-            <Text className="text-xs text-gray-500">
-              Barcode: {item.barcode}
-            </Text>
-            <TextInput
-              keyboardType="numeric"
-              className="border p-2 mt-2 rounded"
-              value={item.quantity.toString()}
-              onChangeText={(val) => {
-                const updated = [...scannedItems];
-                updated[index].quantity = parseInt(val) || 0;
-                setScannedItems(updated);
-              }}
-            />
+        <Text className="text-xl font-bold mb-4">
+          Supplier: {String(supplier)}
+        </Text>
+
+        {/* Camera Scanner View */}
+        {scanMode === "camera" && (
+          <View className="rounded-xl overflow-hidden h-64 mb-4 border">
+            {scanning && (
+              <CameraView
+                style={{ flex: 1 }}
+                onBarcodeScanned={handleBarCodeScanned}
+                barcodeScannerSettings={{
+                  barcodeTypes: ["ean13", "ean8", "code128", "code39", "qr"],
+                }}
+              />
+            )}
           </View>
         )}
-        ListEmptyComponent={
-          <Text className="text-gray-500 italic">No products scanned</Text>
-        }
-      />
 
-      <TouchableOpacity
-        className="mt-4 bg-green-600 p-4 rounded-xl"
-        onPress={updateQuantities}
-        disabled={scannedItems.length === 0}
-      >
-        <Text className="text-white text-center font-bold">
-          Update Quantities
-        </Text>
-      </TouchableOpacity>
-    </View>
+        <Text className="text-lg font-semibold mb-2">Scanned Products</Text>
+
+        <FlatList
+          data={scannedItems}
+          keyExtractor={(item) => item.barcode}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 100 }}
+          renderItem={({ item, index }) => (
+            <View className="mb-2 border p-3 rounded-lg bg-gray-100">
+              <View className="flex-row justify-between items-center mb-1">
+                <Text className="font-semibold flex-1">{item.name}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const updated = scannedItems.filter((_, i) => i !== index);
+                    setScannedItems(updated);
+                  }}
+                >
+                  <Text className="text-red-500 font-bold">✖</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text className="text-xs text-gray-500 mb-2">
+                Barcode: {item.barcode}
+              </Text>
+
+              <View className="flex-row items-center justify-between">
+                <TextInput
+                  keyboardType="numeric"
+                  className="border mx-2 p-2 w-28 text-center rounded"
+                  value={item.quantity.toString()}
+                  onFocus={() => setIsEditing(true)}
+                  onBlur={() => setIsEditing(false)}
+                  onChangeText={(val) => {
+                    const updated = [...scannedItems];
+                    updated[index].quantity = parseInt(val) || 0;
+                    setScannedItems(updated);
+                  }}
+                />
+
+                <View className="flex-row">
+                  <TouchableOpacity
+                    className="bg-gray-300 px-6 py-1 mr-8 rounded"
+                    onPress={() => {
+                      const updated = [...scannedItems];
+                      updated[index].quantity = Math.max(
+                        0,
+                        updated[index].quantity - 1
+                      );
+                      setScannedItems(updated);
+                    }}
+                  >
+                    <Text className="text-lg font-bold">-</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    className="bg-gray-300 px-6 py-1 rounded"
+                    onPress={() => {
+                      const updated = [...scannedItems];
+                      updated[index].quantity += 1;
+                      setScannedItems(updated);
+                    }}
+                  >
+                    <Text className="text-lg font-bold">+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={
+            <Text className="text-gray-500 italic">No products scanned</Text>
+          }
+        />
+
+        <TouchableOpacity
+          className="mt-4 bg-green-600 p-4 rounded-xl mb-10"
+          onPress={updateQuantities}
+          disabled={scannedItems.length === 0}
+        >
+          <Text className="text-white text-center font-bold">
+            Update Quantities
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
