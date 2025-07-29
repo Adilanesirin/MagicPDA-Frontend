@@ -11,6 +11,7 @@ export default function Index() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        //await deleteOldDatabase();
         // ✅ Initialize DB
         await initDatabase();
 

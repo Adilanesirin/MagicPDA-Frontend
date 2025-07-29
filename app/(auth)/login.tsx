@@ -78,8 +78,8 @@ export default function Login() {
         >
           <View className="flex-1 justify-center items-center px-5 bg-gray-100">
             <View className="w-full max-w-[360px] bg-white rounded-2xl p-6 shadow-lg">
-              <Text className="text-center text-2xl font-bold mb-6 text-gray-800">
-                🔐 Login to Your Account
+              <Text className="text-center text-2xl font-bold mb-6 text-blue-500">
+                Login to Your Account
               </Text>
 
               <View className="mb-4">
@@ -91,8 +91,8 @@ export default function Login() {
                     setUseridError(false);
                   }}
                   placeholder="Enter your username"
-                  className={`border rounded-lg px-4 py-3 text-base bg-white ${
-                    useridError ? "border-red-500" : "border-gray-300"
+                  className={`border rounded-xl px-4 py-4 text-base bg-white shadow-sm ${
+                    useridError ? "border-red-400" : "border-yellow-300"
                   }`}
                 />
                 {useridError && (
@@ -113,18 +113,18 @@ export default function Login() {
                     }}
                     placeholder="Enter your password"
                     secureTextEntry={!showPassword}
-                    className={`border rounded-lg px-4 py-3 text-base bg-white ${
-                      passwordError ? "border-red-500" : "border-gray-300"
+                    className={`border rounded-xl px-4 py-4 text-base bg-white shadow-sm ${
+                      passwordError ? "border-red-400" : "border-yellow-300"
                     }`}
                   />
                   <TouchableOpacity
-                    className="absolute right-3 top-3"
+                    className="absolute right-4 top-4"
                     onPress={() => setShowPassword((prev) => !prev)}
                   >
                     <Ionicons
                       name={showPassword ? "eye-off" : "eye"}
                       size={22}
-                      color="#555"
+                      color="#000"
                     />
                   </TouchableOpacity>
                 </View>
@@ -137,12 +137,12 @@ export default function Login() {
 
               <Pressable
                 onPress={handleLogin}
-                className={`rounded-lg py-3 ${
-                  loading ? "bg-blue-400" : "bg-blue-600"
+                className={`rounded-xl py-4 shadow-lg ${
+                  loading ? "bg-orange-300" : "bg-orange-500"
                 }`}
                 disabled={loading}
               >
-                <Text className="text-center text-white font-semibold text-base">
+                <Text className="text-center text-white font-bold text-lg">
                   {loading ? "Logging in..." : "Login"}
                 </Text>
               </Pressable>

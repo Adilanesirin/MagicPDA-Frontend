@@ -14,11 +14,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as SQLite from "expo-sqlite";
 import * as SecureStore from "expo-secure-store";
+import { saveOrderToSync } from "@/utils/sync";
 
 const db = SQLite.openDatabaseSync("magicpedia.db");
 
 export default function BarcodeEntry() {
-  const { supplier } = useLocalSearchParams();
+  const { supplier, supplier_code } = useLocalSearchParams<{
+    supplier: string;
+    supplier_code: string;
+  }>();
   const router = useRouter();
 
   const [hasPermission, requestPermission] = useCameraPermissions();
@@ -48,7 +52,6 @@ export default function BarcodeEntry() {
     loadScanMode();
   }, []);
 
-  // Keep hidden input focused for Zebra scanner
   useEffect(() => {
     const interval = setInterval(() => {
       if (scanMode === "hardware" && !isEditing) {
@@ -108,20 +111,35 @@ export default function BarcodeEntry() {
 
   const updateQuantities = async () => {
     try {
+      const userId = await SecureStore.getItemAsync("user_id");
+      const today = new Date().toISOString().split("T")[0];
+
       await db.withTransactionAsync(async () => {
         for (const item of scannedItems) {
+          // Save entry to sync table
+          await saveOrderToSync({
+            supplier_code: supplier_code,
+            userid: userId ?? "unknown",
+            barcode: item.barcode,
+            quantity: item.quantity,
+            rate: item.cost ?? 0,
+            mrp: item.bmrp ?? 0,
+            order_date: today,
+          });
+
           await db.runAsync(
             "UPDATE product_data SET quantity = ? WHERE barcode = ?",
             [item.quantity, item.barcode]
           );
         }
       });
-      Alert.alert("✅ Success", "Quantities updated successfully!");
+
+      Alert.alert("✅ Success", "Entries saved for sync!");
       setScannedItems([]);
       router.back();
     } catch (err) {
-      console.error("❌ Update failed:", err);
-      Alert.alert("Error", "Failed to update quantities.");
+      console.error("❌ Save failed:", err);
+      Alert.alert("Error", "Failed to save entries.");
     }
   };
 
@@ -163,7 +181,7 @@ export default function BarcodeEntry() {
         )}
 
         <Text className="text-xl font-bold mb-4">
-          Supplier: {String(supplier)}
+          Supplier: {supplier} ({supplier_code})
         </Text>
 
         {/* Camera Scanner View */}

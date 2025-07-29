@@ -110,3 +110,86 @@ export const updateLastSynced = async () => {
     [now]
   );
 };
+
+export const saveOrderToSync = async (order: {
+  supplier_code: string;
+  userid: string;
+  barcode: string;
+  quantity: number;
+  rate: number;
+  mrp: number;
+  order_date: string;
+}) => {
+  await db.runAsync(
+    `
+    INSERT INTO orders_to_sync 
+    (supplier_code, userid, barcode, quantity, rate, mrp, order_date, sync_status) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+    `,
+    [
+      order.supplier_code,
+      order.userid,
+      order.barcode,
+      order.quantity,
+      order.rate,
+      order.mrp,
+      order.order_date,
+    ]
+  );
+};
+
+type OrderRow = {
+  supplier_code: string;
+  userid: string;
+  barcode: string;
+  quantity: number;
+  rate: number;
+  mrp: number;
+  order_date: string;
+};
+
+type GroupedOrder = {
+  supplier_code: string;
+  userid: string;
+  order_date: string;
+  products: {
+    barcode: string;
+    quantity: number;
+    rate: number;
+    mrp: number;
+  }[];
+};
+
+export const getPendingOrders = async (): Promise<GroupedOrder[]> => {
+  const rows = (await db.getAllAsync(`
+    SELECT * FROM orders_to_sync WHERE sync_status = 'pending'
+  `)) as OrderRow[];
+
+  const grouped: Record<string, GroupedOrder> = {};
+
+  for (const row of rows) {
+    const key = `${row.supplier_code}_${row.userid}_${row.order_date}`;
+    if (!grouped[key]) {
+      grouped[key] = {
+        supplier_code: row.supplier_code,
+        userid: row.userid,
+        order_date: row.order_date,
+        products: [],
+      };
+    }
+    grouped[key].products.push({
+      barcode: row.barcode,
+      quantity: row.quantity,
+      rate: row.rate,
+      mrp: row.mrp,
+    });
+  }
+
+  return Object.values(grouped);
+};
+
+export const markOrdersAsSynced = async () => {
+  await db.execAsync(`
+    UPDATE orders_to_sync SET sync_status = 'synced' WHERE sync_status = 'pending'
+  `);
+};

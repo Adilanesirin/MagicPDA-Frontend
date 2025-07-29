@@ -1,26 +1,25 @@
 {
   "expo": {
-    "name": "Magic Pedia",
-    "slug": "Magic Pedia",
+    "name": "MagicPDA",
+    "slug": "MagicPDA",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "magicpedia",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "primaryColor": "#FF8C00",
+    "backgroundColor": "#FFFFFF",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FF8C00"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.CAMERA"
-      ],
+      "permissions": ["android.permission.CAMERA", "android.permission.CAMERA"],
       "package": "com.anonymous.MagicPedia"
     },
     "web": {

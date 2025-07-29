@@ -76,9 +76,9 @@ export default function Pairing() {
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
         >
-          <View className="flex-1 justify-center items-center px-5 bg-gray-100">
+          <View className="flex-1 justify-center items-center px-5 bg-gradient-to-br from-yellow-400 to-orange-400">
             <View className="w-full max-w-[360px] bg-white rounded-2xl p-6 shadow-md">
-              <Text className="text-center text-xl font-semibold mb-6">
+              <Text className="text-center text-blue-500 text-xl font-semibold mb-6">
                 Pair with Server
               </Text>
 
@@ -94,8 +94,8 @@ export default function Pairing() {
                     }}
                     placeholder="Enter IP (e.g. 192.168.1.10)"
                     keyboardType="decimal-pad"
-                    className={`border rounded-lg px-4 py-3 text-base bg-white ${
-                      ipError ? "border-red-500" : "border-gray-300"
+                    className={`border rounded-lg px-4 py-4 text-base bg-white ${
+                      ipError ? "border-red-400" : "border-yellow-300"
                     }`}
                   />
                   {ipError && (
@@ -116,18 +116,18 @@ export default function Pairing() {
                       }}
                       placeholder="Enter Password"
                       secureTextEntry={!showPassword}
-                      className={`border rounded-lg px-4 py-3 text-base bg-white ${
-                        passwordError ? "border-red-500" : "border-gray-300"
+                      className={`border rounded-lg px-4 py-4 text-base bg-white ${
+                        passwordError ? "border-red-400" : "border-yellow-300"
                       }`}
                     />
                     <TouchableOpacity
-                      className="absolute right-3 top-3"
+                      className="absolute right-4 top-4"
                       onPress={() => setShowPassword((prev) => !prev)}
                     >
                       <Ionicons
                         name={showPassword ? "eye-off" : "eye"}
                         size={22}
-                        color="#555"
+                        color="#000"
                       />
                     </TouchableOpacity>
                   </View>
@@ -142,10 +142,10 @@ export default function Pairing() {
               {/* Button */}
               <Pressable
                 onPress={handlePair}
-                className="bg-blue-600 rounded-lg py-3 mt-6"
+                className={`rounded-lg py-3 mt-6 shadow-lg ${loading ? "bg-orange-300" : "bg-orange-500"}`}
                 disabled={loading}
               >
-                <Text className="text-center text-white font-medium text-base">
+                <Text className="text-center text-white font-bold text-lg">
                   {loading ? "Pairing..." : "Pair"}
                 </Text>
               </Pressable>

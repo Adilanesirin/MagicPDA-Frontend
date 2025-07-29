@@ -25,6 +25,21 @@ export const initDatabase = async () => {
           cost NUMERIC
         );
       `);
+
+      await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS orders_to_sync (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      supplier_code TEXT,
+      userid TEXT,
+      barcode TEXT,
+      quantity NUMERIC,
+      rate NUMERIC,
+      mrp NUMERIC,
+      order_date TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      sync_status TEXT DEFAULT 'pending'
+    );
+  `);
     });
 
     await db.execAsync(`

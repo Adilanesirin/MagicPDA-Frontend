@@ -12,8 +12,11 @@ import * as SQLite from "expo-sqlite";
 import { useRouter } from "expo-router";
 
 export default function Entry() {
-  const [suppliers, setSuppliers] = useState<string[]>([]);
-  const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
+  type Supplier = { code: string; name: string };
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(
+    null
+  );
   const [modalVisible, setModalVisible] = useState(false);
   const [searchText, setSearchText] = useState("");
   const router = useRouter();
@@ -24,10 +27,10 @@ export default function Entry() {
     const fetchSuppliers = async () => {
       try {
         const rows = await db.getAllAsync(
-          "SELECT DISTINCT name FROM master_data"
+          "SELECT DISTINCT code, name FROM master_data"
         );
-        const names = rows.map((item: any) => item.name);
-        setSuppliers(names);
+        // const names = rows.map((item: any) => item.name);
+        setSuppliers(rows as Supplier[]);
       } catch (err) {
         console.error("❌ Error fetching suppliers:", err);
       }
@@ -35,15 +38,18 @@ export default function Entry() {
     fetchSuppliers();
   }, []);
 
-  const filteredSuppliers = suppliers.filter((name) =>
-    name.toLowerCase().includes(searchText.toLowerCase())
+  const filteredSuppliers = suppliers.filter((s) =>
+    s.name.toLowerCase().includes(searchText.toLowerCase())
   );
 
   const handleProceed = () => {
     if (selectedSupplier) {
       router.push({
         pathname: "/barcode-entry",
-        params: { supplier: selectedSupplier },
+        params: {
+          supplier: selectedSupplier.name,
+          supplier_code: selectedSupplier.code,
+        },
       });
     }
   };
@@ -57,7 +63,7 @@ export default function Entry() {
         onPress={() => setModalVisible(true)}
       >
         <Text className="text-base">
-          {selectedSupplier || "Choose a supplier..."}
+          {selectedSupplier?.name || "Choose a supplier..."}
         </Text>
       </TouchableOpacity>
 
@@ -83,7 +89,7 @@ export default function Entry() {
                   setSearchText("");
                 }}
               >
-                <Text>{item}</Text>
+                <Text>{item.name}</Text>
               </TouchableOpacity>
             )}
           />
