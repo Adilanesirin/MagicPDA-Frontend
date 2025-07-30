@@ -55,7 +55,10 @@ export default function Entry() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 50 }} className="p-4">
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 50 }}
+      className="p-4 bg-white"
+    >
       <Text className="text-2xl font-bold mt-24 mb-5">Select Supplier</Text>
 
       <TouchableOpacity

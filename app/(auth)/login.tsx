@@ -10,12 +10,15 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Image,
   TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { createAPI } from "@/utils/api";
 import { saveToken, saveUserid } from "@/utils/auth";
 import { Ionicons } from "@expo/vector-icons";
+import Toast from "react-native-toast-message";
+import { StatusBar } from "react-native";
 
 export default function Login() {
   const [userid, setUserid] = useState("");
@@ -54,13 +57,27 @@ export default function Login() {
       if (res.data.status === "success") {
         await saveToken(res.data.token);
         await saveUserid(res.data.user_id);
-        Alert.alert("Welcome", "Login successful");
-        router.replace("/(main)");
+        Toast.show({
+          type: "success",
+          text1: "Success",
+          text2: "Welcome, Login successful",
+        });
+        setTimeout(() => {
+          router.replace("/(main)");
+        }, 300);
       } else {
-        Alert.alert("Login Failed", "Invalid credentials");
+        Toast.show({
+          type: "error",
+          text1: "Login failed",
+          text2: res.data.message || "Invalid credentials",
+        });
       }
     } catch (err) {
-      Alert.alert("Login Failed", "Invalid credentials or IP not paired");
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Login failed. Check UserID or password.",
+      });
     } finally {
       setLoading(false);
     }
@@ -71,12 +88,26 @@ export default function Login() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1 }}
     >
+      {/* Coloured Status Bar */}
+      <StatusBar backgroundColor="#FB923C" />
+
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
+          className="bg-gray-100"
         >
-          <View className="flex-1 justify-center items-center px-5 bg-gray-100">
+          <View className="flex-1 justify-center items-center px-5 pt-20">
+            {/* Logo & Title */}
+            <View className="items-center mb-6">
+              <Image
+                source={require("../../assets/images/icon.png")}
+                style={{ width: 60, height: 60, marginBottom: 8 }}
+              />
+              <Text className="text-lg font-semibold">MagicPDA</Text>
+            </View>
+
+            {/* Login Box */}
             <View className="w-full max-w-[360px] bg-white rounded-2xl p-6 shadow-lg">
               <Text className="text-center text-2xl font-bold mb-6 text-blue-500">
                 Login to Your Account
@@ -146,6 +177,13 @@ export default function Login() {
                   {loading ? "Logging in..." : "Login"}
                 </Text>
               </Pressable>
+            </View>
+
+            {/* Footer */}
+            <View className="mt-10 mb-6">
+              <Text className="text-sm text-gray-400 text-center">
+                Powered by IMC Business Solutions
+              </Text>
             </View>
           </View>
         </ScrollView>
