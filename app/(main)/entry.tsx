@@ -29,7 +29,6 @@ export default function Entry() {
         const rows = await db.getAllAsync(
           "SELECT DISTINCT code, name FROM master_data"
         );
-        // const names = rows.map((item: any) => item.name);
         setSuppliers(rows as Supplier[]);
       } catch (err) {
         console.error("❌ Error fetching suppliers:", err);
@@ -57,65 +56,88 @@ export default function Entry() {
   return (
     <ScrollView
       contentContainerStyle={{ paddingBottom: 50 }}
-      className="p-4 bg-white"
+      className="bg-gray-100 px-5 pt-24"
     >
-      <Text className="text-2xl font-bold mt-24 mb-5">Select Supplier</Text>
-
-      <TouchableOpacity
-        className="border p-4 rounded-lg bg-white mb-4"
-        onPress={() => setModalVisible(true)}
-      >
-        <Text className="text-base">
-          {selectedSupplier?.name || "Choose a supplier..."}
+      <View className="items-center mb-6">
+        <Text className="text-2xl font-bold text-blue-500">
+          Select Supplier
         </Text>
-      </TouchableOpacity>
+      </View>
+
+      <View className="bg-white p-6 rounded-2xl shadow-lg max-w-[360px] self-center w-full">
+        <Text className="text-base font-semibold mb-2 text-gray-700">
+          Supplier
+        </Text>
+        <TouchableOpacity
+          className="border border-yellow-300 p-4 rounded-xl mb-6 bg-white shadow-sm"
+          onPress={() => setModalVisible(true)}
+        >
+          <Text className="text-base text-gray-600">
+            {selectedSupplier?.name || "Choose a supplier..."}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          disabled={!selectedSupplier}
+          onPress={handleProceed}
+          className={`p-4 rounded-xl shadow-lg ${
+            selectedSupplier ? "bg-orange-500" : "bg-gray-300"
+          }`}
+        >
+          <Text className="text-white text-center font-bold text-base">
+            Proceed to Entry
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Modal Dropdown */}
       <Modal visible={modalVisible} animationType="slide">
-        <View className="flex-1 p-4 bg-white">
-          <Text className="text-xl font-bold mb-3">Search Supplier</Text>
+        <View className="flex-1 bg-white px-4 pt-10">
+          <Text className="text-xl font-bold mb-4 text-blue-500">
+            Search Supplier
+          </Text>
+
           <TextInput
             placeholder="Type to search..."
-            className="border p-3 rounded-lg mb-4"
+            className="border border-yellow-300 p-4 rounded-xl mb-4 shadow-sm bg-white"
             value={searchText}
             onChangeText={setSearchText}
           />
+
           <FlatList
             data={filteredSuppliers}
-            keyExtractor={(item, index) => `${item}-${index}`}
+            keyExtractor={(item, index) => `${item.code}-${index}`}
             renderItem={({ item }) => (
               <TouchableOpacity
-                className="p-3 border-b"
+                className="p-4 border-b border-gray-200"
                 onPress={() => {
                   setSelectedSupplier(item);
                   setModalVisible(false);
                   setSearchText("");
                 }}
               >
-                <Text>{item.name}</Text>
+                <Text className="text-base text-gray-700">{item.name}</Text>
               </TouchableOpacity>
             )}
           />
+
           <TouchableOpacity
-            className="mt-4 bg-red-500 p-3 rounded-lg"
+            className="mb-3 bg-orange-400 p-4 rounded-xl"
             onPress={() => setModalVisible(false)}
           >
-            <Text className="text-white text-center font-semibold">Close</Text>
+            <Text className="text-white text-center font-semibold text-base">
+              Close
+            </Text>
           </TouchableOpacity>
         </View>
       </Modal>
 
-      <TouchableOpacity
-        disabled={!selectedSupplier}
-        onPress={handleProceed}
-        className={`p-4 rounded-lg ${
-          selectedSupplier ? "bg-blue-500" : "bg-gray-300"
-        }`}
-      >
-        <Text className="text-white text-center font-semibold">
-          Proceed to Entry
+      {/* Footer */}
+      {/* <View className="mt-10 mb-6">
+        <Text className="text-sm text-gray-400 text-center">
+          Powered by IMC Business Solutions
         </Text>
-      </TouchableOpacity>
+      </View> */}
     </ScrollView>
   );
 }

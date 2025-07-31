@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   Pressable,
-  Alert,
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,

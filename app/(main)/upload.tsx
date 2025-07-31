@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Pressable,
   Alert,
 } from "react-native";
 import {
@@ -14,6 +15,9 @@ import {
   getLocalDataStats,
 } from "@/utils/sync";
 import { uploadPendingOrders } from "@/utils/upload";
+import Toast from "react-native-toast-message";
+import LottieView from "lottie-react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function Upload() {
   const [loading, setLoading] = useState(false);
@@ -33,56 +37,98 @@ export default function Upload() {
 
   const handleUpload = async () => {
     if (orders.length === 0) {
-      Alert.alert("Nothing to upload", "All entries are already synced.");
+      Toast.show({
+        type: "info",
+        text1: "Nothing to upload",
+        text2: "All entries are already synced.",
+      });
       return;
     }
 
     try {
       setLoading(true);
       const res = await uploadPendingOrders(orders);
-      console.log(res);
 
       await markOrdersAsSynced();
       await loadData();
-      Alert.alert("✅ Success", "Orders uploaded successfully.");
+
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      Toast.show({
+        type: "success",
+        text1: "Success",
+        text2: "Orders uploaded successfully.",
+      });
     } catch (err: any) {
       console.error(err);
-      Alert.alert("❌ Upload Failed", err.message || "Something went wrong.");
+      Toast.show({
+        type: "error",
+        text1: "❌ Upload Failed",
+        text2: err.message || "Something went wrong.",
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView className="p-4 mt-20">
-      <Text className="text-2xl font-bold mb-4">Upload Pending Orders</Text>
-
-      <View className="bg-white rounded-xl shadow p-4 mb-4">
-        <Text className="text-base font-medium">
-          Pending Orders: {orders.length}
-        </Text>
-        <Text className="text-base">
-          Total Items:{" "}
-          {orders.reduce((acc, cur) => acc + cur.products.length, 0)}
-        </Text>
-        <Text className="text-sm text-gray-500 mt-1">
-          Last Synced: {stats.lastSynced || "Never"}
-        </Text>
-      </View>
-
-      <TouchableOpacity
-        onPress={handleUpload}
-        disabled={loading || orders.length === 0}
-        className={`p-4 rounded-xl ${
-          orders.length === 0 ? "bg-gray-400" : "bg-green-600"
-        }`}
-      >
+    <View className="flex-1 justify-center items-center px-4">
+      <View className="w-full max-w-[360px] bg-white rounded-2xl shadow-lg p-6">
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <View className="items-center">
+            <Text className="text-2xl font-semibold text-blue-400 mb-2">
+              Uploading...
+            </Text>
+            <LottieView
+              source={require("@/assets/lottie/upload.json")}
+              autoPlay
+              loop
+              style={{ width: 180, height: 180 }}
+            />
+          </View>
         ) : (
-          <Text className="text-white text-center font-semibold">Upload</Text>
+          <>
+            <View className="flex-row justify-center items-center gap-2 mb-6">
+              <Ionicons name="cloud-upload-outline" size={28} color="#60A5FA" />
+              <Text className="text-2xl font-bold text-blue-400 text-center">
+                Upload Pending Orders
+              </Text>
+            </View>
+            <View className="gap-y-4 mb-8">
+              <View className="flex flex-row gap-1">
+                <Text>📦</Text>
+                <Text className="text-base text-gray-700">
+                  Pending Orders: {orders.length}
+                </Text>
+              </View>
+              <View className="flex flex-row gap-1">
+                <Text>🎰</Text>
+                <Text className="text-base text-gray-700">
+                  Total Items:{" "}
+                  {orders.reduce((acc, cur) => acc + cur.products.length, 0)}
+                </Text>
+              </View>
+              <View className="flex flex-row gap-1">
+                <Text>⏱️</Text>
+                <Text className="text-sm text-gray-500">
+                  Last Synced: {stats.lastSynced || "Never"}
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={handleUpload}
+              disabled={loading || orders.length === 0}
+              className={`p-4 rounded-xl ${
+                orders.length === 0 ? "bg-gray-400" : "bg-orange-400"
+              }`}
+            >
+              <Text className="text-white text-center font-semibold">
+                Upload
+              </Text>
+            </Pressable>
+          </>
         )}
-      </TouchableOpacity>
-    </ScrollView>
+      </View>
+    </View>
   );
 }

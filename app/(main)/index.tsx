@@ -15,19 +15,20 @@ const routes = [
     color: "#1E90FF",
     bgColor: "#E6F3FF",
   },
-  {
-    name: "Upload",
-    icon: "cloud-upload-outline",
-    path: "/(main)/upload" as const,
-    color: "#FF8C00",
-    bgColor: "#FFF4E6",
-  },
+
   {
     name: "Entry",
     icon: "document-text-outline",
     path: "/(main)/entry" as const,
     color: "#10B981",
     bgColor: "#E0F7F1",
+  },
+  {
+    name: "Upload",
+    icon: "cloud-upload-outline",
+    path: "/(main)/upload" as const,
+    color: "#FF8C00",
+    bgColor: "#FFF4E6",
   },
   {
     name: "Logout",
