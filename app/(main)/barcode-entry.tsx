@@ -1,7 +1,6 @@
 import {
   View,
   Text,
-  FlatList,
   TextInput,
   TouchableOpacity,
   Alert,
@@ -32,6 +31,7 @@ export default function BarcodeEntry() {
   const [scanMode, setScanMode] = useState<"camera" | "hardware">("hardware");
   const [isEditing, setIsEditing] = useState(false);
   const [scanModeLoaded, setScanModeLoaded] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState("");
 
   const inputRef = useRef<TextInput>(null);
 
@@ -106,6 +106,41 @@ export default function BarcodeEntry() {
       Alert.alert("Error", "Failed to scan product.");
     } finally {
       setTimeout(() => setScanning(true), 800);
+    }
+  };
+
+  const handleManualSearch = async () => {
+    const trimmed = manualBarcode.trim();
+    if (!trimmed) return;
+
+    try {
+      const rows = await db.getAllAsync(
+        "SELECT * FROM product_data WHERE barcode = ?",
+        [trimmed]
+      );
+
+      if (rows.length === 0) {
+        Alert.alert("Product not found", `Barcode: ${trimmed}`);
+        return;
+      }
+
+      const existing = scannedItems.find((item) => item.barcode === trimmed);
+      if (existing) {
+        Alert.alert("Info", `Product already scanned: ${existing.name}`);
+        return;
+      }
+
+      const product = rows[0] as { [key: string]: any; quantity?: number };
+      const newItem = {
+        ...product,
+        quantity: product.quantity ?? 1,
+      };
+
+      setScannedItems((prev) => [...prev, newItem]);
+      setManualBarcode(""); // clear after search
+    } catch (err) {
+      console.error("❌ Error fetching product:", err);
+      Alert.alert("Error", "Failed to fetch product.");
     }
   };
 
@@ -206,6 +241,23 @@ export default function BarcodeEntry() {
               )}
             </View>
           )}
+          <View className="flex-row items-center mb-4 gap-2">
+            <TextInput
+              placeholder="Enter barcode manually"
+              value={manualBarcode}
+              onChangeText={setManualBarcode}
+              className="flex-1 border border-gray-300 px-4 py-2 rounded-xl bg-white shadow-sm"
+              keyboardType="default"
+              onFocus={() => setIsEditing(true)}
+              onBlur={() => setIsEditing(false)}
+            />
+            <TouchableOpacity
+              onPress={handleManualSearch}
+              className="bg-blue-500 px-4 py-2 rounded-xl"
+            >
+              <Text className="text-white font-semibold">Search</Text>
+            </TouchableOpacity>
+          </View>
 
           <Text className="text-lg font-semibold mb-2 text-gray-700">
             Scanned Products

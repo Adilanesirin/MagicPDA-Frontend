@@ -28,6 +28,10 @@ export default function DownloadPage() {
     try {
       setLoading(true);
       const data = await fetchDownloadData();
+      console.log("✅ Data fetched:", {
+        master: data.master_data?.length,
+        product: data.product_data?.length,
+      });
 
       await saveMasterData(data.master_data);
       await saveProductData(data.product_data);
