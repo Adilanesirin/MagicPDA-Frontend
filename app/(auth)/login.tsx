@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { createAPI } from "@/utils/api";
+import { createEnhancedAPI } from "@/utils/api";
 import { saveToken, saveUserid } from "@/utils/auth";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
@@ -50,7 +50,7 @@ export default function Login() {
 
     setLoading(true);
     try {
-      const api = await createAPI();
+      const api = await createEnhancedAPI();
       const res = await api.post("/login", { userid, password });
 
       if (res.data.status === "success") {
