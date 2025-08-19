@@ -1,19 +1,20 @@
+import { saveOrderToSync } from "@/utils/sync";
+import { Ionicons } from "@expo/vector-icons";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import * as SQLite from "expo-sqlite";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import React, { useEffect, useRef, useState } from "react";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import * as SQLite from "expo-sqlite";
-import * as SecureStore from "expo-secure-store";
-import { saveOrderToSync } from "@/utils/sync";
 
 const db = SQLite.openDatabaseSync("magicpedia.db");
 
@@ -96,8 +97,9 @@ export default function BarcodeEntry() {
         const newItem = {
           ...product,
           quantity: product.quantity ?? 1,
+          scannedAt: new Date().getTime(), // Add timestamp
         };
-        setScannedItems((prev) => [...prev, newItem]);
+        setScannedItems((prev) => [newItem, ...prev]); // Add to beginning of array
       } else {
         Alert.alert("Error", "Scanned data is invalid.");
       }
@@ -134,9 +136,10 @@ export default function BarcodeEntry() {
       const newItem = {
         ...product,
         quantity: product.quantity ?? 1,
+        scannedAt: new Date().getTime(), // Add timestamp
       };
 
-      setScannedItems((prev) => [...prev, newItem]);
+      setScannedItems((prev) => [newItem, ...prev]); // Add to beginning of array
       setManualBarcode(""); // clear after search
     } catch (err) {
       console.error("❌ Error fetching product:", err);
@@ -171,11 +174,15 @@ export default function BarcodeEntry() {
 
       Alert.alert("✅ Success", "Entries saved for sync!");
       setScannedItems([]);
-      router.back();
+      router.push("/"); // Navigate to index page instead of router.back()
     } catch (err) {
       console.error("❌ Save failed:", err);
       Alert.alert("Error", "Failed to save entries.");
     }
+  };
+
+  const handleBack = () => {
+    router.back();
   };
 
   if (hasPermission?.status !== "granted" && scanMode === "camera") {
@@ -201,9 +208,19 @@ export default function BarcodeEntry() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1 }}
     >
+      {/* Back Button */}
+      <View className="absolute top-12 left-4 z-50">
+        <TouchableOpacity
+          onPress={handleBack}
+       
+        >
+          <Ionicons name="arrow-back" size={24} color="#374151" />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         className="flex-1 bg-gray-100"
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: 80, paddingTop: 60 }}
       >
         <View className="p-4">
           {/* Hidden Zebra Scanner Input */}
@@ -255,7 +272,7 @@ export default function BarcodeEntry() {
               onPress={handleManualSearch}
               className="bg-blue-500 px-4 py-2 rounded-xl"
             >
-              <Text className="text-white font-semibold">Search</Text>
+              <Text className="text-white font-semibold">Get</Text>
             </TouchableOpacity>
           </View>
 

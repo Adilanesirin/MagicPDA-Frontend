@@ -1,18 +1,21 @@
-import { View, Text, Pressable } from "react-native";
-import { useEffect, useState } from "react";
 import { fetchDownloadData } from "@/utils/download";
 import {
+  getLocalDataStats,
   saveMasterData,
   saveProductData,
-  getLocalDataStats,
   updateLastSynced,
 } from "@/utils/sync";
-import Toast from "react-native-toast-message";
-import LottieView from "lottie-react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import LottieView from "lottie-react-native";
+import { useEffect, useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import Toast from "react-native-toast-message";
 
 export default function DownloadPage() {
   const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [downloadComplete, setDownloadComplete] = useState(false);
   const [masterCount, setMasterCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
@@ -39,11 +42,12 @@ export default function DownloadPage() {
       await updateLastSynced();
       await loadStats();
 
-      Toast.show({
-        type: "success",
-        text1: "Download Successful",
-        text2: "Data saved locally 🎉",
-      });
+      setDownloadComplete(true);
+      setShowSuccess(true);
+      // Auto hide success card after 3 seconds
+      setTimeout(() => {
+        setShowSuccess(false);
+      }, 3000);
     } catch (error) {
       Toast.show({
         type: "error",
@@ -56,12 +60,51 @@ export default function DownloadPage() {
     }
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   useEffect(() => {
     loadStats();
   }, []);
 
   return (
-    <View className="flex-1 justify-center items-center  px-4">
+    <View className="flex-1 justify-center items-center px-4">
+      {/* Back Button */}
+      <View className="absolute top-12 left-4 z-10">
+        <Pressable
+          onPress={handleBack}
+          className="bg-white rounded-full p-3 shadow-lg"
+        >
+          <Ionicons name="arrow-back" size={24} color="#374151" />
+        </Pressable>
+      </View>
+
+      {/* Success Card Overlay */}
+      {showSuccess && (
+        <View className="absolute inset-0 bg-black/50 justify-center items-center z-20 px-4">
+          <View className="bg-white rounded-2xl p-8 shadow-xl max-w-[320px] w-full items-center">
+            <View className="bg-green-100 rounded-full p-4 mb-4">
+              <Ionicons name="checkmark-circle" size={48} color="#10B981" />
+            </View>
+            <Text className="text-2xl font-bold text-gray-800 mb-2 text-center">
+              Download Successful!
+            </Text>
+            <Text className="text-gray-600 text-center mb-6">
+              Data saved locally 🎉
+            </Text>
+            <Pressable
+              onPress={() => setShowSuccess(false)}
+              className="bg-green-500 rounded-xl py-3 px-8"
+            >
+              <Text className="text-white font-semibold">
+                Continue
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       <View className="w-full max-w-[360px] bg-white rounded-2xl shadow-lg p-6">
         {loading ? (
           <View className="items-center">
@@ -104,10 +147,19 @@ export default function DownloadPage() {
             </View>
             <Pressable
               onPress={handleDownload}
-              className="bg-orange-400 rounded-xl py-4 shadow-lg"
+              disabled={downloadComplete || loading}
+              className={`rounded-xl py-4 shadow-lg ${
+                downloadComplete
+                  ? "bg-gray-300"
+                  : loading
+                  ? "bg-orange-300"
+                  : "bg-orange-400"
+              }`}
             >
-              <Text className="text-white font-bold text-lg text-center">
-                Download Now
+              <Text className={`font-bold text-lg text-center ${
+                downloadComplete ? "text-gray-500" : "text-white"
+              }`}>
+                {downloadComplete ? "✓ Downloaded" : loading ? "Downloading..." : "Download Now"}
               </Text>
             </Pressable>
           </>
