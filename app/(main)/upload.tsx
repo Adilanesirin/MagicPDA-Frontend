@@ -1,28 +1,27 @@
 // app/upload.tsx
-import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-  Pressable,
-  Alert,
-} from "react-native";
-import {
+  getLocalDataStats,
   getPendingOrders,
   markOrdersAsSynced,
-  getLocalDataStats,
 } from "@/utils/sync";
 import { uploadPendingOrders } from "@/utils/upload";
-import Toast from "react-native-toast-message";
-import LottieView from "lottie-react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import LottieView from "lottie-react-native";
+import React, { useEffect, useState } from "react";
+import {
+  Pressable,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
+import Toast from "react-native-toast-message";
 
 export default function Upload() {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({});
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const loadData = async () => {
     const data = await getPendingOrders();
@@ -54,11 +53,7 @@ export default function Upload() {
 
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      Toast.show({
-        type: "success",
-        text1: "Success",
-        text2: "Orders uploaded successfully.",
-      });
+      setUploadSuccess(true);
     } catch (err: any) {
       console.error(err);
       Toast.show({
@@ -71,10 +66,59 @@ export default function Upload() {
     }
   };
 
+  const resetToUploadView = () => {
+    setUploadSuccess(false);
+    loadData(); // Refresh data
+  };
+
   return (
     <View className="flex-1 justify-center items-center px-4">
+      {/* Back Button */}
+      <TouchableOpacity 
+        className="absolute top-12 left-4 bg-white p-2 rounded-full shadow-md z-10"
+        onPress={() => router.back()}
+      >
+        <Ionicons name="arrow-back" size={24} color="#3B82F6" />
+      </TouchableOpacity>
+
       <View className="w-full max-w-[360px] bg-white rounded-2xl shadow-lg p-6">
-        {loading ? (
+        {uploadSuccess ? (
+          // Success Card
+          <View className="items-center">
+            <View className="w-16 h-16 bg-green-100 rounded-full items-center justify-center mb-4">
+              <Ionicons name="checkmark-circle" size={40} color="#10B981" />
+            </View>
+            
+            <Text className="text-2xl font-bold text-green-600 text-center mb-2">
+              Upload Successful!
+            </Text>
+            
+            <Text className="text-base text-gray-600 text-center mb-6">
+              All orders have been uploaded and synced successfully.
+            </Text>
+
+            <View className="w-full gap-y-3">
+              <Pressable
+                onPress={resetToUploadView}
+                className="p-4 rounded-xl bg-blue-500"
+              >
+                <Text className="text-white text-center font-semibold">
+                  Upload More Orders
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.back()}
+                className="p-4 rounded-xl bg-gray-200"
+              >
+                <Text className="text-gray-700 text-center font-semibold">
+                  Go Back
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : loading ? (
+          // Loading State
           <View className="items-center">
             <Text className="text-2xl font-semibold text-blue-400 mb-2">
               Uploading...
@@ -87,6 +131,7 @@ export default function Upload() {
             />
           </View>
         ) : (
+          // Upload Form
           <>
             <View className="flex-row justify-center items-center gap-2 mb-6">
               <Ionicons name="cloud-upload-outline" size={28} color="#60A5FA" />

@@ -97,6 +97,9 @@ export default function BarcodeEntry() {
         const newItem = {
           ...product,
           quantity: product.quantity ?? 1,
+          cost: product.cost ?? product.bmrp ?? 0, // Make cost editable, default to existing cost or MRP
+          currentStock: product.quantity ?? 0, // Current stock from database
+          batchSupplier: product.batch_supplier ?? supplier, // Use batch supplier or current supplier
           scannedAt: new Date().getTime(), // Add timestamp
         };
         setScannedItems((prev) => [newItem, ...prev]); // Add to beginning of array
@@ -136,6 +139,9 @@ export default function BarcodeEntry() {
       const newItem = {
         ...product,
         quantity: product.quantity ?? 1,
+        cost: product.cost ?? product.bmrp ?? 0, // Make cost editable
+        currentStock: product.quantity ?? 0, // Current stock from database
+        batchSupplier: product.batch_supplier ?? supplier, // Use batch supplier or current supplier
         scannedAt: new Date().getTime(), // Add timestamp
       };
 
@@ -160,14 +166,14 @@ export default function BarcodeEntry() {
             userid: userId ?? "unknown",
             barcode: item.barcode,
             quantity: item.quantity,
-            rate: item.cost ?? 0,
+            rate: item.cost ?? 0, // Use the editable cost
             mrp: item.bmrp ?? 0,
             order_date: today,
           });
 
           await db.runAsync(
-            "UPDATE product_data SET quantity = ? WHERE barcode = ?",
-            [item.quantity, item.barcode]
+            "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
+            [item.quantity, item.cost, item.barcode]
           );
         }
       });
@@ -289,65 +295,300 @@ export default function BarcodeEntry() {
           {scannedItems.map((item, index) => (
             <View
               key={item.barcode}
-              className="mb-4 bg-white rounded-xl p-4 shadow-md border border-gray-200"
+              style={{
+                marginBottom: 16,
+                backgroundColor: 'white',
+                borderRadius: 16,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 12,
+                elevation: 8,
+                borderWidth: 1,
+                borderColor: '#f3f4f6',
+              }}
             >
-              <View className="flex-row justify-between items-start mb-2">
-                <Text className="font-semibold text-base flex-1">
-                  {item.name}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    const updated = scannedItems.filter((_, i) => i !== index);
-                    setScannedItems(updated);
-                  }}
-                >
-                  <Text className="text-red-500 font-bold text-lg">✖</Text>
-                </TouchableOpacity>
+              {/* Header Section */}
+              <View style={{
+                backgroundColor: '#eff6ff',
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 16,
+                padding: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: '#f3f4f6',
+              }}>
+                <View className="flex-row justify-between items-start">
+                  <View className="flex-1">
+                    <Text style={{
+                      fontWeight: 'bold',
+                      fontSize: 18,
+                      color: '#111827',
+                      marginBottom: 8,
+                      lineHeight: 22,
+                    }}>
+                      {item.name}
+                    </Text>
+                    <View className="flex-row items-center">
+                      <View style={{
+                        backgroundColor: '#e5e7eb',
+                        borderRadius: 20,
+                        paddingHorizontal: 12,
+                        paddingVertical: 4,
+                      }}>
+                        <Text style={{
+                          fontSize: 12,
+                          fontWeight: '500',
+                          color: '#374151',
+                        }}>
+                          {item.barcode}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const updated = scannedItems.filter((_, i) => i !== index);
+                      setScannedItems(updated);
+                    }}
+                    style={{
+                      backgroundColor: '#fef2f2',
+                      borderRadius: 20,
+                      padding: 8,
+                      marginLeft: 12,
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#dc2626" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <Text className="text-xs text-gray-500 mb-3">
-                Barcode: {item.barcode}
-              </Text>
+              {/* Product Details Section */}
+              <View style={{ padding: 16 }}>
+                {/* Price and Stock Row */}
+                <View className="flex-row mb-4">
+                  <View className="flex-1" style={{ marginRight: 8 }}>
+                    <View style={{
+                      backgroundColor: '#f0fdf4',
+                      borderRadius: 12,
+                      padding: 12,
+                      
+                    }}>
+                      <Text style={{
+                        fontSize: 12,
+                        fontWeight: '500',
+                        color: '#15803d',
+                        marginBottom: 4,
+                      }}>MRP</Text>
+                      <Text style={{
+                        fontSize: 18,
+                        fontWeight: 'bold',
+                        color: '#166534',
+                      }}>
+                        ₹{item.bmrp || 0}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="flex-1" style={{ marginLeft: 8 }}>
+                    <View style={{
+                      backgroundColor: '#eff6ff',
+                      borderRadius: 12,
+                      padding: 12,
+                      
+                    }}>
+                      <Text style={{
+                        fontSize: 12,
+                        fontWeight: '500',
+                        color: '#1d4ed8',
+                        marginBottom: 4,
+                      }}>Current Stock</Text>
+                      <Text style={{
+                        fontSize: 18,
+                        fontWeight: 'bold',
+                        color: '#1e40af',
+                      }}>
+                        {item.currentStock}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
 
-              <View className="flex-row justify-between items-center">
-                <TextInput
-                  keyboardType="numeric"
-                  className="border border-yellow-300 bg-white shadow-sm px-4 py-2 rounded-xl text-center text-base w-24"
-                  value={item.quantity.toString()}
-                  onFocus={() => setIsEditing(true)}
-                  onBlur={() => setIsEditing(false)}
-                  onChangeText={(val) => {
-                    const updated = [...scannedItems];
-                    updated[index].quantity = parseInt(val) || 0;
-                    setScannedItems(updated);
-                  }}
-                />
+                {/* Cost and Supplier Row */}
+                <View className="flex-row mb-4">
+                  <View className="flex-1" style={{ marginRight: 8 }}>
+                    <View style={{
+                      backgroundColor: '#fff7ed',
+                      borderRadius: 12,
+                      padding: 12,
+                      
+                    }}>
+                      <Text style={{
+                        fontSize: 12,
+                        fontWeight: '500',
+                        color: '#c2410c',
+                        marginBottom: 8,
+                      }}>Cost (Editable)</Text>
+                      <TextInput
+                        keyboardType="numeric"
+                        style={{
+                          backgroundColor: 'white',
+                          borderWidth: 2,
+                          borderColor: '#fed7aa',
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 8,
+                          fontSize: 16,
+                          fontWeight: 'bold',
+                          color: '#c2410c',
+                          textAlign: 'center',
+                        }}
+                        value={item.cost?.toString() || "0"}
+                        onFocus={() => setIsEditing(true)}
+                        onBlur={() => setIsEditing(false)}
+                        onChangeText={(val) => {
+                          const updated = [...scannedItems];
+                          updated[index].cost = parseFloat(val) || 0;
+                          setScannedItems(updated);
+                        }}
+                      />
+                    </View>
+                  </View>
+                  <View className="flex-1" style={{ marginLeft: 8 }}>
+                    <View style={{
+                      backgroundColor: '#faf5ff',
+                      borderRadius: 12,
+                      padding: 12,
+                      
+                    }}>
+                      <Text style={{
+                        fontSize: 12,
+                        fontWeight: '500',
+                        color: '#7c2d12',
+                        marginBottom: 4,
+                      }}>Batch Supplier</Text>
+                      <Text style={{
+                        fontSize: 14,
+                        fontWeight: '600',
+                        color: '#7c2d12',
+                        lineHeight: 16,
+                      }}>
+                        {item.batchSupplier || 'N/A'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
 
-                <View className="flex-row gap-3">
-                  <TouchableOpacity
-                    className="bg-gray-300 rounded-xl px-4 py-2"
-                    onPress={() => {
-                      const updated = [...scannedItems];
-                      updated[index].quantity = Math.max(
-                        0,
-                        updated[index].quantity - 1
-                      );
-                      setScannedItems(updated);
-                    }}
-                  >
-                    <Text className="text-lg font-bold">−</Text>
-                  </TouchableOpacity>
+                {/* Quantity Control Section */}
+                <View style={{
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 12,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: '#e5e7eb',
+                }}>
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: '#374151',
+                    marginBottom: 12,
+                    textAlign: 'center',
+                  }}>
+                    Quantity Management
+                  </Text>
+                  <View className="flex-row items-center justify-between">
+                    <TouchableOpacity
+                      onPress={() => {
+                        const updated = [...scannedItems];
+                        updated[index].quantity = Math.max(
+                          0,
+                          updated[index].quantity - 1
+                        );
+                        setScannedItems(updated);
+                      }}
+                      style={{
+                        
+                        padding: 12,
+                        shadowColor: '#ef4444',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 4,
+                      }}
+                    >
+                      <Ionicons name="remove" size={24} color="black" />
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    className="bg-gray-300 rounded-xl px-4 py-2"
-                    onPress={() => {
-                      const updated = [...scannedItems];
-                      updated[index].quantity += 1;
-                      setScannedItems(updated);
-                    }}
-                  >
-                    <Text className="text-lg font-bold">+</Text>
-                  </TouchableOpacity>
+                    <View style={{ marginHorizontal: 16, flex: 1 }}>
+                      <TextInput
+                        keyboardType="numeric"
+                        style={{
+                          backgroundColor: 'white',
+                          borderWidth: 2,
+                          borderColor: '#a5b4fc',
+                          paddingHorizontal: 16,
+                          paddingVertical: 12,
+                          borderRadius: 12,
+                          textAlign: 'center',
+                          fontSize: 20,
+                          fontWeight: 'bold',
+                          color: '#3730a3',
+                          shadowColor: '#6366f1',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 4,
+                          elevation: 2,
+                        }}
+                        value={item.quantity.toString()}
+                        onFocus={() => setIsEditing(true)}
+                        onBlur={() => setIsEditing(false)}
+                        onChangeText={(val) => {
+                          const updated = [...scannedItems];
+                          updated[index].quantity = parseInt(val) || 0;
+                          setScannedItems(updated);
+                        }}
+                      />
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        const updated = [...scannedItems];
+                        updated[index].quantity += 1;
+                        setScannedItems(updated);
+                      }}
+                      style={{
+                       
+                        padding: 12,
+                        shadowColor: '#22c55e',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 4,
+                      }}
+                    >
+                      <Ionicons name="add" size={24} color="black" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Summary Footer */}
+                <View style={{
+                  marginTop: 16,
+                  paddingTop: 12,
+                  borderTopWidth: 1,
+                  borderTopColor: '#e5e7eb',
+                }}>
+                  <View className="flex-row justify-between items-center">
+                    <Text style={{
+                      fontSize: 14,
+                      color: '#4b5563',
+                    }}>Total Value:</Text>
+                    <Text style={{
+                      fontSize: 18,
+                      fontWeight: 'bold',
+                      color: '#4f46e5',
+                    }}>
+                      ₹{((item.cost || 0) * item.quantity).toFixed(2)}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </View>

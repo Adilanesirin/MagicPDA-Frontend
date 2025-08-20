@@ -74,7 +74,7 @@ export default function DownloadPage() {
       <View className="absolute top-12 left-4 z-10">
         <Pressable
           onPress={handleBack}
-          className="bg-white rounded-full p-3 shadow-lg"
+    
         >
           <Ionicons name="arrow-back" size={24} color="#374151" />
         </Pressable>
