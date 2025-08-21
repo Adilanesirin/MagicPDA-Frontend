@@ -99,6 +99,21 @@ export default function HomeScreen() {
                 style={styles.gradientBackground}
               />
             </MaskedView>
+           <MaskedView
+              style={{ height: 16, width: '100%' }}
+              maskElement={
+                <Text style={styles.subtitleText}>
+                  Your Smart PDA - Making productivity magical
+                </Text>
+            }
+          >
+            <LinearGradient
+              colors={['#f0770dff', '#ee7219', '#141bec']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ flex: 1 }}
+            />
+            </MaskedView>
           </View>
           
           <TouchableOpacity
@@ -186,23 +201,6 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* Stats/Info Card */}
-        <View style={styles.infoCard}>
-          <LinearGradient
-            colors={['#fbd23c', '#ee7219', '#141bec']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.infoGradient}
-          >
-            <View style={styles.infoContent}>
-              <Ionicons name="sparkles" size={20} color="white" />
-              <Text style={styles.infoText}>
-                Your Smart PDA - Making productivity magical
-              </Text>
-            </View>
-          </LinearGradient>
-        </View>
-
         {/* Footer */}
         <Text style={styles.footer}>
           Powered by IMC Business Solutions
@@ -221,7 +219,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: "white",
     paddingTop: 50,
-    paddingBottom: 20,
+    paddingBottom: 25,
     borderBottomWidth: 0.5,
     borderBottomColor: "#E5E7EB",
     shadowColor: "#000",
@@ -241,20 +239,36 @@ const styles = StyleSheet.create({
   logoContainer: {
     flex: 1,
     alignItems: "flex-start",
+    paddingTop:1,
   },
   
   logoMask: {
     height: 35,
     width: 160,
+    marginBottom: 4,
   },
   
   logoText: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: 1,
     backgroundColor: 'transparent',
     textAlign: 'center',
     color: 'black',
+    marginRight: 20,
+    paddingTop: 5,
+
+    
+  },
+  
+  subtitleText: {
+    fontSize: 13,
+    
+    fontWeight: "500",
+    marginTop: 2,
+    backgroundColor: 'transparent',
+    color:'black',
+    paddingTop:1,
   },
   
   gradientBackground: {
@@ -394,37 +408,11 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
   
-  infoCard: {
-    marginHorizontal: 20,
-    marginTop: 30,
-    marginBottom: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  
-  infoGradient: {
-    padding: 20,
-  },
-  
-  infoContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  
-  infoText: {
-    color: "white",
-    fontSize: 15,
-    fontWeight: "500",
-    marginLeft: 8,
-    textAlign: "center",
-  },
-  
   footer: {
     textAlign: "center",
     color: "#9CA3AF",
     fontSize: 13,
-    marginTop: -10,
+    marginTop: 60,
     fontWeight: "400",
   },
 });

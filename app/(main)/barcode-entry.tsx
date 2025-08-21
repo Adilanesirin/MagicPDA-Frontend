@@ -310,7 +310,7 @@ export default function BarcodeEntry() {
             >
               {/* Header Section */}
               <View style={{
-                backgroundColor: '#eff6ff',
+                backgroundColor: '#d3ecdde7',
                 borderTopLeftRadius: 16,
                 borderTopRightRadius: 16,
                 padding: 16,
@@ -390,7 +390,7 @@ export default function BarcodeEntry() {
                   </View>
                   <View className="flex-1" style={{ marginLeft: 8 }}>
                     <View style={{
-                      backgroundColor: '#eff6ff',
+                      backgroundColor: '#f0fdf4',
                       borderRadius: 12,
                       padding: 12,
                       
@@ -398,13 +398,13 @@ export default function BarcodeEntry() {
                       <Text style={{
                         fontSize: 12,
                         fontWeight: '500',
-                        color: '#1d4ed8',
+                        color: '#166534',
                         marginBottom: 4,
                       }}>Current Stock</Text>
                       <Text style={{
                         fontSize: 18,
                         fontWeight: 'bold',
-                        color: '#1e40af',
+                        color: '#166534',
                       }}>
                         {item.currentStock}
                       </Text>
@@ -416,7 +416,7 @@ export default function BarcodeEntry() {
                 <View className="flex-row mb-4">
                   <View className="flex-1" style={{ marginRight: 8 }}>
                     <View style={{
-                      backgroundColor: '#fff7ed',
+                      backgroundColor: '#f0fdf4',
                       borderRadius: 12,
                       padding: 12,
                       
@@ -424,7 +424,7 @@ export default function BarcodeEntry() {
                       <Text style={{
                         fontSize: 12,
                         fontWeight: '500',
-                        color: '#c2410c',
+                        color: '#166534',
                         marginBottom: 8,
                       }}>Cost (Editable)</Text>
                       <TextInput
@@ -432,13 +432,13 @@ export default function BarcodeEntry() {
                         style={{
                           backgroundColor: 'white',
                           borderWidth: 2,
-                          borderColor: '#fed7aa',
+                          borderColor: '#19ac5189',
                           paddingHorizontal: 12,
                           paddingVertical: 8,
                           borderRadius: 8,
                           fontSize: 16,
                           fontWeight: 'bold',
-                          color: '#c2410c',
+                          color: '#166534',
                           textAlign: 'center',
                         }}
                         value={item.cost?.toString() || "0"}
@@ -454,7 +454,7 @@ export default function BarcodeEntry() {
                   </View>
                   <View className="flex-1" style={{ marginLeft: 8 }}>
                     <View style={{
-                      backgroundColor: '#faf5ff',
+                      backgroundColor: '#f0fdf4',
                       borderRadius: 12,
                       padding: 12,
                       
@@ -462,13 +462,13 @@ export default function BarcodeEntry() {
                       <Text style={{
                         fontSize: 12,
                         fontWeight: '500',
-                        color: '#7c2d12',
+                        color: '#166534',
                         marginBottom: 4,
                       }}>Batch Supplier</Text>
                       <Text style={{
                         fontSize: 14,
                         fontWeight: '600',
-                        color: '#7c2d12',
+                        color: '#166534',
                         lineHeight: 16,
                       }}>
                         {item.batchSupplier || 'N/A'}
@@ -479,11 +479,11 @@ export default function BarcodeEntry() {
 
                 {/* Quantity Control Section */}
                 <View style={{
-                  backgroundColor: '#f9fafb',
+                  backgroundColor: '#f0fdf4',
                   borderRadius: 12,
                   padding: 16,
                   borderWidth: 1,
-                  borderColor: '#e5e7eb',
+                  borderColor: '#add693ff',
                 }}>
                   <Text style={{
                     fontSize: 14,
@@ -523,15 +523,15 @@ export default function BarcodeEntry() {
                         style={{
                           backgroundColor: 'white',
                           borderWidth: 2,
-                          borderColor: '#a5b4fc',
+                          borderColor: '#19ac5189',
                           paddingHorizontal: 16,
                           paddingVertical: 12,
                           borderRadius: 12,
                           textAlign: 'center',
                           fontSize: 20,
                           fontWeight: 'bold',
-                          color: '#3730a3',
-                          shadowColor: '#6366f1',
+                          color: '#166534',
+                          shadowColor: '#63f171ff',
                           shadowOffset: { width: 0, height: 2 },
                           shadowOpacity: 0.1,
                           shadowRadius: 4,
@@ -584,7 +584,7 @@ export default function BarcodeEntry() {
                     <Text style={{
                       fontSize: 18,
                       fontWeight: 'bold',
-                      color: '#4f46e5',
+                      color: '#166534',
                     }}>
                       ₹{((item.cost || 0) * item.quantity).toFixed(2)}
                     </Text>
