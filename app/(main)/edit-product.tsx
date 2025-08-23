@@ -2,13 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 
 export default function EditProduct() {
@@ -29,7 +29,8 @@ export default function EditProduct() {
     if (itemData) {
       const parsedItem = JSON.parse(itemData);
       setProduct(parsedItem);
-      setEditedCost(parsedItem.cost?.toString() || "0");
+      // Use e.cost if available, otherwise use cost
+      setEditedCost(parsedItem.eCost?.toString() || parsedItem.cost?.toString() || "0");
       setEditedQuantity(parsedItem.quantity?.toString() || "1");
       setEditedSupplier(parsedItem.batchSupplier || supplier || "");
     }
@@ -38,7 +39,8 @@ export default function EditProduct() {
   const handleSave = () => {
     const updatedItem = {
       ...product,
-      cost: parseFloat(editedCost) || 0,
+      cost: product.cost, // Keep original cost unchanged
+      eCost: parseFloat(editedCost) || 0, // Save edited cost as eCost
       quantity: parseInt(editedQuantity) || 1,
       batchSupplier: editedSupplier,
     };
@@ -70,6 +72,8 @@ export default function EditProduct() {
     }
   };
 
+  const currentCost = product.eCost || product.cost || 0;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -88,8 +92,8 @@ export default function EditProduct() {
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="p-4">
-          {/* Product Info */}
-          <View className="bg-white rounded-lg p-4 mb-4">
+          {/* Product Info with Blue Outline */}
+          <View className="bg-white rounded-lg p-4 mb-4 border-2 border-blue-500">
             <Text className="text-base font-semibold text-gray-800 mb-1" numberOfLines={2}>
               {product.name}
             </Text>
@@ -98,13 +102,28 @@ export default function EditProduct() {
               MRP: <Text className="font-semibold text-green-600">₹{product.bmrp || 0}</Text>
               {" • "}Stock: <Text className="font-semibold">{product.currentStock || 0}</Text>
             </Text>
+            <Text className="text-sm text-gray-600 mt-1">
+              Original Cost: <Text className="font-semibold text-orange-600">₹{product.cost || 0}</Text>
+              {" • "}Edited Cost: <Text className="font-semibold text-red-600">₹{product.eCost || 0}</Text>
+            </Text>
           </View>
 
-          {/* Edit Form */}
+          {/* Edit Form - Reordered: Supplier, E.Qty, E.Cost */}
           <View className="bg-white rounded-lg p-4 mb-4">
+            {/* Supplier (Non-editable) */}
+            <View className="mb-4">
+              <Text className="text-gray-700 font-medium mb-2">Supplier</Text>
+              <View className="border border-gray-300 rounded-lg px-3 py-2 bg-gray-100">
+                <Text className="text-gray-600">{editedSupplier || "No supplier selected"}</Text>
+              </View>
+              <Text className="text-xs text-gray-500 mt-1">
+                Supplier information is read-only
+              </Text>
+            </View>
+
             {/* Quantity */}
             <View className="mb-4">
-              <Text className="text-gray-700 font-medium mb-2">Quantity</Text>
+              <Text className="text-gray-700 font-medium mb-2">E.Qty (Editable Quantity)</Text>
               <View className="flex-row items-center">
                 <TouchableOpacity
                   onPress={decrementQuantity}
@@ -128,8 +147,10 @@ export default function EditProduct() {
             </View>
 
             {/* Cost */}
-            <View className="mb-4">
-              <Text className="text-gray-700 font-medium mb-2">Cost (₹)</Text>
+            <View>
+              <Text className="text-gray-700 font-medium mb-2">
+                E.Cost (₹)
+              </Text>
               <TextInput
                 value={editedCost}
                 onChangeText={setEditedCost}
@@ -137,17 +158,9 @@ export default function EditProduct() {
                 placeholder="0"
                 className="border border-gray-300 rounded-lg px-3 py-2 font-semibold"
               />
-            </View>
-
-            {/* Supplier */}
-            <View>
-              <Text className="text-gray-700 font-medium mb-2">Supplier</Text>
-              <TextInput
-                value={editedSupplier}
-                onChangeText={setEditedSupplier}
-                placeholder="Supplier name"
-                className="border border-gray-300 rounded-lg px-3 py-2"
-              />
+              <Text className="text-xs text-gray-500 mt-1">
+                Enter the edited cost. Original cost remains unchanged.
+              </Text>
             </View>
           </View>
 

@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -17,6 +18,237 @@ import {
 } from "react-native";
 
 const db = SQLite.openDatabaseSync("magicpedia.db");
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 48,
+    left: 16,
+    zIndex: 50,
+  },
+  scrollView: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+  },
+  scrollContent: {
+    paddingBottom: 80,
+    paddingTop: 60,
+  },
+  content: {
+    padding: 16,
+  },
+  hiddenInput: {
+    height: 1,
+    width: 1,
+    opacity: 0,
+    position: 'absolute',
+  },
+  supplierTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#3b82f6',
+    marginBottom: 16,
+  },
+  cameraContainer: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    height: 256,
+    marginBottom: 16,
+    backgroundColor: '#e5e7eb',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  camera: {
+    flex: 1,
+  },
+  pausedContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pausedText: {
+    color: '#9ca3af',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  textInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  getButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  getButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#374151',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    marginTop: 16,
+  },
+  productCard: {
+    marginBottom: 6, // Reduced from 8
+    borderRadius: 6, // Reduced from 8
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08, // Reduced shadow
+    shadowRadius: 1.5,
+    elevation: 1.5,
+    padding: 10, // Reduced from 12
+  },
+  latestProductCard: {
+    backgroundColor: '#faf7e6ff', // Very light pink
+    borderWidth: 1,
+    borderColor: '#fabe09ff', // Red border12
+  },
+  regularProductCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  productHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6, // Reduced from 8
+  },
+  productInfo: {
+    flex: 1,
+    marginRight: 10, // Reduced from 12
+  },
+  productName: {
+    fontWeight: '600',
+    fontSize: 16, // Reduced from 18
+    color: '#1f2937',
+    marginBottom: 2, // Reduced from 4
+  },
+  productBarcode: {
+    fontSize: 14, // Reduced from 16
+    color: '#6b7280',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 6, // Reduced from 8
+  },
+  editButton: {
+    backgroundColor: '#3b82f6',
+    padding: 6, // Reduced from 8
+    borderRadius: 4,
+  },
+  deleteButton: {
+    backgroundColor: '#ef4444',
+    padding: 6, // Reduced from 8
+    borderRadius: 4,
+  },
+  productDetails: {
+    gap: 4, // Reduced from 8
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16, // Reduced from 24
+  },
+  detailText: {
+    fontSize: 14, // Reduced from 16
+    color: '#4b5563',
+  },
+  supplierText: {
+    fontWeight: '600',
+    color: '#9333ea',
+  },
+  mrpText: {
+    fontWeight: '600',
+    color: '#16a34a',
+  },
+  costText: {
+    fontWeight: '600',
+    color: '#ea580c',
+  },
+  stockText: {
+    fontWeight: '600',
+    color: '#374151',
+  },
+  eQtyText: {
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  eCostText: {
+    fontWeight: '600',
+    color: '#dc2626',
+  },
+  saveButton: {
+    marginTop: 20, // Reduced from 24
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  saveButtonActive: {
+    backgroundColor: '#fb923c',
+  },
+  saveButtonInactive: {
+    backgroundColor: '#d1d5db',
+  },
+  saveButtonText: {
+    color: '#ffffff',
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  footer: {
+    marginTop: 32, // Reduced from 40
+    marginBottom: 20, // Reduced from 24
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#6b7280',
+  },
+});
 
 export default function BarcodeEntry() {
   const { supplier, supplier_code, updatedItem, itemIndex } = useLocalSearchParams<{
@@ -127,6 +359,7 @@ export default function BarcodeEntry() {
           ...product,
           quantity: product.quantity ?? 1,
           cost: product.cost ?? product.bmrp ?? 0,
+          eCost: 0, // Initialize eCost as 0 (always present)
           currentStock: product.quantity ?? 0,
           batchSupplier: product.batch_supplier ?? supplier,
           scannedAt: new Date().getTime(),
@@ -169,6 +402,7 @@ export default function BarcodeEntry() {
         ...product,
         quantity: product.quantity ?? 1,
         cost: product.cost ?? product.bmrp ?? 0,
+        eCost: 0, // Initialize eCost as 0 (always present)
         currentStock: product.quantity ?? 0,
         batchSupplier: product.batch_supplier ?? supplier,
         scannedAt: new Date().getTime(),
@@ -202,19 +436,22 @@ export default function BarcodeEntry() {
 
       await db.withTransactionAsync(async () => {
         for (const item of scannedItems) {
+          // Use eCost if it's not 0, otherwise use cost
+          const finalCost = item.eCost !== 0 ? item.eCost : item.cost;
+          
           await saveOrderToSync({
             supplier_code: supplier_code,
             userid: userId ?? "unknown",
             barcode: item.barcode,
             quantity: item.quantity,
-            rate: item.cost ?? 0,
+            rate: finalCost ?? 0,
             mrp: item.bmrp ?? 0,
             order_date: today,
           });
 
           await db.runAsync(
             "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
-            [item.quantity, item.cost, item.barcode]
+            [item.quantity, finalCost, item.barcode]
           );
         }
       });
@@ -245,8 +482,8 @@ export default function BarcodeEntry() {
 
   if (!scanModeLoaded) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <Text className="text-gray-500">Loading scan mode...</Text>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading scan mode...</Text>
       </View>
     );
   }
@@ -254,20 +491,20 @@ export default function BarcodeEntry() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1 }}
+      style={styles.container}
     >
       {/* Back Button */}
-      <View className="absolute top-12 left-4 z-50">
+      <View style={styles.backButton}>
         <TouchableOpacity onPress={handleBack}>
           <Ionicons name="arrow-back" size={24} color="#374151" />
         </TouchableOpacity>
       </View>
 
       <ScrollView
-        className="flex-1 bg-gray-100"
-        contentContainerStyle={{ paddingBottom: 80, paddingTop: 60 }}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
       >
-        <View className="p-4">
+        <View style={styles.content}>
           {/* Hidden Zebra Scanner Input */}
           {scanMode === "hardware" && (
             <TextInput
@@ -275,59 +512,59 @@ export default function BarcodeEntry() {
               autoFocus
               value={hardwareScanValue}
               onChangeText={(text) => setHardwareScanValue(text)}
-              style={{ height: 1, width: 1, opacity: 0, position: "absolute" }}
+              style={styles.hiddenInput}
               showSoftInputOnFocus={false}
               blurOnSubmit={false}
             />
           )}
 
-          <Text className="text-2xl font-bold text-blue-500 mb-4">
+          <Text style={styles.supplierTitle}>
             Supplier: {supplier} ({supplier_code})
           </Text>
 
           {/* Camera Scanner */}
           {scanMode === "camera" && (
-            <View className="rounded-2xl overflow-hidden h-64 mb-4 bg-gray-200 border border-gray-300 shadow-sm">
+            <View style={styles.cameraContainer}>
               {scanning ? (
                 <CameraView
-                  style={{ flex: 1 }}
+                  style={styles.camera}
                   onBarcodeScanned={handleBarCodeScanned}
                   barcodeScannerSettings={{
                     barcodeTypes: ["ean13", "ean8", "code128", "code39", "qr"],
                   }}
                 />
               ) : (
-                <View className="flex-1 items-center justify-center">
-                  <Text className="text-gray-400">Paused</Text>
+                <View style={styles.pausedContainer}>
+                  <Text style={styles.pausedText}>Paused</Text>
                 </View>
               )}
             </View>
           )}
 
-          <View className="flex-row items-center mb-4 gap-2">
+          <View style={styles.inputRow}>
             <TextInput
               placeholder="Enter barcode manually"
               value={manualBarcode}
               onChangeText={setManualBarcode}
-              className="flex-1 border border-gray-300 px-4 py-2 rounded-xl bg-white shadow-sm"
+              style={styles.textInput}
               keyboardType="default"
               onFocus={() => setIsEditing(true)}
               onBlur={() => setIsEditing(false)}
             />
             <TouchableOpacity
               onPress={handleManualSearch}
-              className="bg-blue-500 px-4 py-2 rounded-xl"
+              style={styles.getButton}
             >
-              <Text className="text-white font-semibold">Get</Text>
+              <Text style={styles.getButtonText}>Get</Text>
             </TouchableOpacity>
           </View>
 
-          <Text className="text-lg font-semibold mb-2 text-gray-700">
+          <Text style={styles.sectionTitle}>
             Scanned Products
           </Text>
 
           {scannedItems.length === 0 && (
-            <Text className="text-center text-gray-400 italic mt-4">
+            <Text style={styles.emptyText}>
               No products scanned
             </Text>
           )}
@@ -335,20 +572,23 @@ export default function BarcodeEntry() {
           {scannedItems.map((item, index) => (
             <View
               key={`${item.barcode}-${index}`}
-              className="mb-2 bg-white rounded-lg shadow-sm border border-gray-200 p-3"
+              style={[
+                styles.productCard,
+                index === 0 ? styles.latestProductCard : styles.regularProductCard
+              ]}
             >
               {/* Product Name and Actions */}
-              <View className="flex-row justify-between items-center mb-2">
-                <View className="flex-1 mr-3">
-                  <Text className="font-semibold text-base text-gray-800 mb-1" numberOfLines={1}>
+              <View style={styles.productHeader}>
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <Text className="text-sm text-gray-500">{item.barcode}</Text>
+                  <Text style={styles.productBarcode}>{item.barcode}</Text>
                 </View>
-                <View className="flex-row gap-2">
+                <View style={styles.actionButtons}>
                   <TouchableOpacity
                     onPress={() => handleEditItem(item, index)}
-                    className="bg-blue-500 p-2 rounded"
+                    style={styles.editButton}
                   >
                     <Ionicons name="create-outline" size={14} color="white" />
                   </TouchableOpacity>
@@ -357,35 +597,42 @@ export default function BarcodeEntry() {
                       const updated = scannedItems.filter((_, i) => i !== index);
                       setScannedItems(updated);
                     }}
-                    className="bg-red-500 p-2 rounded"
+                    style={styles.deleteButton}
                   >
                     <Ionicons name="trash-outline" size={14} color="white" />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Product Details - Two Rows */}
-              <View className="space-y-1">
-                {/* First Row: Qty, Cost, MRP */}
-                <View className="flex-row items-center gap-4">
-                  <Text className="text-sm text-gray-600">
-                    Qty: <Text className="font-semibold text-blue-600">{item.quantity}</Text>
-                  </Text>
-                  <Text className="text-sm text-gray-600">
-                    Cost: <Text className="font-semibold text-orange-600">₹{item.cost || 0}</Text>
-                  </Text>
-                  <Text className="text-sm text-gray-600">
-                    MRP: <Text className="font-semibold text-green-600">₹{item.bmrp || 0}</Text>
-                  </Text>
-                  <Text className="text-sm text-gray-600">
-                    Stock: <Text className="font-semibold text-gray-700">{item.currentStock}</Text>
+              {/* Product Details - Three Lines */}
+              <View style={styles.productDetails}>
+                {/* First Line: Supplier */}
+                <View>
+                  <Text style={styles.detailText}>
+                    Supplier: <Text style={styles.supplierText}>{item.batchSupplier || 'N/A'}</Text>
                   </Text>
                 </View>
 
-                {/* Second Row: Supplier */}
-                <View>
-                  <Text className="text-sm text-gray-600">
-                    Supplier: <Text className="font-semibold text-purple-600">{item.batchSupplier || 'N/A'}</Text>
+                {/* Second Line: MRP, Cost, Stock */}
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailText}>
+                    MRP: <Text style={styles.mrpText}>₹{item.bmrp || 0}</Text>
+                  </Text>
+                  <Text style={styles.detailText}>
+                    Cost: <Text style={styles.costText}>₹{item.cost || 0}</Text>
+                  </Text>
+                  <Text style={styles.detailText}>
+                    Stock: <Text style={styles.stockText}>{item.currentStock}</Text>
+                  </Text>
+                </View>
+
+                {/* Third Line: E.Qty, E.Cost */}
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailText}>
+                    E.Qty: <Text style={styles.eQtyText}>{item.quantity}</Text>
+                  </Text>
+                  <Text style={styles.detailText}>
+                    E.Cost: <Text style={styles.eCostText}>₹{item.eCost || 0}</Text>
                   </Text>
                 </View>
               </View>
@@ -394,20 +641,21 @@ export default function BarcodeEntry() {
 
           {/* Save Button */}
           <TouchableOpacity
-            className={`mt-6 rounded-xl p-4 shadow-lg ${
-              scannedItems.length > 0 ? "bg-orange-400" : "bg-gray-300"
-            }`}
+            style={[
+              styles.saveButton,
+              scannedItems.length > 0 ? styles.saveButtonActive : styles.saveButtonInactive
+            ]}
             disabled={scannedItems.length === 0}
             onPress={updateQuantities}
           >
-            <Text className="text-white text-center text-lg font-bold">
+            <Text style={styles.saveButtonText}>
               Update Quantities ({scannedItems.length} items)
             </Text>
           </TouchableOpacity>
 
           {/* Footer */}
-          <View className="mt-10 mb-6">
-            <Text className="text-sm text-gray-400 text-center">
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
               Powered by IMC Business Solutions
             </Text>
           </View>
