@@ -3,7 +3,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import * as SQLite from "expo-sqlite";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -17,7 +16,10 @@ import {
   View,
 } from "react-native";
 
-const db = SQLite.openDatabaseSync("magicpedia.db");
+// Add this import - adjust the path based on your database setup
+import { getDatabase } from "@/utils/database"; // Import a function that returns the database instance
+// Alternative: if you have a direct import that might be undefined initially:
+// import { db } from "@/utils/database";
 
 const styles = StyleSheet.create({
   container: {
@@ -120,19 +122,19 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   productCard: {
-    marginBottom: 6, // Reduced from 8
-    borderRadius: 6, // Reduced from 8
+    marginBottom: 6,
+    borderRadius: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08, // Reduced shadow
+    shadowOpacity: 0.08,
     shadowRadius: 1.5,
     elevation: 1.5,
-    padding: 10, // Reduced from 12
+    padding: 10,
   },
   latestProductCard: {
-    backgroundColor: '#faf7e6ff', // Very light pink
+    backgroundColor: '#faf7e6ff',
     borderWidth: 1,
-    borderColor: '#fabe09ff', // Red border12
+    borderColor: '#fabe09ff',
   },
   regularProductCard: {
     backgroundColor: '#ffffff',
@@ -143,46 +145,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6, // Reduced from 8
+    marginBottom: 6,
   },
   productInfo: {
     flex: 1,
-    marginRight: 10, // Reduced from 12
+    marginRight: 10,
   },
   productName: {
     fontWeight: '600',
-    fontSize: 16, // Reduced from 18
+    fontSize: 16,
     color: '#1f2937',
-    marginBottom: 2, // Reduced from 4
+    marginBottom: 2,
   },
   productBarcode: {
-    fontSize: 14, // Reduced from 16
+    fontSize: 14,
     color: '#6b7280',
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 6, // Reduced from 8
+    gap: 6,
   },
   editButton: {
     backgroundColor: '#3b82f6',
-    padding: 6, // Reduced from 8
+    padding: 6,
     borderRadius: 4,
   },
   deleteButton: {
     backgroundColor: '#ef4444',
-    padding: 6, // Reduced from 8
+    padding: 6,
     borderRadius: 4,
   },
   productDetails: {
-    gap: 4, // Reduced from 8
+    gap: 4,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16, // Reduced from 24
+    gap: 16,
   },
   detailText: {
-    fontSize: 14, // Reduced from 16
+    fontSize: 14,
     color: '#4b5563',
   },
   supplierText: {
@@ -201,16 +203,59 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
   },
+  // Enhanced styles for E.Qty and E.Cost highlighting
+  eQtyContainer: {
+    backgroundColor: '#f5e4dfff', // Light blue background
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e24b14ff',
+  },
   eQtyText: {
-    fontWeight: '600',
-    color: '#2563eb',
+    fontWeight: '700',
+    color: '#cb2a15ff', // Dark blue text
+    fontSize: 14,
+  },
+  eQtyValue: {
+    fontWeight: '700',
+    color: '#cb2a15ff',
+    fontSize: 14,
+  },
+  eCostContainer: {
+    backgroundColor: '#f5e4dfff', // Light yellow background
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e24b14ff',
   },
   eCostText: {
-    fontWeight: '600',
-    color: '#dc2626',
+    fontWeight: '700',
+    color: '#cb2a15ff', // Dark yellow/orange text
+    fontSize: 14,
+  },
+  eCostValue: {
+    fontWeight: '700',
+    color: '#cb2a15ff',
+    fontSize: 14,
+  },
+  // Styles for edited values
+  editedValue: {
+    backgroundColor: '#f3e8ff', // Light purple background for edited values
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#c084fc',
+  },
+  editedText: {
+    fontWeight: '700',
+    color: '#7c3aed', // Purple text for edited values
+    fontSize: 14,
   },
   saveButton: {
-    marginTop: 20, // Reduced from 24
+    marginTop: 20,
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
@@ -232,8 +277,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   footer: {
-    marginTop: 32, // Reduced from 40
-    marginBottom: 20, // Reduced from 24
+    marginTop: 32,
+    marginBottom: 20,
   },
   footerText: {
     fontSize: 14,
@@ -297,10 +342,11 @@ export default function BarcodeEntry() {
         setScannedItems(prevItems => {
           const newItems = [...prevItems];
           if (index >= 0 && index < newItems.length) {
-            newItems[index] = parsedItem;
+            // Mark the item as edited
+            newItems[index] = { ...parsedItem, isEdited: true };
           } else {
             // If index is invalid, add as new item
-            newItems.unshift(parsedItem);
+            newItems.unshift({ ...parsedItem, isEdited: true });
           }
           return newItems;
         });
@@ -335,6 +381,15 @@ export default function BarcodeEntry() {
     setScanning(false);
 
     try {
+      // Get the database instance
+      const db = await getDatabase();
+      
+      if (!db) {
+        Alert.alert("Error", "Database not available");
+        setScanning(true);
+        return;
+      }
+
       const rows = await db.getAllAsync(
         "SELECT * FROM product_data WHERE barcode = ?",
         [data]
@@ -357,12 +412,13 @@ export default function BarcodeEntry() {
       if (typeof product === "object" && product !== null) {
         const newItem = {
           ...product,
-          quantity: product.quantity ?? 1,
+          quantity: 0, // Initialize E.Qty as 0 instead of product.quantity
           cost: product.cost ?? product.bmrp ?? 0,
           eCost: 0, // Initialize eCost as 0 (always present)
-          currentStock: product.quantity ?? 0,
+          currentStock: product.quantity ?? 0, // Keep current stock separate
           batchSupplier: product.batch_supplier ?? supplier,
           scannedAt: new Date().getTime(),
+          isEdited: false, // Track if item has been edited
         };
         setScannedItems((prev) => [newItem, ...prev]);
       } else {
@@ -381,6 +437,14 @@ export default function BarcodeEntry() {
     if (!trimmed) return;
 
     try {
+      // Get the database instance
+      const db = await getDatabase();
+      
+      if (!db) {
+        Alert.alert("Error", "Database not available");
+        return;
+      }
+
       const rows = await db.getAllAsync(
         "SELECT * FROM product_data WHERE barcode = ?",
         [trimmed]
@@ -400,12 +464,13 @@ export default function BarcodeEntry() {
       const product = rows[0] as { [key: string]: any; quantity?: number };
       const newItem = {
         ...product,
-        quantity: product.quantity ?? 1,
+        quantity: 0, // Initialize E.Qty as 0 instead of product.quantity
         cost: product.cost ?? product.bmrp ?? 0,
         eCost: 0, // Initialize eCost as 0 (always present)
-        currentStock: product.quantity ?? 0,
+        currentStock: product.quantity ?? 0, // Keep current stock separate
         batchSupplier: product.batch_supplier ?? supplier,
         scannedAt: new Date().getTime(),
+        isEdited: false, // Track if item has been edited
       };
 
       setScannedItems((prev) => [newItem, ...prev]);
@@ -433,6 +498,14 @@ export default function BarcodeEntry() {
     try {
       const userId = await SecureStore.getItemAsync("user_id");
       const today = new Date().toISOString().split("T")[0];
+
+      // Get the database instance
+      const db = await getDatabase();
+      
+      if (!db) {
+        Alert.alert("Error", "Database not available");
+        return;
+      }
 
       await db.withTransactionAsync(async () => {
         for (const item of scannedItems) {
@@ -626,14 +699,33 @@ export default function BarcodeEntry() {
                   </Text>
                 </View>
 
-                {/* Third Line: E.Qty, E.Cost */}
+                {/* Third Line: E.Qty, E.Cost with enhanced highlighting */}
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailText}>
-                    E.Qty: <Text style={styles.eQtyText}>{item.quantity}</Text>
-                  </Text>
-                  <Text style={styles.detailText}>
-                    E.Cost: <Text style={styles.eCostText}>₹{item.eCost || 0}</Text>
-                  </Text>
+                  {/* E.Qty with highlighting */}
+                  <View style={[
+                    styles.eQtyContainer,
+                    item.isEdited && item.quantity !== 0 ? styles.editedValue : {}
+                  ]}>
+                    <Text style={[
+                      styles.eQtyText,
+                      item.isEdited && item.quantity !== 0 ? styles.editedText : styles.eQtyValue
+                    ]}>
+                      E.Qty: {item.quantity}
+                    </Text>
+                  </View>
+
+                  {/* E.Cost with highlighting */}
+                  <View style={[
+                    styles.eCostContainer,
+                    item.isEdited && item.eCost !== 0 ? styles.editedValue : {}
+                  ]}>
+                    <Text style={[
+                      styles.eCostText,
+                      item.isEdited && item.eCost !== 0 ? styles.editedText : styles.eCostValue
+                    ]}>
+                      E.Cost: ₹{item.eCost || 0}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </View>

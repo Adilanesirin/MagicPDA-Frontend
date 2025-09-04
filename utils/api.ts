@@ -1,18 +1,20 @@
-// utils/enhanced-api.ts
+// utils/api.ts
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
-// Enhanced connection test with multiple fallback methods
+// Track API instances to prevent reuse issues
+const apiInstanceTracker = new Set<string>();
+
+// Enhanced connection test
 export async function testConnectionEnhanced(ip: string): Promise<boolean> {
   const cleanIP = ip
     .replace(/^https?:\/\//, "")
     .replace(/:8000$/, "")
     .trim();
 
-  console.log(`🔍 Enhanced connection test to: ${cleanIP}:8000`);
+  console.log(`Testing connection to: ${cleanIP}:8000`);
 
-  // Multiple connection methods to try
   const methods = [
     { name: "Direct HTTP", url: `http://${cleanIP}:8000/status` },
     {
@@ -29,10 +31,9 @@ export async function testConnectionEnhanced(ip: string): Promise<boolean> {
 
   for (const method of methods) {
     try {
-      console.log(`🧪 Trying ${method.name}...`);
+      console.log(`Trying ${method.name}...`);
 
       if (method.method === "fetch") {
-        // Use native fetch as fallback
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
 
@@ -50,12 +51,11 @@ export async function testConnectionEnhanced(ip: string): Promise<boolean> {
         if (response.ok) {
           const data = await response.json();
           if (data.status === "online") {
-            console.log(`✅ ${method.name} successful:`, data);
+            console.log(`${method.name} successful:`, data);
             return true;
           }
         }
       } else {
-        // Use axios
         const axiosConfig = {
           timeout: 8000,
           headers: {
@@ -64,44 +64,31 @@ export async function testConnectionEnhanced(ip: string): Promise<boolean> {
             "User-Agent": "IMCSync-Mobile/1.0",
             ...method.headers,
           },
-          // Important: Force HTTP even in production
           httpsAgent: false,
-          // Disable SSL verification for local networks
           rejectUnauthorized: false,
         };
 
         const response = await axios.get(method.url, axiosConfig);
 
         if (response.data && response.data.status === "online") {
-          console.log(`✅ ${method.name} successful:`, response.data);
-          return true;
+            console.log(`${method.name} successful:`, response.data);
+            return true;
         }
       }
     } catch (error: any) {
-      console.log(`❌ ${method.name} failed:`, {
+      console.log(`${method.name} failed:`, {
         message: error.message,
         code: error.code,
         name: error.name,
       });
-
-      // Log specific error types for debugging
-      if (error.code === "NETWORK_ERROR") {
-        console.log("   🔍 Network error - likely blocked by security policy");
-      } else if (error.name === "AbortError") {
-        console.log("   ⏱️ Request timed out");
-      } else if (error.message?.includes("cleartext")) {
-        console.log(
-          "   🚫 Cleartext HTTP blocked - check network security config"
-        );
-      }
     }
   }
 
-  console.log(`❌ All connection methods failed for ${cleanIP}`);
+  console.log(`All connection methods failed for ${cleanIP}`);
   return false;
 }
 
-// Enhanced API instance with multiple fallback strategies
+// Enhanced API creation with SELECTIVE cache-busting for downloads only
 export async function createEnhancedAPI() {
   try {
     const ip = await SecureStore.getItemAsync("paired_ip");
@@ -111,47 +98,82 @@ export async function createEnhancedAPI() {
       throw new Error("No paired IP found. Please connect to server first.");
     }
 
-    console.log("🌐 Creating enhanced API instance for IP:", ip);
-
+    // Create unique instance ID for tracking
+    const instanceId = `api_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     const baseURL = `http://${ip}:8000`;
 
+    console.log(`Creating fresh API instance: ${instanceId} for ${baseURL}`);
+
+    // Create completely fresh axios instance
     const instance = axios.create({
       baseURL,
-      timeout: 45000, // Longer timeout for production
+      timeout: 60000,
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         "User-Agent": "IMCSync-Mobile/1.0",
-        // Add cache control to prevent caching issues
-        "Cache-Control": "no-cache",
-        Pragma: "no-cache",
+        "X-Instance-ID": instanceId,
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
       },
-      // Production-specific settings
       maxRedirects: 0,
-      validateStatus: (status) => status < 500, // Accept 4xx errors for handling
+      validateStatus: (status) => status < 500,
+      adapter: undefined,
     });
 
-    // Enhanced request interceptor
+    // Enhanced request interceptor with SELECTIVE cache-busting
     instance.interceptors.request.use(
       (config) => {
-        console.log(
-          `🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`
-        );
-        console.log(`📡 Base URL: ${config.baseURL}`);
+        console.log(`API Request [${instanceId}]: ${config.method?.toUpperCase()} ${config.url}`);
+        console.log(`Base URL: ${config.baseURL}`);
 
+        // Add auth token if available
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
 
-        // Add timestamp to prevent caching
-        if (config.url && !config.url.includes("?")) {
-          config.url += `?_t=${Date.now()}`;
+        // List of endpoints that NEED cache-busting (ONLY for file downloads)
+        const needsCacheBusting = [
+          '/download-file',
+          '/export-excel',
+          '/export-csv', 
+          '/download-backup',
+          '/generate-pdf',
+          '/download-report',
+          '/export-database',
+          '/backup-download',
+          '/download',
+          '/sync-data',
+          '/get-data',
+          '/data-download',
+          '/api/data'
+        ];
+
+        // Check if current URL needs cache-busting
+        const needsCacheBypass = needsCacheBusting.some(endpoint => 
+          config.url?.includes(endpoint)
+        );
+
+        // Only add cache-busting params for download/data endpoints
+        if (needsCacheBypass) {
+          const timestamp = Date.now();
+          const random = Math.random().toString(36).substring(2, 8);
+          
+          if (!config.params) config.params = {};
+          config.params._t = timestamp;
+          config.params._r = random;
+          config.params._instance = instanceId;
+
+          console.log(`Cache busting params added for download: _t=${timestamp}, _r=${random}, _instance=${instanceId}`);
+        } else {
+          console.log(`No cache-busting needed for: ${config.url}`);
         }
 
         return config;
       },
       (error) => {
-        console.error("❌ Request interceptor error:", error);
+        console.error("Request interceptor error:", error);
         return Promise.reject(error);
       }
     );
@@ -159,13 +181,11 @@ export async function createEnhancedAPI() {
     // Enhanced response interceptor
     instance.interceptors.response.use(
       (response) => {
-        console.log(
-          `✅ API Success: ${response.status} ${response.config.url}`
-        );
+        console.log(`API Success [${instanceId}]: ${response.status} ${response.config.url}`);
         return response;
       },
       async (error) => {
-        console.error("❌ API Error Details:", {
+        console.error(`API Error [${instanceId}]:`, {
           message: error.message,
           code: error.code,
           url: error.config?.url,
@@ -173,31 +193,89 @@ export async function createEnhancedAPI() {
           statusText: error.response?.statusText,
         });
 
-        // Specific error handling for network issues
         if (error.code === "NETWORK_ERROR" || error.code === "ECONNREFUSED") {
-          console.log("🔍 Network connectivity issue detected");
-          console.log("   - Check if server is running");
-          console.log("   - Verify firewall settings");
-          console.log("   - Ensure both devices on same WiFi");
-        }
-
-        if (error.message?.toLowerCase().includes("cleartext")) {
-          console.log("🚫 HTTP cleartext traffic blocked");
-          console.log("   - Check network_security_config.xml");
-          console.log("   - Verify usesCleartextTraffic is true");
+          console.log("Network connectivity issue detected");
+        } else if (error.message?.toLowerCase().includes("cleartext")) {
+          console.log("HTTP cleartext traffic blocked");
+        } else if (error.code === 'ECONNABORTED') {
+          console.log("Request timeout");
+        } else if (error.response?.status === 422) {
+          console.log("Unprocessable Content (422)");
         }
 
         return Promise.reject(error);
       }
     );
 
+    // Track this instance
+    apiInstanceTracker.add(instanceId);
+
+    console.log(`Fresh API instance ready: ${instanceId}`);
+    return instance;
+
+  } catch (error) {
+    console.error("Error creating enhanced API instance:", error);
+    throw new Error(`API initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+// Special API creator for downloads
+export async function createDownloadAPI() {
+  try {
+    const ip = await SecureStore.getItemAsync("paired_ip");
+    const token = await SecureStore.getItemAsync("token");
+
+    if (!ip) {
+      throw new Error("No paired IP found");
+    }
+
+    const instanceId = `download_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    const baseURL = `http://${ip}:8000`;
+
+    console.log(`Creating download API instance: ${instanceId}`);
+
+    const instance = axios.create({
+      baseURL,
+      timeout: 120000,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "User-Agent": "IMCSync-Mobile-Download/1.0",
+        "X-Instance-ID": instanceId,
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      },
+    });
+
+    // Aggressive cache-busting for all download requests
+    instance.interceptors.request.use((config) => {
+      console.log(`Download Request: ${config.method?.toUpperCase()} ${config.url}`);
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+
+      // Always add cache-busting for download requests
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 15);
+      
+      if (!config.params) config.params = {};
+      config.params._download = timestamp;
+      config.params._cache = random;
+      config.params._attempt = instanceId;
+
+      return config;
+    });
+
     return instance;
   } catch (error) {
-    console.error("❌ Error creating enhanced API instance:", error);
+    console.error("Error creating download API:", error);
     throw error;
   }
 }
 
+// Network diagnostics
 interface NetworkTestResult {
   name: string;
   success: boolean;
@@ -205,21 +283,16 @@ interface NetworkTestResult {
   error: string | null;
 }
 
-// Network diagnostics function
 export async function runNetworkDiagnostics(ip: string) {
-  console.log("🔍 Running network diagnostics...");
+  console.log("Running network diagnostics...");
 
-  const diagnostics: {
-    platform: string;
-    ip: string;
-    timestamp: string;
-    tests: NetworkTestResult[];
-  } = {
+  const diagnostics = {
     platform: Platform.OS,
     ip: ip,
     timestamp: new Date().toISOString(),
-    tests: [],
+    tests: [] as NetworkTestResult[],
   };
+
   // Test 1: Basic fetch
   try {
     const controller = new AbortController();
@@ -265,6 +338,12 @@ export async function runNetworkDiagnostics(ip: string) {
     });
   }
 
-  console.log("📊 Network Diagnostics Results:", diagnostics);
+  console.log("Network Diagnostics Results:", diagnostics);
   return diagnostics;
 }
+
+// Utility functions for managing API instances
+export const resetApiState = () => {
+  console.log("Resetting API state completely");
+  apiInstanceTracker.clear();
+};

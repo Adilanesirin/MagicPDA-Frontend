@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import * as SQLite from "expo-sqlite";
 import React, { useEffect, useState } from "react";
 import {
   FlatList,
@@ -11,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { getAllSuppliers } from "../../utils/database"; // Import from root utils folder
 
 export default function Entry() {
   type Supplier = { code: string; name: string };
@@ -20,21 +20,27 @@ export default function Entry() {
   );
   const [modalVisible, setModalVisible] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
-
-  const db = SQLite.openDatabaseSync("magicpedia.db");
 
   useEffect(() => {
     const fetchSuppliers = async () => {
       try {
-        const rows = await db.getAllAsync(
-          "SELECT DISTINCT code, name FROM master_data"
-        );
-        setSuppliers(rows as Supplier[]);
+        setLoading(true);
+        // Use the helper function (recommended)
+        const supplierData = await getAllSuppliers();
+        setSuppliers(supplierData as Supplier[]);
+        
+        console.log(`✅ Loaded ${supplierData.length} suppliers`);
       } catch (err) {
         console.error("❌ Error fetching suppliers:", err);
+        // Show user-friendly error message
+        setSuppliers([]);
+      } finally {
+        setLoading(false);
       }
     };
+    
     fetchSuppliers();
   }, []);
 
@@ -62,10 +68,7 @@ export default function Entry() {
     <View className="flex-1 bg-gray-100">
       {/* Back Button */}
       <View className="absolute top-12 left-4 z-50">
-        <TouchableOpacity
-          onPress={handleBack}
-      
-        >
+        <TouchableOpacity onPress={handleBack}>
           <Ionicons name="arrow-back" size={24} color="#374151" />
         </TouchableOpacity>
       </View>
@@ -84,24 +87,35 @@ export default function Entry() {
           <Text className="text-base font-semibold mb-2 text-gray-700">
             Supplier
           </Text>
-          <TouchableOpacity
-            className="border border-yellow-300 p-4 rounded-xl mb-6 bg-white shadow-sm"
-            onPress={() => setModalVisible(true)}
-          >
-            <Text className="text-base text-gray-600">
-              {selectedSupplier?.name || "Choose a supplier..."}
-            </Text>
-          </TouchableOpacity>
+          
+          {loading ? (
+            <View className="border border-yellow-300 p-4 rounded-xl mb-6 bg-gray-50">
+              <Text className="text-base text-gray-400">Loading suppliers...</Text>
+            </View>
+          ) : suppliers.length === 0 ? (
+            <View className="border border-red-300 p-4 rounded-xl mb-6 bg-red-50">
+              <Text className="text-base text-red-600">No suppliers found. Please sync data first.</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              className="border border-yellow-300 p-4 rounded-xl mb-6 bg-white shadow-sm"
+              onPress={() => setModalVisible(true)}
+            >
+              <Text className="text-base text-gray-600">
+                {selectedSupplier?.name || "Choose a supplier..."}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
-            disabled={!selectedSupplier}
+            disabled={!selectedSupplier || loading}
             onPress={handleProceed}
             className={`p-4 rounded-xl shadow-lg ${
-              selectedSupplier ? "bg-orange-500" : "bg-gray-300"
+              selectedSupplier && !loading ? "bg-orange-500" : "bg-gray-300"
             }`}
           >
             <Text className="text-white text-center font-bold text-base">
-              Proceed to Entry
+              {loading ? "Loading..." : "Proceed to Entry"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -133,8 +147,16 @@ export default function Entry() {
                   }}
                 >
                   <Text className="text-base text-gray-700">{item.name}</Text>
+                  <Text className="text-sm text-gray-500">Code: {item.code}</Text>
                 </TouchableOpacity>
               )}
+              ListEmptyComponent={
+                <View className="p-4">
+                  <Text className="text-gray-500 text-center">
+                    {searchText ? "No suppliers match your search" : "No suppliers available"}
+                  </Text>
+                </View>
+              }
             />
 
             <TouchableOpacity

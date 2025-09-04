@@ -26,8 +26,10 @@ export default function Upload() {
   const loadData = async () => {
     const data = await getPendingOrders();
     const s = await getLocalDataStats();
-    setOrders(data);
-    setStats(s);
+    
+    // FIX: Ensure orders is always an array, never undefined
+    setOrders(Array.isArray(data) ? data : []);
+    setStats(s || {});
   };
 
   useEffect(() => {
@@ -35,7 +37,8 @@ export default function Upload() {
   }, []);
 
   const handleUpload = async () => {
-    if (orders.length === 0) {
+    // FIX: Added proper array check
+    if (!orders || orders.length === 0) {
       Toast.show({
         type: "info",
         text1: "Nothing to upload",
@@ -70,6 +73,11 @@ export default function Upload() {
     setUploadSuccess(false);
     loadData(); // Refresh data
   };
+
+  // FIX: Added safe calculation for total items
+  const totalItems = Array.isArray(orders) 
+    ? orders.reduce((acc, cur) => acc + (cur.products?.length || 0), 0)
+    : 0;
 
   return (
     <View className="flex-1 justify-center items-center px-4">
@@ -149,8 +157,7 @@ export default function Upload() {
               <View className="flex flex-row gap-1">
                 <Text>🎰</Text>
                 <Text className="text-base text-gray-700">
-                  Total Items:{" "}
-                  {orders.reduce((acc, cur) => acc + cur.products.length, 0)}
+                  Total Items: {totalItems}
                 </Text>
               </View>
               <View className="flex flex-row gap-1">

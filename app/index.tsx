@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { initDatabase } from "@/utils/database";
 import { Redirect } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import { View, Image } from "react-native";
-import { initDatabase } from "@/utils/database";
-import { deleteOldDatabase } from "@/utils/db-utils";
+import { useEffect, useState } from "react";
+import { Image, View } from "react-native";
 
 export default function Index() {
   const [redirectTo, setRedirectTo] = useState<string | null>(null);

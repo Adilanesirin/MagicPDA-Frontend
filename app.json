@@ -2,6 +2,7 @@
   "expo": {
     "name": "IMCSync",
     "slug": "IMCSync",
+    "owner": "adila-2005",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -75,7 +76,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "44019653-da4e-4abc-8684-e92a09e2a1e5"
+        "projectId": "f25ceba9-3d51-4b1f-9ca4-3986a0095dd0"
       }
     }
   }

@@ -1,25 +1,25 @@
+import { runNetworkDiagnostics, testConnectionEnhanced } from "@/utils/api";
+import { savePairingIP } from "@/utils/pairing";
+import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
+  ActivityIndicator,
+  Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
-  TouchableWithoutFeedback,
-  Keyboard,
+  StatusBar,
+  Text,
+  TextInput,
   TouchableOpacity,
-  Image,
-  ActivityIndicator,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import axios from "axios";
-import { savePairingIP } from "@/utils/pairing";
-import { testConnectionEnhanced, runNetworkDiagnostics } from "@/utils/api";
-import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
-import { StatusBar } from "react-native";
 
 export default function Pairing() {
   const [ip, setIp] = useState("");

@@ -5,7 +5,7 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Toast from "react-native-toast-message";
 
 const routes = [
@@ -100,7 +100,7 @@ export default function HomeScreen() {
               />
             </MaskedView>
            <MaskedView
-              style={{ height: 16, width: '100%' }}
+              style={styles.subtitleMask}
               maskElement={
                 <Text style={styles.subtitleText}>
                   Your Smart PDA - Making productivity magical
@@ -218,8 +218,8 @@ const styles = StyleSheet.create({
   
   header: {
     backgroundColor: "white",
-    paddingTop: 50,
-    paddingBottom: 25,
+    paddingTop: Platform.OS === 'android' ? 60 : 50,
+    paddingBottom: Platform.OS === 'android' ? 30 : 25,
     borderBottomWidth: 0.5,
     borderBottomColor: "#E5E7EB",
     shadowColor: "#000",
@@ -239,36 +239,42 @@ const styles = StyleSheet.create({
   logoContainer: {
     flex: 1,
     alignItems: "flex-start",
-    paddingTop:1,
+    paddingTop: Platform.OS === 'android' ? 5 : 1,
   },
   
   logoMask: {
-    height: 35,
-    width: 160,
-    marginBottom: 4,
+    height: Platform.OS === 'android' ? 40 : 35,
+    width: Platform.OS === 'android' ? 180 : 160,
+    marginBottom: Platform.OS === 'android' ? 6 : 4,
   },
   
   logoText: {
-    fontSize: 30,
+    fontSize: Platform.OS === 'android' ? 32 : 30,
     fontWeight: "800",
     letterSpacing: 1,
     backgroundColor: 'transparent',
     textAlign: 'center',
     color: 'black',
     marginRight: 20,
-    paddingTop: 5,
-
-    
+    paddingTop: Platform.OS === 'android' ? 2 : 5,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  
+  subtitleMask: {
+    height: Platform.OS === 'android' ? 20 : 16,
+    width: '100%',
   },
   
   subtitleText: {
-    fontSize: 13,
-    
+    fontSize: Platform.OS === 'android' ? 14 : 13,
     fontWeight: "500",
-    marginTop: 2,
+    marginTop: Platform.OS === 'android' ? 0 : 2,
     backgroundColor: 'transparent',
     color:'black',
-    paddingTop:1,
+    paddingTop: Platform.OS === 'android' ? 0 : 1,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   
   gradientBackground: {
@@ -411,8 +417,9 @@ const styles = StyleSheet.create({
   footer: {
     textAlign: "center",
     color: "#9CA3AF",
-    fontSize: 13,
+    fontSize: Platform.OS === 'android' ? 14 : 13,
     marginTop: 60,
     fontWeight: "400",
+    includeFontPadding: false,
   },
 });
