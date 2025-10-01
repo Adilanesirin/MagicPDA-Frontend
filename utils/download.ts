@@ -1,5 +1,4 @@
 // Enhanced download functions with better authentication handling
-
 import { createDownloadAPI } from "@/utils/api";
 import {
   saveMasterData,
@@ -10,9 +9,9 @@ import * as SecureStore from "expo-secure-store";
 // Download state management
 let downloadState = {
   isInProgress: false,
-  lastError: null,
-  startTime: null,
-  endTime: null
+  lastError: null as string | null,
+  startTime: null as number | null,
+  endTime: null as number | null
 };
 
 // Get current download status
@@ -49,7 +48,6 @@ export const resetDownloadState = async () => {
 export const clearDownloadArtifacts = async () => {
   try {
     console.log("🧹 Clearing download artifacts...");
-    // Add any cleanup logic here (temp files, cached data, etc.)
     downloadState.lastError = null;
     console.log("✅ Download artifacts cleared");
   } catch (error) {
@@ -58,12 +56,11 @@ export const clearDownloadArtifacts = async () => {
   }
 };
 
-// First, let's create a function to check authentication status
+// Check authentication status
 export const checkAuthenticationStatus = async () => {
   try {
     console.log("🔐 Checking authentication status...");
     
-    // Debug: Check all possible token keys
     const tokenChecks = {
       access_token: await SecureStore.getItemAsync('access_token'),
       token: await SecureStore.getItemAsync('token'),
@@ -78,15 +75,6 @@ export const checkAuthenticationStatus = async () => {
       user_id: tokenChecks.user_id ? `EXISTS: ${tokenChecks.user_id}` : 'NOT FOUND'
     });
     
-    // Try to get all SecureStore keys for debugging
-    try {
-      const allKeys = await SecureStore.getAllKeysAsync();
-      console.log("🔍 All SecureStore Keys:", allKeys);
-    } catch (keyError) {
-      console.log("🔍 Could not retrieve all keys:", keyError.message);
-    }
-    
-    // Use the first available token - prioritize 'token' since that's what your server returns
     let accessToken = tokenChecks.token || tokenChecks.access_token;
     
     console.log("🔐 Final Auth Status:", {
@@ -107,68 +95,8 @@ export const checkAuthenticationStatus = async () => {
   }
 };
 
-// Enhanced debug function with authentication
-export const debugServerResponseWithAuth = async () => {
-  try {
-    console.log("🧪 Starting authenticated server debug test...");
-    
-    // Check authentication first
-    const { accessToken } = await checkAuthenticationStatus();
-    
-    // Test with authentication headers
-    const response = await fetch(`http://192.168.1.28:8000/data-download?cb=${Date.now()}`, {
-      method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}` // Add auth header
-      }
-    });
-    
-    console.log("🌐 Response Status:", response.status);
-    console.log("🌐 Response Headers:", Object.fromEntries(response.headers.entries()));
-    
-    const textResponse = await response.text();
-    console.log("📄 Raw Response (first 1000 chars):", textResponse.substring(0, 1000));
-    
-    if (response.status === 401) {
-      throw new Error("Authentication failed. Please login again.");
-    }
-    
-    if (response.status !== 200) {
-      throw new Error(`Server error: ${response.status} - ${textResponse}`);
-    }
-    
-    try {
-      const jsonResponse = JSON.parse(textResponse);
-      console.log("📊 Parsed JSON Keys:", Object.keys(jsonResponse));
-      
-      // Log detailed structure
-      for (const key of Object.keys(jsonResponse)) {
-        const value = jsonResponse[key];
-        console.log(`📊 ${key}:`, {
-          type: typeof value,
-          isArray: Array.isArray(value),
-          length: Array.isArray(value) ? value.length : 'N/A',
-          sample: Array.isArray(value) && value.length > 0 ? value[0] : value
-        });
-      }
-      
-      return jsonResponse;
-    } catch (parseError) {
-      console.error("❌ Failed to parse JSON:", parseError);
-      return null;
-    }
-    
-  } catch (error) {
-    console.error("❌ Authenticated debug test failed:", error);
-    throw error;
-  }
-};
-
 // Enhanced download function with better auth handling
-export async function downloadFromEndpointWithAuth(path) {
+export async function downloadFromEndpointWithAuth(path: string) {
   try {
     console.log("🌐 Downloading from endpoint with auth:", path);
     
@@ -178,10 +106,8 @@ export async function downloadFromEndpointWithAuth(path) {
     const api = await createDownloadAPI();
     const url = `${path}?cb=${Date.now()}`;
     
-    // Log the request details
     console.log("📤 API Request Details:", {
       url: api.defaults?.baseURL + url,
-      headers: api.defaults?.headers,
       hasAuth: !!(api.defaults?.headers?.common?.Authorization || api.defaults?.headers?.Authorization)
     });
     
@@ -195,8 +121,7 @@ export async function downloadFromEndpointWithAuth(path) {
     console.log("📥 API Response Details:", {
       status: res.status,
       hasData: !!res.data,
-      dataKeys: res.data ? Object.keys(res.data) : 'no data',
-      dataPreview: typeof res.data === 'object' ? JSON.stringify(res.data).substring(0, 300) + '...' : res.data
+      dataKeys: res.data ? Object.keys(res.data) : 'no data'
     });
     
     // Check for authentication errors in response
@@ -205,7 +130,7 @@ export async function downloadFromEndpointWithAuth(path) {
     }
     
     return res.data;
-  } catch (error) {
+  } catch (error: any) {
     console.error("downloadFromEndpointWithAuth failed:", error?.message ?? error);
     
     // Handle specific auth errors
@@ -218,7 +143,7 @@ export async function downloadFromEndpointWithAuth(path) {
 }
 
 // Enhanced process function with better data structure handling
-export async function processDownloadedDataEnhanced(data) {
+export async function processDownloadedDataEnhanced(data: any) {
   try {
     if (!data) throw new Error("No data to process");
 
@@ -252,7 +177,8 @@ export async function processDownloadedDataEnhanced(data) {
       actualData.master_data,
       actualData.suppliers,
       actualData.vendor,
-      actualData.vendors
+      actualData.vendors,
+      actualData.supplier_data
     ].filter(Boolean);
 
     // Check all possible variations for product data
@@ -262,7 +188,9 @@ export async function processDownloadedDataEnhanced(data) {
       actualData.product,
       actualData.product_data,
       actualData.items,
-      actualData.inventory
+      actualData.inventory,
+      actualData.item_data,
+      actualData.stock_data
     ].filter(Boolean);
 
     console.log("🔍 Data variations found:", {
@@ -283,15 +211,22 @@ export async function processDownloadedDataEnhanced(data) {
     console.log("🔍 Final selected data:", {
       masterCount: master.length,
       productCount: product.length,
-      masterSample: master.length > 0 ? JSON.stringify(master[0]).substring(0, 100) + '...' : 'no data',
-      productSample: product.length > 0 ? JSON.stringify(product[0]).substring(0, 100) + '...' : 'no data'
+      masterSample: master.length > 0 ? master[0] : 'no data',
+      productSample: product.length > 0 ? product[0] : 'no data'
     });
 
     if (master.length === 0 && product.length === 0) {
-      console.warn("⚠️ No data found in any expected format. Server might be returning empty dataset or different structure.");
+      console.warn("⚠️ No data found in any expected format.");
       
-      // Log the actual structure to help debug
-      console.log("🔍 Complete data structure for debugging:", JSON.stringify(actualData, null, 2));
+      // Try to find any array in the response
+      const allArrays = Object.values(actualData).filter(item => Array.isArray(item));
+      if (allArrays.length > 0) {
+        console.log("🔍 Found arrays in response:", allArrays.map(arr => ({
+          key: Object.keys(actualData).find(key => actualData[key] === arr),
+          length: arr.length,
+          sample: arr[0]
+        })));
+      }
     }
 
     if (master.length > 0) {
@@ -314,7 +249,7 @@ export async function processDownloadedDataEnhanced(data) {
 
 // Main download function with retry logic
 export const downloadWithRetry = async (maxRetries = 3) => {
-  let lastError = null;
+  let lastError = null as any;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -334,27 +269,26 @@ export const downloadWithRetry = async (maxRetries = 3) => {
       downloadState.endTime = Date.now();
       
       console.log(`✅ Download completed successfully on attempt ${attempt}`);
+      console.log(`📊 Download stats: ${result.totalRecords} records processed in ${downloadState.endTime - downloadState.startTime}ms`);
+      
       return result;
-      
     } catch (error) {
-      console.error(`❌ Download attempt ${attempt} failed:`, error.message);
-      
+      console.error(`❌ Download attempt ${attempt} failed:`, error?.message ?? error);
       lastError = error;
-      downloadState.lastError = error.message;
-      downloadState.isInProgress = false;
-      downloadState.endTime = Date.now();
+      downloadState.lastError = error?.message || 'Unknown error';
       
-      // If this is the last attempt, throw the error
-      if (attempt === maxRetries) {
-        throw error;
+      // Wait before retry (exponential backoff)
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`⏳ Waiting ${delay}ms before next retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-      
-      // Wait before retrying (exponential backoff)
-      const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s...
-      console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
   }
   
-  throw lastError;
+  // All retries failed
+  downloadState.isInProgress = false;
+  downloadState.endTime = Date.now();
+  
+  throw lastError || new Error("All download attempts failed");
 };

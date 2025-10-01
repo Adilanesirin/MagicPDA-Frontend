@@ -1,8 +1,8 @@
 import { saveOrderToSync } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
+import * as SQLite from "expo-sqlite";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -16,28 +16,33 @@ import {
   View,
 } from "react-native";
 
-// Add this import - adjust the path based on your database setup
-import { getDatabase } from "@/utils/database"; // Import a function that returns the database instance
-// Alternative: if you have a direct import that might be undefined initially:
-// import { db } from "@/utils/database";
+const db = SQLite.openDatabaseSync("magicpedia.db");
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f3f4f6',
   },
   backButton: {
     position: 'absolute',
-    top: 48,
+    top: Platform.OS === 'ios' ? 50 : 40,
     left: 16,
     zIndex: 50,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   scrollView: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
   },
   scrollContent: {
     paddingBottom: 80,
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'ios' ? 100 : 80,
   },
   content: {
     padding: 16,
@@ -53,31 +58,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#3b82f6',
     marginBottom: 16,
-  },
-  cameraContainer: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    height: 256,
-    marginBottom: 16,
-    backgroundColor: '#e5e7eb',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  camera: {
-    flex: 1,
-  },
-  pausedContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pausedText: {
-    color: '#9ca3af',
+    textAlign: 'center',
   },
   inputRow: {
     flexDirection: 'row',
@@ -90,29 +71,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d1d5db',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    fontSize: 16,
   },
   getButton: {
     backgroundColor: '#3b82f6',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderRadius: 12,
   },
   getButtonText: {
     color: '#ffffff',
     fontWeight: '600',
+    fontSize: 16,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 12,
     color: '#374151',
   },
   emptyText: {
@@ -120,21 +98,22 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontStyle: 'italic',
     marginTop: 16,
+    fontSize: 16,
   },
   productCard: {
-    marginBottom: 6,
-    borderRadius: 6,
+    marginBottom: 8,
+    borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 1.5,
     elevation: 1.5,
-    padding: 10,
+    padding: 12,
   },
   latestProductCard: {
-    backgroundColor: '#faf7e6ff',
+    backgroundColor: '#faf7e6',
     borderWidth: 1,
-    borderColor: '#fabe09ff',
+    borderColor: '#fabe09',
   },
   regularProductCard: {
     backgroundColor: '#ffffff',
@@ -145,17 +124,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   productInfo: {
     flex: 1,
-    marginRight: 10,
+    marginRight: 12,
   },
   productName: {
     fontWeight: '600',
     fontSize: 16,
     color: '#1f2937',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   productBarcode: {
     fontSize: 14,
@@ -163,25 +142,26 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   editButton: {
     backgroundColor: '#3b82f6',
-    padding: 6,
+    padding: 8,
     borderRadius: 4,
   },
   deleteButton: {
     backgroundColor: '#ef4444',
-    padding: 6,
+    padding: 8,
     borderRadius: 4,
   },
   productDetails: {
-    gap: 4,
+    gap: 6,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+    flexWrap: 'wrap',
   },
   detailText: {
     fontSize: 14,
@@ -203,59 +183,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
   },
-  // Enhanced styles for E.Qty and E.Cost highlighting
-  eQtyContainer: {
-    backgroundColor: '#f5e4dfff', // Light blue background
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#e24b14ff',
-  },
   eQtyText: {
-    fontWeight: '700',
-    color: '#cb2a15ff', // Dark blue text
-    fontSize: 14,
-  },
-  eQtyValue: {
-    fontWeight: '700',
-    color: '#cb2a15ff',
-    fontSize: 14,
-  },
-  eCostContainer: {
-    backgroundColor: '#f5e4dfff', // Light yellow background
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#e24b14ff',
+    fontWeight: '600',
+    color: '#2563eb',
   },
   eCostText: {
-    fontWeight: '700',
-    color: '#cb2a15ff', // Dark yellow/orange text
-    fontSize: 14,
-  },
-  eCostValue: {
-    fontWeight: '700',
-    color: '#cb2a15ff',
-    fontSize: 14,
-  },
-  // Styles for edited values
-  editedValue: {
-    backgroundColor: '#f3e8ff', // Light purple background for edited values
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#c084fc',
-  },
-  editedText: {
-    fontWeight: '700',
-    color: '#7c3aed', // Purple text for edited values
-    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc2626',
   },
   saveButton: {
-    marginTop: 20,
+    marginTop: 24,
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
@@ -278,20 +215,12 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: 32,
-    marginBottom: 20,
+    marginBottom: 24,
   },
   footerText: {
     fontSize: 14,
     color: '#9ca3af',
     textAlign: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    color: '#6b7280',
   },
 });
 
@@ -304,33 +233,12 @@ export default function BarcodeEntry() {
   }>();
   const router = useRouter();
 
-  const [hasPermission, requestPermission] = useCameraPermissions();
   const [scannedItems, setScannedItems] = useState<any[]>([]);
   const [hardwareScanValue, setHardwareScanValue] = useState("");
-  const [scanning, setScanning] = useState(true);
-  const [scanMode, setScanMode] = useState<"camera" | "hardware">("hardware");
   const [isEditing, setIsEditing] = useState(false);
-  const [scanModeLoaded, setScanModeLoaded] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
 
   const inputRef = useRef<TextInput>(null);
-
-  useEffect(() => {
-    if (hasPermission === null) {
-      requestPermission();
-    }
-  }, [hasPermission]);
-
-  useEffect(() => {
-    const loadScanMode = async () => {
-      const savedMode = await SecureStore.getItemAsync("scanMode");
-      if (savedMode === "hardware" || savedMode === "camera") {
-        setScanMode(savedMode);
-      }
-      setScanModeLoaded(true);
-    };
-    loadScanMode();
-  }, []);
 
   // Handle updated item from edit page
   useEffect(() => {
@@ -342,17 +250,19 @@ export default function BarcodeEntry() {
         setScannedItems(prevItems => {
           const newItems = [...prevItems];
           if (index >= 0 && index < newItems.length) {
-            // Mark the item as edited
-            newItems[index] = { ...parsedItem, isEdited: true };
+            newItems[index] = parsedItem;
           } else {
             // If index is invalid, add as new item
-            newItems.unshift({ ...parsedItem, isEdited: true });
+            newItems.unshift(parsedItem);
           }
           return newItems;
         });
 
         // Clear the parameters to prevent re-processing
-        router.setParams({ updatedItem: undefined, itemIndex: undefined });
+        router.setParams({ 
+          updatedItem: undefined, 
+          itemIndex: undefined 
+        } as any);
       } catch (error) {
         console.error("Error parsing updated item:", error);
       }
@@ -361,35 +271,23 @@ export default function BarcodeEntry() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (scanMode === "hardware" && !isEditing) {
+      if (!isEditing) {
         inputRef.current?.focus();
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [scanMode, isEditing]);
+  }, [isEditing]);
 
   // Handle Zebra input
   useEffect(() => {
-    if (hardwareScanValue.length > 0) {
+    if (hardwareScanValue.length > 0 && hardwareScanValue.trim() !== "") {
       handleBarCodeScanned({ data: hardwareScanValue.trim() });
       setHardwareScanValue("");
     }
   }, [hardwareScanValue]);
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    if (!scanning) return;
-    setScanning(false);
-
     try {
-      // Get the database instance
-      const db = await getDatabase();
-      
-      if (!db) {
-        Alert.alert("Error", "Database not available");
-        setScanning(true);
-        return;
-      }
-
       const rows = await db.getAllAsync(
         "SELECT * FROM product_data WHERE barcode = ?",
         [data]
@@ -397,14 +295,12 @@ export default function BarcodeEntry() {
 
       if (rows.length === 0) {
         Alert.alert("Product not found", `Barcode: ${data}`);
-        setScanning(true);
         return;
       }
 
       const existing = scannedItems.find((item) => item.barcode === data);
       if (existing) {
         Alert.alert("Info", `Product already scanned: ${existing.name}`);
-        setScanning(true);
         return;
       }
 
@@ -412,13 +308,12 @@ export default function BarcodeEntry() {
       if (typeof product === "object" && product !== null) {
         const newItem = {
           ...product,
-          quantity: 0, // Initialize E.Qty as 0 instead of product.quantity
+          quantity: product.quantity ?? 1,
           cost: product.cost ?? product.bmrp ?? 0,
           eCost: 0, // Initialize eCost as 0 (always present)
-          currentStock: product.quantity ?? 0, // Keep current stock separate
+          currentStock: product.quantity ?? 0,
           batchSupplier: product.batch_supplier ?? supplier,
           scannedAt: new Date().getTime(),
-          isEdited: false, // Track if item has been edited
         };
         setScannedItems((prev) => [newItem, ...prev]);
       } else {
@@ -427,24 +322,17 @@ export default function BarcodeEntry() {
     } catch (err) {
       console.error("❌ Error fetching product:", err);
       Alert.alert("Error", "Failed to scan product.");
-    } finally {
-      setTimeout(() => setScanning(true), 800);
     }
   };
 
   const handleManualSearch = async () => {
     const trimmed = manualBarcode.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      Alert.alert("Error", "Please enter a barcode");
+      return;
+    }
 
     try {
-      // Get the database instance
-      const db = await getDatabase();
-      
-      if (!db) {
-        Alert.alert("Error", "Database not available");
-        return;
-      }
-
       const rows = await db.getAllAsync(
         "SELECT * FROM product_data WHERE barcode = ?",
         [trimmed]
@@ -464,13 +352,12 @@ export default function BarcodeEntry() {
       const product = rows[0] as { [key: string]: any; quantity?: number };
       const newItem = {
         ...product,
-        quantity: 0, // Initialize E.Qty as 0 instead of product.quantity
+        quantity: product.quantity ?? 1,
         cost: product.cost ?? product.bmrp ?? 0,
         eCost: 0, // Initialize eCost as 0 (always present)
-        currentStock: product.quantity ?? 0, // Keep current stock separate
+        currentStock: product.quantity ?? 0,
         batchSupplier: product.batch_supplier ?? supplier,
         scannedAt: new Date().getTime(),
-        isEdited: false, // Track if item has been edited
       };
 
       setScannedItems((prev) => [newItem, ...prev]);
@@ -488,10 +375,10 @@ export default function BarcodeEntry() {
       params: {
         itemData: JSON.stringify(item),
         itemIndex: index.toString(),
-        supplier,
-        supplier_code,
+        supplier: supplier || "",
+        supplier_code: supplier_code || "",
       },
-    });
+    } as any);
   };
 
   const updateQuantities = async () => {
@@ -499,21 +386,13 @@ export default function BarcodeEntry() {
       const userId = await SecureStore.getItemAsync("user_id");
       const today = new Date().toISOString().split("T")[0];
 
-      // Get the database instance
-      const db = await getDatabase();
-      
-      if (!db) {
-        Alert.alert("Error", "Database not available");
-        return;
-      }
-
       await db.withTransactionAsync(async () => {
         for (const item of scannedItems) {
           // Use eCost if it's not 0, otherwise use cost
           const finalCost = item.eCost !== 0 ? item.eCost : item.cost;
           
           await saveOrderToSync({
-            supplier_code: supplier_code,
+            supplier_code: supplier_code || "",
             userid: userId ?? "unknown",
             barcode: item.barcode,
             quantity: item.quantity,
@@ -531,7 +410,7 @@ export default function BarcodeEntry() {
 
       Alert.alert("✅ Success", "Entries saved for sync!");
       setScannedItems([]);
-      router.push("/");
+      router.push("/(main)/");
     } catch (err) {
       console.error("❌ Save failed:", err);
       Alert.alert("Error", "Failed to save entries.");
@@ -541,25 +420,6 @@ export default function BarcodeEntry() {
   const handleBack = () => {
     router.back();
   };
-
-  if (hasPermission?.status !== "granted" && scanMode === "camera") {
-    Alert.alert(
-      "Permission Required",
-      "Camera access is needed to scan barcodes.",
-      [
-        { text: "OK", onPress: () => requestPermission() },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
-  }
-
-  if (!scanModeLoaded) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading scan mode...</Text>
-      </View>
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -579,40 +439,19 @@ export default function BarcodeEntry() {
       >
         <View style={styles.content}>
           {/* Hidden Zebra Scanner Input */}
-          {scanMode === "hardware" && (
-            <TextInput
-              ref={inputRef}
-              autoFocus
-              value={hardwareScanValue}
-              onChangeText={(text) => setHardwareScanValue(text)}
-              style={styles.hiddenInput}
-              showSoftInputOnFocus={false}
-              blurOnSubmit={false}
-            />
-          )}
+          <TextInput
+            ref={inputRef}
+            autoFocus
+            value={hardwareScanValue}
+            onChangeText={(text) => setHardwareScanValue(text)}
+            style={styles.hiddenInput}
+            showSoftInputOnFocus={false}
+            blurOnSubmit={false}
+          />
 
           <Text style={styles.supplierTitle}>
             Supplier: {supplier} ({supplier_code})
           </Text>
-
-          {/* Camera Scanner */}
-          {scanMode === "camera" && (
-            <View style={styles.cameraContainer}>
-              {scanning ? (
-                <CameraView
-                  style={styles.camera}
-                  onBarcodeScanned={handleBarCodeScanned}
-                  barcodeScannerSettings={{
-                    barcodeTypes: ["ean13", "ean8", "code128", "code39", "qr"],
-                  }}
-                />
-              ) : (
-                <View style={styles.pausedContainer}>
-                  <Text style={styles.pausedText}>Paused</Text>
-                </View>
-              )}
-            </View>
-          )}
 
           <View style={styles.inputRow}>
             <TextInput
@@ -621,6 +460,8 @@ export default function BarcodeEntry() {
               onChangeText={setManualBarcode}
               style={styles.textInput}
               keyboardType="default"
+              onSubmitEditing={handleManualSearch}
+              returnKeyType="search"
               onFocus={() => setIsEditing(true)}
               onBlur={() => setIsEditing(false)}
             />
@@ -633,18 +474,18 @@ export default function BarcodeEntry() {
           </View>
 
           <Text style={styles.sectionTitle}>
-            Scanned Products
+            Scanned Products ({scannedItems.length})
           </Text>
 
           {scannedItems.length === 0 && (
             <Text style={styles.emptyText}>
-              No products scanned
+              No products scanned yet. Start scanning or enter a barcode manually.
             </Text>
           )}
 
           {scannedItems.map((item, index) => (
             <View
-              key={`${item.barcode}-${index}`}
+              key={`${item.barcode}-${index}-${item.scannedAt}`}
               style={[
                 styles.productCard,
                 index === 0 ? styles.latestProductCard : styles.regularProductCard
@@ -699,33 +540,14 @@ export default function BarcodeEntry() {
                   </Text>
                 </View>
 
-                {/* Third Line: E.Qty, E.Cost with enhanced highlighting */}
+                {/* Third Line: E.Qty, E.Cost */}
                 <View style={styles.detailRow}>
-                  {/* E.Qty with highlighting */}
-                  <View style={[
-                    styles.eQtyContainer,
-                    item.isEdited && item.quantity !== 0 ? styles.editedValue : {}
-                  ]}>
-                    <Text style={[
-                      styles.eQtyText,
-                      item.isEdited && item.quantity !== 0 ? styles.editedText : styles.eQtyValue
-                    ]}>
-                      E.Qty: {item.quantity}
-                    </Text>
-                  </View>
-
-                  {/* E.Cost with highlighting */}
-                  <View style={[
-                    styles.eCostContainer,
-                    item.isEdited && item.eCost !== 0 ? styles.editedValue : {}
-                  ]}>
-                    <Text style={[
-                      styles.eCostText,
-                      item.isEdited && item.eCost !== 0 ? styles.editedText : styles.eCostValue
-                    ]}>
-                      E.Cost: ₹{item.eCost || 0}
-                    </Text>
-                  </View>
+                  <Text style={styles.detailText}>
+                    E.Qty: <Text style={styles.eQtyText}>{item.quantity}</Text>
+                  </Text>
+                  <Text style={styles.detailText}>
+                    E.Cost: <Text style={styles.eCostText}>₹{item.eCost || 0}</Text>
+                  </Text>
                 </View>
               </View>
             </View>

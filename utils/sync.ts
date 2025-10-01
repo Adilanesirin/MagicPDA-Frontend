@@ -1,305 +1,118 @@
-// utils/sync.ts - Enhanced version with better error handling and connection management
+// utils/sync.ts
+import { getDatabase } from "./database";
 
-import { closeDatabase, getDatabase } from "./database";
-
-// Add this function to reset database connection
-export const resetDatabaseConnection = async () => {
-  closeDatabase();
-  console.log("✅ Database connection reset");
-};
-
-// Enhanced database health check
-export const checkDatabaseHealth = async () => {
-  try {
-    const db = getDatabase();
-    await db.getFirstAsync("SELECT 1");
-    return true;
-  } catch (error) {
-    console.error("❌ Database health check failed:", error);
-    // Try to reset connection
-    await resetDatabaseConnection();
-    return false;
-  }
-};
-
-// Enhanced saveMasterData with connection management
+// Save master data
 export const saveMasterData = async (data: any[]) => {
+  const db = getDatabase();
   try {
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      console.warn("⚠️ No master data to save or invalid data format");
-      return;
-    }
-
-    console.log(`💾 Saving ${data.length} master records...`);
-
-    // Check database health first
-    const isHealthy = await checkDatabaseHealth();
-    if (!isHealthy) {
-      throw new Error("Database connection is not healthy");
-    }
-
-    const db = getDatabase();
-    
-    // Add retry logic for database operations
-    const maxRetries = 3;
-    let retryCount = 0;
-    
-    while (retryCount < maxRetries) {
-      try {
-        await db.withTransactionAsync(async () => {
-          // Clear existing data first
-          await db.runAsync("DELETE FROM master_data");
-          console.log("✅ Cleared existing master data");
-
-          // Insert new data in batches to avoid memory issues
-          const batchSize = 100;
-          for (let i = 0; i < data.length; i += batchSize) {
-            const batch = data.slice(i, i + batchSize);
-            
-            for (const item of batch) {
-              if (!item.code) {
-                console.warn("⚠️ Skipping master item without code:", item);
-                continue;
-              }
-
-              await db.runAsync(
-                "INSERT OR REPLACE INTO master_data (code, name, place) VALUES (?, ?, ?)",
-                [item.code, item.name || "", item.place || ""]
-              );
-            }
-            
-            // Small delay between batches
-            if (i + batchSize < data.length) {
-              await new Promise(resolve => setTimeout(resolve, 10));
-            }
-          }
-        });
-        
-        console.log(`✅ Master data saved successfully: ${data.length} records`);
-        return; // Success, exit retry loop
-        
-      } catch (error: any) {
-        retryCount++;
-        console.error(`❌ Attempt ${retryCount} failed:`, error.message);
-        
-        if (retryCount >= maxRetries) {
-          throw error;
-        }
-        
-        // Reset database connection before retry
-        await resetDatabaseConnection();
-        
-        // Wait before retry with exponential backoff
-        const delay = 1000 * Math.pow(2, retryCount - 1);
-        console.log(`⏳ Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+    await db.withTransactionAsync(async () => {
+      for (const item of data) {
+        await db.runAsync(
+          'INSERT OR REPLACE INTO master_data (code, name, place) VALUES (?, ?, ?)',
+          [item.code, item.name, item.place || null]
+        );
       }
-    }
-
-  } catch (error: any) {
+    });
+    console.log(`✅ Saved ${data.length} master records`);
+  } catch (error) {
     console.error("❌ Error saving master data:", error);
-    throw new Error(`Failed to save master data: ${error.message}`);
-  }
-};
-
-// Enhanced saveProductData with connection management
-export const saveProductData = async (data: any[]) => {
-  try {
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      console.warn("⚠️ No product data to save or invalid data format");
-      return;
-    }
-
-    console.log(`💾 Saving ${data.length} product records...`);
-
-    // Check database health first
-    const isHealthy = await checkDatabaseHealth();
-    if (!isHealthy) {
-      throw new Error("Database connection is not healthy");
-    }
-
-    const db = getDatabase();
-    
-    // Add retry logic for database operations
-    const maxRetries = 3;
-    let retryCount = 0;
-    
-    while (retryCount < maxRetries) {
-      try {
-        await db.withTransactionAsync(async () => {
-          // Clear existing data first
-          await db.runAsync("DELETE FROM product_data");
-          console.log("✅ Cleared existing product data");
-
-          // Insert new data in batches
-          const batchSize = 100;
-          for (let i = 0; i < data.length; i += batchSize) {
-            const batch = data.slice(i, i + batchSize);
-            
-            for (const item of batch) {
-              if (!item.barcode) {
-                console.warn("⚠️ Skipping product item without barcode:", item);
-                continue;
-              }
-
-              await db.runAsync(
-                "INSERT OR REPLACE INTO product_data (code, name, barcode, quantity, salesprice, bmrp, cost) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                [
-                  item.code || "",
-                  item.name || "",
-                  item.barcode,
-                  item.quantity || 0,
-                  item.salesprice || 0,
-                  item.bmrp || 0,
-                  item.cost || 0
-                ]
-              );
-            }
-            
-            // Small delay between batches
-            if (i + batchSize < data.length) {
-              await new Promise(resolve => setTimeout(resolve, 10));
-            }
-          }
-        });
-        
-        console.log(`✅ Product data saved successfully: ${data.length} records`);
-        return; // Success, exit retry loop
-        
-      } catch (error: any) {
-        retryCount++;
-        console.error(`❌ Attempt ${retryCount} failed:`, error.message);
-        
-        if (retryCount >= maxRetries) {
-          throw error;
-        }
-        
-        // Reset database connection before retry
-        await resetDatabaseConnection();
-        
-        // Wait before retry with exponential backoff
-        const delay = 1000 * Math.pow(2, retryCount - 1);
-        console.log(`⏳ Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-
-  } catch (error: any) {
-    console.error("❌ Error saving product data:", error);
-    throw new Error(`Failed to save product data: ${error.message}`);
-  }
-};
-
-// Add database cleanup function
-export const cleanupDatabase = async () => {
-  try {
-    const db = getDatabase();
-    // Close any pending transactions
-    try {
-      await db.execAsync("ROLLBACK");
-    } catch (error) {
-      // Ignore rollback errors if no transaction is active
-    }
-    
-    try {
-      // Unlock database
-      await db.execAsync("BEGIN IMMEDIATE; ROLLBACK;");
-      console.log("✅ Database cleanup completed");
-    } catch (error) {
-      console.error("❌ Database cleanup failed:", error);
-    }
-  } catch (error) {
-    console.error("❌ Error accessing database for cleanup:", error);
-  }
-};
-
-// Enhanced clearDownloadCache with cleanup
-export const clearDownloadCache = async () => {
-  try {
-    const db = getDatabase();
-    // Cleanup first
-    await cleanupDatabase();
-    
-    // Clear cache
-    await db.execAsync("DELETE FROM sync_info");
-    console.log("✅ Download cache cleared");
-  } catch (error) {
-    console.error("❌ Error clearing download cache:", error);
     throw error;
   }
 };
 
-// Rest of the functions remain the same but use getDatabase() instead of direct db import...
-// Update all functions to use getDatabase() instead of the direct db import
-
-export const updateLastSynced = async () => {
+// Save product data with fallback for missing batch_supplier
+export const saveProductData = async (data: any[]) => {
+  const db = getDatabase();
   try {
-    const db = getDatabase();
-    const now = new Date().toISOString();
-    
-    // First try to update existing record
-    const result = await db.runAsync(
-      "UPDATE sync_info SET last_synced = ? WHERE id = 1",
-      [now]
-    );
-
-    // If no rows were updated, insert new record
-    if (result.changes === 0) {
-      await db.runAsync(
-        "INSERT INTO sync_info (id, last_synced) VALUES (1, ?)",
-        [now]
-      );
-    }
-
-    console.log("✅ Last sync timestamp updated:", now);
+    await db.withTransactionAsync(async () => {
+      for (const item of data) {
+        // Check if batch_supplier exists in the item, use fallback if not
+        const batchSupplier = item.batch_supplier || item.supplier || item.batch_supplier_name || null;
+        
+        await db.runAsync(
+          'INSERT OR REPLACE INTO product_data (code, name, barcode, quantity, salesprice, bmrp, cost, batch_supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            item.code || item.product_code,
+            item.name || item.product_name,
+            item.barcode,
+            item.quantity || item.stock || 0,
+            item.salesprice || item.selling_price || 0,
+            item.bmrp || item.mrp || 0,
+            item.cost || item.purchase_price || 0,
+            batchSupplier
+          ]
+        );
+      }
+    });
+    console.log(`✅ Saved ${data.length} product records`);
   } catch (error) {
-    console.error("❌ Error updating last sync timestamp:", error);
+    console.error("❌ Error saving product data:", error);
+    throw error;
   }
 };
 
+// Get local data statistics
 export const getLocalDataStats = async () => {
+  const db = getDatabase();
   try {
-    const db = getDatabase();
-    const masterCountResult = await db.getFirstAsync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM master_data"
-    );
-    const productCountResult = await db.getFirstAsync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM product_data"
-    );
-    const lastSyncedResult = await db.getFirstAsync<{ last_synced: string }>(
-      "SELECT last_synced FROM sync_info WHERE id = 1"
-    );
+    const masterCountResult = await db.getFirstAsync('SELECT COUNT(*) as count FROM master_data') as {count: number};
+    const productCountResult = await db.getFirstAsync('SELECT COUNT(*) as count FROM product_data') as {count: number};
+    const pendingOrdersResult = await db.getFirstAsync('SELECT COUNT(*) as count FROM orders_to_sync WHERE sync_status = ?', ['pending']) as {count: number};
+    const lastSyncedResult = await db.getFirstAsync('SELECT last_synced FROM sync_info WHERE id = 1') as {last_synced: string} | null;
 
     return {
       masterCount: masterCountResult?.count || 0,
       productCount: productCountResult?.count || 0,
+      pendingOrders: pendingOrdersResult?.count || 0,
       lastSynced: lastSyncedResult?.last_synced || null
     };
   } catch (error) {
-    console.error("❌ Error getting local data stats:", error);
+    console.error("❌ Error getting local stats:", error);
     return {
       masterCount: 0,
       productCount: 0,
+      pendingOrders: 0,
       lastSynced: null
     };
   }
 };
 
-export const getLastSyncTime = async () => {
+// Get pending orders
+export const getPendingOrders = async () => {
+  const db = getDatabase();
   try {
-    const db = getDatabase();
-    const result = await db.getFirstAsync<{ last_synced: string }>(
-      "SELECT last_synced FROM sync_info WHERE id = 1"
+    const orders = await db.getAllAsync(
+      `SELECT o.*, p.name as product_name 
+       FROM orders_to_sync o 
+       LEFT JOIN product_data p ON o.barcode = p.barcode 
+       WHERE o.sync_status = ? 
+       ORDER BY o.created_at`,
+      ['pending']
     );
-    return result?.last_synced || null;
+    return orders;
   } catch (error) {
-    console.error("❌ Error getting last sync time:", error);
-    return null;
+    console.error("❌ Error getting pending orders:", error);
+    return [];
   }
 };
 
-// ===== UPLOAD/ORDER FUNCTIONS =====
-export const saveOrderToSync = async (orderData: {
+// Mark orders as synced
+export const markOrdersAsSynced = async () => {
+  const db = getDatabase();
+  try {
+    await db.runAsync(
+      'UPDATE orders_to_sync SET sync_status = ? WHERE sync_status = ?',
+      ['synced', 'pending']
+    );
+    console.log("✅ Orders marked as synced");
+  } catch (error) {
+    console.error("❌ Error marking orders as synced:", error);
+    throw error;
+  }
+};
+
+// Save order to sync
+export const saveOrderToSync = async (order: {
   supplier_code: string;
   userid: string;
   barcode: string;
@@ -308,217 +121,161 @@ export const saveOrderToSync = async (orderData: {
   mrp: number;
   order_date: string;
 }) => {
+  const db = getDatabase();
   try {
-    const db = getDatabase();
-    const result = await db.runAsync(
-      `INSERT INTO orders_to_sync 
-       (supplier_code, userid, barcode, quantity, rate, mrp, order_date, sync_status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
-      [
-        orderData.supplier_code,
-        orderData.userid,
-        orderData.barcode,
-        orderData.quantity,
-        orderData.rate,
-        orderData.mrp,
-        orderData.order_date
-      ]
+    // Check if order already exists for same date, barcode, user, and supplier
+    const existingOrder = await db.getFirstAsync(
+      `SELECT id, quantity FROM orders_to_sync 
+       WHERE barcode = ? AND order_date = ? AND userid = ? AND supplier_code = ? 
+       AND sync_status = 'pending'`,
+      [order.barcode, order.order_date, order.userid, order.supplier_code]
     );
 
-    console.log("✅ Order saved for sync:", result.lastInsertRowId);
-    return result.lastInsertRowId;
+    if (existingOrder) {
+      // Update existing order with new quantity (accumulate)
+      const newQuantity = (existingOrder.quantity || 0) + order.quantity;
+      
+      await db.runAsync(
+        `UPDATE orders_to_sync 
+         SET quantity = ?, rate = ?, mrp = ?, created_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [newQuantity, order.rate, order.mrp, existingOrder.id]
+      );
+      
+      console.log("✅ Updated existing order quantity:", {
+        barcode: order.barcode,
+        oldQuantity: existingOrder.quantity,
+        newQuantity: newQuantity
+      });
+    } else {
+      // Insert new order
+      await db.runAsync(
+        `INSERT INTO orders_to_sync 
+         (supplier_code, userid, barcode, quantity, rate, mrp, order_date) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [order.supplier_code, order.userid, order.barcode, order.quantity, order.rate, order.mrp, order.order_date]
+      );
+      
+      console.log("✅ New order saved for sync:", {
+        barcode: order.barcode,
+        quantity: order.quantity
+      });
+    }
+  } catch (error: any) {
+    // Handle unique constraint violation gracefully
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      console.log("⚠️ Order already exists, updating instead...");
+      
+      // Try to update existing order
+      await db.runAsync(
+        `UPDATE orders_to_sync 
+         SET quantity = quantity + ?, rate = ?, mrp = ?, created_at = CURRENT_TIMESTAMP 
+         WHERE barcode = ? AND order_date = ? AND userid = ? AND supplier_code = ?`,
+        [order.quantity, order.rate, order.mrp, order.barcode, order.order_date, order.userid, order.supplier_code]
+      );
+      
+      console.log("✅ Updated existing order after constraint violation");
+    } else {
+      console.error("❌ Error saving order to sync:", error);
+      throw error;
+    }
+  }
+};
+
+// Update last synced timestamp
+export const updateLastSynced = async () => {
+  const db = getDatabase();
+  try {
+    const now = new Date().toISOString();
+    await db.runAsync(
+      'INSERT OR REPLACE INTO sync_info (id, last_synced) VALUES (1, ?)',
+      [now]
+    );
+    console.log("✅ Last sync timestamp updated:", now);
   } catch (error) {
-    console.error("❌ Error saving order for sync:", error);
+    console.error("❌ Error updating sync timestamp:", error);
     throw error;
   }
 };
 
-export const getPendingOrders = async (): Promise<any[]> => {
+// Clean up duplicate orders function
+export const cleanupDuplicateOrders = async () => {
+  const db = getDatabase();
   try {
-    const db = getDatabase();
-    const orders = await db.getAllAsync(`
-      SELECT * FROM orders_to_sync 
-      WHERE sync_status = 'pending' 
-      ORDER BY created_at DESC
+    console.log("🧹 Cleaning up duplicate orders...");
+    
+    // Find and merge duplicate orders
+    const duplicates = await db.getAllAsync(`
+      SELECT barcode, order_date, userid, supplier_code, 
+             COUNT(*) as duplicate_count,
+             GROUP_CONCAT(id) as order_ids,
+             SUM(quantity) as total_quantity
+      FROM orders_to_sync 
+      WHERE sync_status = 'pending'
+      GROUP BY barcode, order_date, userid, supplier_code
+      HAVING COUNT(*) > 1
     `);
-    return orders;
-  } catch (error) {
-    console.error("❌ Error getting pending orders:", error);
-    return [];
-  }
-};
 
-export const markOrdersAsSynced = async () => {
-  try {
-    const db = getDatabase();
-    const result = await db.runAsync(
-      "UPDATE orders_to_sync SET sync_status = 'synced' WHERE sync_status = 'pending'"
-    );
-    console.log(`✅ Marked ${result.changes} orders as synced`);
-    return result.changes;
+    console.log(`Found ${duplicates.length} sets of duplicates to clean up`);
+
+    for (const duplicate of duplicates) {
+      const orderIds = duplicate.order_ids.split(',').map((id: string) => parseInt(id));
+      
+      // Keep the first order and delete the rest
+      const orderIdToKeep = orderIds[0];
+      const orderIdsToDelete = orderIds.slice(1);
+      
+      // Update the kept order with the total quantity
+      await db.runAsync(
+        `UPDATE orders_to_sync 
+         SET quantity = ? 
+         WHERE id = ?`,
+        [duplicate.total_quantity, orderIdToKeep]
+      );
+      
+      // Delete the duplicate orders
+      if (orderIdsToDelete.length > 0) {
+        const placeholders = orderIdsToDelete.map(() => '?').join(',');
+        await db.runAsync(
+          `DELETE FROM orders_to_sync 
+           WHERE id IN (${placeholders})`,
+          orderIdsToDelete
+        );
+      }
+      
+      console.log(`✅ Merged ${duplicate.duplicate_count} duplicates for barcode: ${duplicate.barcode}`);
+    }
+    
+    return duplicates.length;
   } catch (error) {
-    console.error("❌ Error marking orders as synced:", error);
+    console.error("❌ Error cleaning up duplicate orders:", error);
     throw error;
   }
 };
 
-export const clearAllPendingOrders = async () => {
+// Clear all sync data (for testing/reset)
+export const clearAllSyncData = async () => {
+  const db = getDatabase();
   try {
-    const db = getDatabase();
-    const result = await db.runAsync("DELETE FROM orders_to_sync WHERE sync_status = 'pending'");
-    console.log(`✅ Cleared ${result.changes} pending orders`);
-    return result.changes;
+    await db.runAsync('DELETE FROM orders_to_sync');
+    await db.runAsync('DELETE FROM sync_info');
+    console.log("✅ All sync data cleared");
   } catch (error) {
-    console.error("❌ Error clearing pending orders:", error);
+    console.error("❌ Error clearing sync data:", error);
     throw error;
   }
 };
 
-export const getOrderStats = async () => {
+// Run initial cleanup (optional)
+export const runInitialCleanup = async () => {
   try {
-    const db = getDatabase();
-    const pendingCount = await db.getFirstAsync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM orders_to_sync WHERE sync_status = 'pending'"
-    );
-    const syncedCount = await db.getFirstAsync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM orders_to_sync WHERE sync_status = 'synced'"
-    );
-
-    return {
-      pending: pendingCount?.count || 0,
-      synced: syncedCount?.count || 0,
-      total: (pendingCount?.count || 0) + (syncedCount?.count || 0)
-    };
+    const cleanedCount = await cleanupDuplicateOrders();
+    if (cleanedCount > 0) {
+      console.log(`✅ Cleaned up ${cleanedCount} sets of duplicate orders`);
+    }
+    return cleanedCount;
   } catch (error) {
-    console.error("❌ Error getting order stats:", error);
-    return { pending: 0, synced: 0, total: 0 };
-  }
-};
-
-// ===== BACKUP & RECOVERY FUNCTIONS =====
-export const backupData = async () => {
-  try {
-    const db = getDatabase();
-    const masterData = await db.getAllAsync<{ code: string; name: string; place: string }>(
-      "SELECT * FROM master_data"
-    );
-    const productData = await db.getAllAsync<{
-      code: string;
-      name: string;
-      barcode: string;
-      quantity: number;
-      salesprice: number;
-      bmrp: number;
-      cost: number;
-    }>("SELECT * FROM product_data");
-
-    return {
-      masterData,
-      productData,
-      timestamp: new Date().toISOString()
-    };
-  } catch (error) {
-    console.error("❌ Error backing up data:", error);
-    return null;
-  }
-};
-
-export const restoreData = async (backup: { masterData: any[]; productData: any[] }) => {
-  try {
-    const db = getDatabase();
-    await db.withTransactionAsync(async () => {
-      // Clear existing data
-      await db.runAsync("DELETE FROM master_data");
-      await db.runAsync("DELETE FROM product_data");
-
-      // Restore master data
-      for (const item of backup.masterData) {
-        await db.runAsync(
-          "INSERT INTO master_data (code, name, place) VALUES (?, ?, ?)",
-          [item.code, item.name, item.place]
-        );
-      }
-
-      // Restore product data
-      for (const item of backup.productData) {
-        await db.runAsync(
-          "INSERT INTO product_data (code, name, barcode, quantity, salesprice, bmrp, cost) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          [item.code, item.name, item.barcode, item.quantity, item.salesprice, item.bmrp, item.cost]
-        );
-      }
-    });
-
-    console.log("✅ Data restored from backup");
-    return true;
-  } catch (error) {
-    console.error("❌ Error restoring data:", error);
-    return false;
-  }
-};
-
-// ===== DATABASE MAINTENANCE =====
-export const optimizeDatabase = async () => {
-  try {
-    const db = getDatabase();
-    await db.execAsync("VACUUM");
-    console.log("✅ Database optimized");
-  } catch (error) {
-    console.error("❌ Error optimizing database:", error);
-  }
-};
-
-export const resetDatabaseSafe = async () => {
-  try {
-    const db = getDatabase();
-    // Cleanup first
-    await cleanupDatabase();
-    
-    await db.withTransactionAsync(async () => {
-      await db.execAsync("DELETE FROM master_data");
-      await db.execAsync("DELETE FROM product_data");
-      await db.execAsync("DELETE FROM orders_to_sync");
-      await db.execAsync("DELETE FROM sync_info");
-    });
-    
-    console.log("✅ Database reset complete");
-    return true;
-  } catch (error) {
-    console.error("❌ Error resetting database:", error);
-    return false;
-  }
-};
-
-// ===== UTILITY FUNCTIONS =====
-export const getDatabaseSize = async () => {
-  try {
-    const db = getDatabase();
-    const result = await db.getFirstAsync<{ size: number }>(
-      "SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()"
-    );
-    return result?.size || 0;
-  } catch (error) {
-    console.error("❌ Error getting database size:", error);
+    console.error("❌ Initial cleanup failed:", error);
     return 0;
-  }
-};
-
-export const exportDatabase = async () => {
-  try {
-    const db = getDatabase();
-    const masterData = await db.getAllAsync("SELECT * FROM master_data");
-    const productData = await db.getAllAsync("SELECT * FROM product_data");
-    const orders = await db.getAllAsync("SELECT * FROM orders_to_sync");
-    const syncInfo = await db.getAllAsync("SELECT * FROM sync_info");
-
-    return {
-      masterData,
-      productData,
-      orders,
-      syncInfo,
-      exportDate: new Date().toISOString()
-    };
-  } catch (error) {
-    console.error("❌ Error exporting database:", error);
-    return null;
   }
 };

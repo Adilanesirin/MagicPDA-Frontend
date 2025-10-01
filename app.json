@@ -9,6 +9,7 @@
     "scheme": "magicpedia",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "jsEngine": "hermes",
     "primaryColor": "#FF8C00",
     "backgroundColor": "#FFFFFF",
     "ios": {

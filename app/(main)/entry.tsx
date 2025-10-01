@@ -10,14 +10,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getAllSuppliers } from "../../utils/database"; // Import from root utils folder
+import { getAllSuppliers } from "../../utils/database";
+
+// Move type definition outside component to avoid Hermes issues
+type Supplier = { code: string; name: string };
 
 export default function Entry() {
-  type Supplier = { code: string; name: string };
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(
-    null
-  );
+  const [suppliers, setSuppliers] = useState([]);
+  const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -27,14 +27,12 @@ export default function Entry() {
     const fetchSuppliers = async () => {
       try {
         setLoading(true);
-        // Use the helper function (recommended)
         const supplierData = await getAllSuppliers();
-        setSuppliers(supplierData as Supplier[]);
+        setSuppliers(supplierData || []);
         
-        console.log(`✅ Loaded ${supplierData.length} suppliers`);
+        console.log(`✅ Loaded ${supplierData?.length || 0} suppliers`);
       } catch (err) {
         console.error("❌ Error fetching suppliers:", err);
-        // Show user-friendly error message
         setSuppliers([]);
       } finally {
         setLoading(false);
@@ -45,7 +43,7 @@ export default function Entry() {
   }, []);
 
   const filteredSuppliers = suppliers.filter((s) =>
-    s.name.toLowerCase().includes(searchText.toLowerCase())
+    s?.name?.toLowerCase()?.includes(searchText.toLowerCase()) || false
   );
 
   const handleProceed = () => {
@@ -63,6 +61,30 @@ export default function Entry() {
   const handleBack = () => {
     router.back();
   };
+
+  const handleSupplierSelect = (item) => {
+    setSelectedSupplier(item);
+    setModalVisible(false);
+    setSearchText("");
+  };
+
+  const renderSupplierItem = ({ item }) => (
+    <TouchableOpacity
+      className="p-4 border-b border-gray-200"
+      onPress={() => handleSupplierSelect(item)}
+    >
+      <Text className="text-base text-gray-700">{item?.name || "Unknown"}</Text>
+      <Text className="text-sm text-gray-500">Code: {item?.code || "N/A"}</Text>
+    </TouchableOpacity>
+  );
+
+  const renderEmptyList = () => (
+    <View className="p-4">
+      <Text className="text-gray-500 text-center">
+        {searchText ? "No suppliers match your search" : "No suppliers available"}
+      </Text>
+    </View>
+  );
 
   return (
     <View className="flex-1 bg-gray-100">
@@ -136,27 +158,9 @@ export default function Entry() {
 
             <FlatList
               data={filteredSuppliers}
-              keyExtractor={(item, index) => `${item.code}-${index}`}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  className="p-4 border-b border-gray-200"
-                  onPress={() => {
-                    setSelectedSupplier(item);
-                    setModalVisible(false);
-                    setSearchText("");
-                  }}
-                >
-                  <Text className="text-base text-gray-700">{item.name}</Text>
-                  <Text className="text-sm text-gray-500">Code: {item.code}</Text>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View className="p-4">
-                  <Text className="text-gray-500 text-center">
-                    {searchText ? "No suppliers match your search" : "No suppliers available"}
-                  </Text>
-                </View>
-              }
+              keyExtractor={(item, index) => `supplier-${item?.code || index}`}
+              renderItem={renderSupplierItem}
+              ListEmptyComponent={renderEmptyList}
             />
 
             <TouchableOpacity
@@ -169,13 +173,6 @@ export default function Entry() {
             </TouchableOpacity>
           </View>
         </Modal>
-
-        {/* Footer */}
-        {/* <View className="mt-10 mb-6">
-          <Text className="text-sm text-gray-400 text-center">
-            Powered by IMC Business Solutions
-          </Text>
-        </View> */}
       </ScrollView>
     </View>
   );

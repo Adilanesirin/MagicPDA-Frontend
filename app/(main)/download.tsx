@@ -23,6 +23,12 @@ export default function DownloadPage() {
   const [masterCount, setMasterCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
+  
+  // Progress tracking states
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [currentStep, setCurrentStep] = useState("");
+  const [downloadedMaster, setDownloadedMaster] = useState(0);
+  const [downloadedProducts, setDownloadedProducts] = useState(0);
 
   const loadStats = async () => {
     try {
@@ -38,13 +44,26 @@ export default function DownloadPage() {
   const resetDownloadUIState = () => {
     setLoading(false);
     setShowSuccess(false);
+    setDownloadProgress(0);
+    setCurrentStep("");
+    setDownloadedMaster(0);
+    setDownloadedProducts(0);
+  };
+
+  const updateProgress = (progress: number, step: string, masterCount = 0, productCount = 0) => {
+    setDownloadProgress(Math.min(progress, 100));
+    setCurrentStep(step);
+    setDownloadedMaster(masterCount);
+    setDownloadedProducts(productCount);
   };
 
   const prepareForDownload = async () => {
     try {
       console.log("🧹 Preparing for fresh download...");
+      updateProgress(5, "Preparing download...");
       await resetDownloadState();
       await clearDownloadArtifacts();
+      updateProgress(10, "Ready to download");
       console.log("✅ Download state reset successful");
     } catch (err) {
       console.warn("⚠️ Error preparing download:", err);
@@ -53,7 +72,7 @@ export default function DownloadPage() {
 
   const checkAuthBeforeDownload = async () => {
     try {
-      // Check for both possible token storage keys
+      updateProgress(15, "Checking authentication...");
       const accessToken = await SecureStore.getItemAsync('token') || 
                           await SecureStore.getItemAsync('access_token');
       
@@ -66,6 +85,7 @@ export default function DownloadPage() {
       if (!accessToken) {
         throw new Error("Please login to download data");
       }
+      updateProgress(20, "Authentication verified");
       return true;
     } catch (error) {
       console.error("❌ Authentication check failed:", error);
@@ -85,43 +105,78 @@ export default function DownloadPage() {
       await prepareForDownload();
       
       console.log("🚀 Starting download process...");
+      updateProgress(25, "Starting download...");
+      
+      // Simulate progress updates during download
+      const progressInterval = setInterval(() => {
+        setDownloadProgress(prev => {
+          if (prev < 85) {
+            const increment = Math.random() * 10 + 5;
+            const newProgress = Math.min(prev + increment, 85);
+            
+            if (newProgress > 30 && newProgress <= 50) {
+              setCurrentStep("Downloading master data...");
+            } else if (newProgress > 50 && newProgress <= 75) {
+              setCurrentStep("Downloading product data...");
+            } else if (newProgress > 75) {
+              setCurrentStep("Processing data...");
+            }
+            
+            return newProgress;
+          }
+          return prev;
+        });
+      }, 800);
+
       const result = await downloadWithRetry();
       
+      // Clear the progress interval
+      clearInterval(progressInterval);
+      
       // Get actual counts from the result
-      const masterCount = result.masterData?.length || 0;
-      const productCount = result.productData?.length || 0;
-      const totalDownloaded = masterCount + productCount;
+      const masterCountResult = result.masterData?.length || 0;
+      const productCountResult = result.productData?.length || 0;
+      const totalDownloaded = masterCountResult + productCountResult;
+      
+      updateProgress(90, "Saving data locally...", masterCountResult, productCountResult);
       
       // Debug logging
       console.log("📊 Download result details:", {
         hasResult: !!result,
         hasMasterData: !!result.masterData,
         hasProductData: !!result.productData,
-        masterCount,
-        productCount,
+        masterCount: masterCountResult,
+        productCount: productCountResult,
         totalDownloaded,
         resultKeys: result ? Object.keys(result) : 'no result'
       });
       
       console.log("✅ Data downloaded successfully:", {
-        master: masterCount,
-        product: productCount,
+        master: masterCountResult,
+        product: productCountResult,
         total: totalDownloaded
       });
 
       // Update sync timestamp first
+      updateProgress(95, "Updating sync status...");
       await updateLastSynced();
       
       // Reload stats from database to get the actual stored counts
       await loadStats();
       
-      // Set success state
-      setShowSuccess(true);
+      // Complete progress
+      updateProgress(100, "Download complete!");
       
-      // Auto-hide success message after 3 seconds  
+      // Brief delay to show completion
       setTimeout(() => {
-        setShowSuccess(false);
-      }, 3000);
+        // Set success state
+        setShowSuccess(true);
+        
+        // Auto-hide success message after 3 seconds  
+        setTimeout(() => {
+          setShowSuccess(false);
+        }, 3000);
+      }, 500);
       
       // Use the actual downloaded counts for the toast
       if (totalDownloaded === 0) {
@@ -136,7 +191,7 @@ export default function DownloadPage() {
         Toast.show({
           type: "success",
           text1: "Download Complete", 
-          text2: `Download successfully!`,
+          text2: `Downloaded ${masterCountResult} masters and ${productCountResult} products successfully!`,
           visibilityTime: 3000,
         });
       }
@@ -239,6 +294,45 @@ export default function DownloadPage() {
             <Text className="text-sm text-gray-500 mb-4">
               This may take a few moments
             </Text>
+            
+            {/* Progress Bar */}
+            <View className="w-full mb-4">
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-sm text-gray-600">{currentStep}</Text>
+                <Text className="text-sm font-semibold text-blue-600">
+                  {Math.round(downloadProgress)}%
+                </Text>
+              </View>
+              <View className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                <View 
+                  className="h-full bg-blue-500 rounded-full"
+                  style={{ 
+                    width: `${downloadProgress}%`,
+                    backgroundColor: '#3B82F6',
+                    borderRadius: 6
+                  }}
+                />
+              </View>
+            </View>
+
+            {/* Progress Stats */}
+            {(downloadedMaster > 0 || downloadedProducts > 0) && (
+              <View className="w-full mb-4 p-3 bg-blue-50 rounded-lg">
+                <Text className="text-center text-sm text-blue-700 mb-1">Downloaded</Text>
+                <View className="flex-row justify-between">
+                  <Text className="text-xs text-blue-600">
+                    📦 Master: {downloadedMaster.toLocaleString()}
+                  </Text>
+                  <Text className="text-xs text-blue-600">
+                    🛍 Products: {downloadedProducts.toLocaleString()}
+                  </Text>
+                </View>
+                <Text className="text-center text-xs text-blue-500 mt-1">
+                  Total: {(downloadedMaster + downloadedProducts).toLocaleString()}
+                </Text>
+              </View>
+            )}
+            
             <LottieView
               source={require("@/assets/lottie/download.json")}
               autoPlay

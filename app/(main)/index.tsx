@@ -5,43 +5,12 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Toast from "react-native-toast-message";
-
-const routes = [
-  {
-    name: "Download",
-    icon: "cloud-download-outline",
-    path: "/(main)/download" as const,
-    description: "Get your files",
-    gradient: ['#3B82F6', '#1E40AF'],
-  },
-  {
-    name: "Entry",
-    icon: "document-text-outline",
-    path: "/(main)/entry" as const,
-    description: "Create entries",
-    gradient: ['#10B981', '#059669'],
-  },
-  {
-    name: "Upload",
-    icon: "cloud-upload-outline",
-    path: "/(main)/upload" as const,
-    description: "Share your files",
-    gradient: ['#F59E0B', '#D97706'],
-  },
-  {
-    name: "Settings",
-    icon: "settings-outline",
-    path: "/(main)/settings" as const,
-    description: "Manage account",
-    gradient: ['#8B5CF6', '#7C3AED'],
-  },
-];
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [username, setUsername] = useState<string | null>(null);
+  const [username, setUsername] = useState(null);
 
   useEffect(() => {
     const fetchUsername = async () => {
@@ -158,47 +127,93 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        {/* Modern Grid */}
+        {/* 2x2 Grid */}
         <View style={styles.gridContainer}>
-          {routes.map((route, index) => (
-            <Pressable
-              key={route.name}
-              onPress={() => router.push(route.path)}
-              style={({ pressed }) => [
-                styles.gridItem,
-                pressed && styles.gridItemPressed
-              ]}
-              android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
+          {/* First Row */}
+          <View style={styles.gridRow}>
+            <TouchableOpacity
+              style={styles.gridItem}
+              onPress={() => router.push("/(main)/orders")}
             >
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
                   <LinearGradient
-                    colors={route.gradient}
+                    colors={['#10B981', '#059669']}
                     style={styles.iconGradient}
                   >
-                    <Ionicons
-                      name={route.icon as keyof typeof Ionicons.glyphMap}
-                      size={28}
-                      color="white"
-                    />
+                    <Ionicons name="receipt-outline" size={32} color="white" />
                   </LinearGradient>
                 </View>
-                
                 <View style={styles.cardTextContainer}>
-                  <Text style={styles.cardTitle}>{route.name}</Text>
-                  <Text style={styles.cardDescription}>
-                    {route.description}
-                  </Text>
+                  <Text style={styles.cardTitle}>Orders</Text>
+                  <Text style={styles.cardDescription}>Entry & Upload</Text>
                 </View>
-                
-                <Ionicons 
-                  name="chevron-forward" 
-                  size={16} 
-                  color="#C7C7CC" 
-                />
               </View>
-            </Pressable>
-          ))}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.gridItem}
+              onPress={() => router.push("/(main)/download")}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#3B82F6', '#1E40AF']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="cloud-download-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Download</Text>
+                  <Text style={styles.cardDescription}>Sync Data</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Second Row */}
+          <View style={styles.gridRow}>
+            <TouchableOpacity
+              style={styles.gridItem}
+              onPress={() => router.push("/(main)/tracker")}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#F59E0B', '#D97706']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="analytics-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Tracker</Text>
+                  <Text style={styles.cardDescription}>Track Progress</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.gridItem}
+              onPress={() => router.push("/(main)/settings")}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#8B5CF6', '#7C3AED']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="settings-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Settings</Text>
+                  <Text style={styles.cardDescription}>App Settings</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Footer */}
@@ -309,7 +324,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.19,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -361,18 +376,25 @@ const styles = StyleSheet.create({
   
   gridContainer: {
     paddingHorizontal: 20,
-    gap: 12,
+    marginBottom: 20,
+  },
+  
+  gridRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 15,
   },
   
   gridItem: {
     backgroundColor: "white",
     borderRadius: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-    marginBottom: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
+    width: '47%',
+    height: 140,
   },
   
   gridItemPressed: {
@@ -381,44 +403,47 @@ const styles = StyleSheet.create({
   },
   
   cardContent: {
-    flexDirection: "row",
-    alignItems: "center",
     padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
   },
   
   iconContainer: {
-    marginRight: 16,
+    marginBottom: 12,
   },
   
   iconGradient: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },
   
   cardTextContainer: {
-    flex: 1,
+    alignItems: "center",
   },
   
   cardTitle: {
-    fontSize: 17,
-    fontWeight: "600",
+    fontSize: 18,
+    fontWeight: "700",
     color: "#111827",
-    marginBottom: 2,
+    marginBottom: 4,
+    textAlign: "center",
   },
   
   cardDescription: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#6B7280",
+    textAlign: "center",
   },
   
   footer: {
     textAlign: "center",
     color: "#9CA3AF",
     fontSize: Platform.OS === 'android' ? 14 : 13,
-    marginTop: 60,
+    marginTop: 40,
     fontWeight: "400",
     includeFontPadding: false,
   },
