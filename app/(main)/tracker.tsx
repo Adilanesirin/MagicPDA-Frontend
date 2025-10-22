@@ -462,28 +462,38 @@ export default function StockTrackerScreen() {
     setProductData(validatedProduct);
   };
 
-  // NEW: Search barcode with variants function (DATABASE-BASED)
+  // FIXED: Search barcode with variants function (CASE-INSENSITIVE)
   const searchBarcodeWithVariants = async (barcode: string): Promise<ProductData[]> => {
     try {
       const trimmedBarcode = barcode.trim();
       
       console.log('🔍 Starting barcode search for:', trimmedBarcode);
       
-      // First try exact match
+      // SQLite LIKE is case-insensitive by default, but to be extra safe we'll use COLLATE NOCASE
+      // Search for exact match (case-insensitive)
       const exactRows = await db.getAllAsync(
-        "SELECT * FROM product_data WHERE barcode = ? OR productcode = ? OR code = ?",
+        `SELECT * FROM product_data 
+         WHERE LOWER(barcode) = LOWER(?) 
+            OR LOWER(productcode) = LOWER(?) 
+            OR LOWER(code) = LOWER(?)`,
         [trimmedBarcode, trimmedBarcode, trimmedBarcode]
       );
 
-      // Search for variants WITH space before colon (barcode : 1, barcode : 2)
+      // Search for variants WITH space before colon (barcode : 1, barcode : 2) - case-insensitive
       const variantRows1 = await db.getAllAsync(
-        "SELECT * FROM product_data WHERE barcode LIKE ? OR productcode LIKE ? OR code LIKE ?",
+        `SELECT * FROM product_data 
+         WHERE LOWER(barcode) LIKE LOWER(?) 
+            OR LOWER(productcode) LIKE LOWER(?) 
+            OR LOWER(code) LIKE LOWER(?)`,
         [`${trimmedBarcode} :%`, `${trimmedBarcode} :%`, `${trimmedBarcode} :%`]
       );
 
-      // Search for variants WITHOUT space (barcode:1, barcode:2)
+      // Search for variants WITHOUT space (barcode:1, barcode:2) - case-insensitive
       const variantRows2 = await db.getAllAsync(
-        "SELECT * FROM product_data WHERE barcode LIKE ? OR productcode LIKE ? OR code LIKE ?",
+        `SELECT * FROM product_data 
+         WHERE LOWER(barcode) LIKE LOWER(?) 
+            OR LOWER(productcode) LIKE LOWER(?) 
+            OR LOWER(code) LIKE LOWER(?)`,
         [`${trimmedBarcode}:%`, `${trimmedBarcode}:%`, `${trimmedBarcode}:%`]
       );
 
@@ -494,9 +504,11 @@ export default function StockTrackerScreen() {
       // Combine all results and remove duplicates
       const allRows = [...exactRows, ...variantRows1, ...variantRows2];
       
-      // Remove duplicates based on barcode
+      // Remove duplicates based on barcode (case-insensitive comparison)
       const uniqueRows = allRows.filter((row: any, index: number, self: any[]) => 
-        index === self.findIndex((r: any) => r.barcode === row.barcode)
+        index === self.findIndex((r: any) => 
+          String(r.barcode || '').toLowerCase() === String(row.barcode || '').toLowerCase()
+        )
       );
 
       console.log('📊 Total unique matches:', uniqueRows.length);
@@ -561,7 +573,7 @@ export default function StockTrackerScreen() {
   const handleBarcodeSearch = async () => {
     const searchBarcode = searchText.trim();
     
-    // Use the new variant search function (now async)
+    // Use the new variant search function (now async and case-insensitive)
     const foundProducts = await searchBarcodeWithVariants(searchBarcode);
     
     if (foundProducts.length === 0) {
@@ -653,7 +665,7 @@ export default function StockTrackerScreen() {
     setScanned(true);
     setShowScanner(false);
     
-    // Use the new variant search function (now async)
+    // Use the new variant search function (now async and case-insensitive)
     const foundProducts = await searchBarcodeWithVariants(data);
     
     if (foundProducts.length === 0) {
