@@ -512,6 +512,53 @@ const styles = StyleSheet.create({
   },
 });
 
+// Initialize orders_to_sync table
+const initOrdersTable = async () => {
+  try {
+    // Create table if not exists
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS orders_to_sync (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_code TEXT NOT NULL,
+        userid TEXT NOT NULL,
+        barcode TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        rate REAL NOT NULL,
+        mrp REAL NOT NULL,
+        order_date TEXT NOT NULL,
+        sync_status TEXT DEFAULT 'pending',
+        created_at TEXT NOT NULL
+      );
+    `);
+    
+    // Try to add missing columns if they don't exist
+    const columnsToAdd = [
+      { name: 'itemcode', type: 'TEXT' },
+      { name: 'product_name', type: 'TEXT' }
+    ];
+    
+    for (const column of columnsToAdd) {
+      try {
+        await db.execAsync(`
+          ALTER TABLE orders_to_sync ADD COLUMN ${column.name} ${column.type};
+        `);
+        console.log(`✅ Added ${column.name} column to orders_to_sync table`);
+      } catch (alterError: any) {
+        // Column might already exist, which is fine
+        if (alterError.message && alterError.message.includes('duplicate column name')) {
+          console.log(`ℹ️ ${column.name} column already exists`);
+        } else {
+          console.log(`ℹ️ ${column.name} column may already exist:`, alterError.message);
+        }
+      }
+    }
+    
+    console.log("✅ Orders table initialized");
+  } catch (error) {
+    console.error("Error initializing orders table:", error);
+  }
+};
+
 // Initialize pending items table with ALTER TABLE to add column if not exists
 const initPendingItemsTable = async () => {
   try {
@@ -554,6 +601,42 @@ const initPendingItemsTable = async () => {
   }
 };
 
+// Save order to sync queue
+const saveOrderToSync = async (orderData: {
+  supplier_code: string;
+  userid: string;
+  itemcode: string;
+  barcode: string;
+  quantity: number;
+  rate: number;
+  mrp: number;
+  order_date: string;
+  product_name?: string;
+}) => {
+  try {
+    await db.runAsync(
+      `INSERT INTO orders_to_sync 
+      (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date, sync_status, created_at, product_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?)`,
+      [
+        orderData.supplier_code,
+        orderData.userid,
+        orderData.itemcode,
+        orderData.barcode,
+        orderData.quantity,
+        orderData.rate,
+        orderData.mrp,
+        orderData.order_date,
+        orderData.product_name || '',
+      ]
+    );
+    console.log(`✅ Saved order to sync: ${orderData.barcode}`);
+  } catch (error) {
+    console.error("Error saving order to sync:", error);
+    throw error;
+  }
+};
+
 export default function BarcodeEntry() {
   const { supplier, supplier_code, updatedItem, itemIndex } = useLocalSearchParams<{
     supplier: string;
@@ -592,6 +675,7 @@ export default function BarcodeEntry() {
 
   useEffect(() => {
     const initialize = async () => {
+      await initOrdersTable();
       await initPendingItemsTable();
       await loadPendingItems();
     };
@@ -1175,7 +1259,8 @@ export default function BarcodeEntry() {
       processingAlertRef.current = false;
     }, 300);
   };
-const updateQuantities = async () => {
+
+  const updateQuantities = async () => {
     Alert.alert(
       "Confirm Update",
       `Are you sure you want to update quantities for ${scannedItems.length} item(s)? This action cannot be undone.`,
@@ -1216,12 +1301,16 @@ const updateQuantities = async () => {
                     rate: finalCost ?? 0,
                     mrp: item.bmrp ?? 0,
                     order_date: today,
+                    product_name: item.name,
                   });
 
-                  await db.runAsync(
-                    "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
-                    [item.quantity, finalCost, item.barcode]
-                  );
+                  // Only update product_data if it's not a manual entry
+                  if (item.isManualEntry !== 1) {
+                    await db.runAsync(
+                      "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
+                      [item.quantity, finalCost, item.barcode]
+                    );
+                  }
                 }
                 
                 await db.runAsync(
@@ -1230,7 +1319,7 @@ const updateQuantities = async () => {
                 );
               });
 
-              Alert.alert("✓ Success", "Entries saved for sync!");
+              Alert.alert("✅ Success", "Entries saved for sync!");
               setScannedItems([]);
               router.push("/(main)/");
             } catch (err) {
