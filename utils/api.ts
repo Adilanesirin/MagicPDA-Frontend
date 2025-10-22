@@ -178,29 +178,34 @@ export async function createEnhancedAPI() {
       }
     );
 
-    // Enhanced response interceptor
+    // Enhanced response interceptor with silent error support
     instance.interceptors.response.use(
       (response) => {
         console.log(`API Success [${instanceId}]: ${response.status} ${response.config.url}`);
         return response;
       },
       async (error) => {
-        console.error(`API Error [${instanceId}]:`, {
-          message: error.message,
-          code: error.code,
-          url: error.config?.url,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-        });
+        // Check if this is a silent error (don't log expected failures)
+        const isSilent = error.config?.headers?.['X-Silent-Error'] === 'true';
+        
+        if (!isSilent) {
+          console.error(`API Error [${instanceId}]:`, {
+            message: error.message,
+            code: error.code,
+            url: error.config?.url,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+          });
+        }
 
         if (error.code === "NETWORK_ERROR" || error.code === "ECONNREFUSED") {
-          console.log("Network connectivity issue detected");
+          if (!isSilent) console.log("Network connectivity issue detected");
         } else if (error.message?.toLowerCase().includes("cleartext")) {
-          console.log("HTTP cleartext traffic blocked");
+          if (!isSilent) console.log("HTTP cleartext traffic blocked");
         } else if (error.code === 'ECONNABORTED') {
-          console.log("Request timeout");
+          if (!isSilent) console.log("Request timeout");
         } else if (error.response?.status === 422) {
-          console.log("Unprocessable Content (422)");
+          if (!isSilent) console.log("Unprocessable Content (422)");
         }
 
         return Promise.reject(error);

@@ -1,15 +1,18 @@
+import { getPendingOrders } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import {
-    Platform,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 const orderRoutes = [
@@ -26,11 +29,47 @@ const orderRoutes = [
     path: "/(main)/upload",
     subtitle: "Sync data",
     gradient: ["#FCD34D", "#F97316"],
+    showPending: true,
   },
 ];
 
 export default function OrdersScreen() {
   const router = useRouter();
+  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingItems, setPendingItems] = useState(0);
+
+  const loadPendingCount = async () => {
+    try {
+      const orders = await getPendingOrders();
+      const ordersArray = Array.isArray(orders) ? orders : [];
+      
+      console.log("📊 Pending orders:", ordersArray.length);
+      console.log("📦 Sample order:", ordersArray[0]);
+      
+      setPendingCount(ordersArray.length);
+      
+      // Calculate total items - sum up all quantities
+      const totalItems = ordersArray.reduce((acc, order) => {
+        const qty = parseInt(order.quantity) || 0;
+        console.log(`Order ${order.id}: quantity = ${qty}`);
+        return acc + qty;
+      }, 0);
+      
+      console.log("📊 Total pending items:", totalItems);
+      setPendingItems(totalItems);
+    } catch (error) {
+      console.error("Error loading pending count:", error);
+      setPendingCount(0);
+      setPendingItems(0);
+    }
+  };
+
+  // Refresh pending count when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadPendingCount();
+    }, [])
+  );
 
   const handleBack = () => {
     router.back();
@@ -86,9 +125,21 @@ export default function OrdersScreen() {
                     style={styles.iconGlow}
                   />
                 </View>
-                <View style={{ marginLeft: 16 }}>
+                <View style={{ marginLeft: 16, flex: 1 }}>
                   <Text style={styles.cardTitle}>{route.name}</Text>
                   <Text style={styles.cardSubtitle}>{route.subtitle}</Text>
+                  {route.showPending && (pendingCount > 0 || pendingItems > 0) && (
+                    <View style={styles.pendingBadgeContainer}>
+                      <View style={styles.pendingBadge}>
+                        <Text style={styles.pendingText}>
+                          {pendingCount > 0 
+                            ? `Upload pending: ${pendingCount} ${pendingCount === 1 ? 'order' : 'orders'}`
+                            : `Upload pending: ${pendingItems} ${pendingItems === 1 ? 'item' : 'items'}`
+                          }
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
               </LinearGradient>
             </Pressable>
@@ -192,6 +243,26 @@ const styles = StyleSheet.create({
   cardSubtitle: {
     fontSize: 15,
     color: "rgba(255,255,255,0.95)",
+  },
+
+  pendingBadgeContainer: {
+    marginTop: 8,
+  },
+  pendingBadge: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  pendingText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#DC2626",
   },
 
   infoCard: {

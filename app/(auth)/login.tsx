@@ -110,7 +110,8 @@ export default function Login() {
         Toast.show({
           type: "error",
           text1: "Login failed",
-          text2: "Please check username/password format",
+          text2: "Please check username/password format OR check Database connection",
+          
         });
       }
       

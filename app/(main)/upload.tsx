@@ -159,6 +159,11 @@ export default function Upload() {
     loadData();
   };
 
+  const goToHome = () => {
+    // Navigate to index.tsx page
+    router.push('/');
+  };
+
   const totalItems = orders.reduce((acc, order) => acc + (order.quantity || 0), 0);
 
   return (
@@ -215,7 +220,7 @@ export default function Upload() {
                 </Pressable>
 
                 <Pressable
-                  onPress={() => router.back()}
+                  onPress={goToHome}
                   className="p-4 rounded-xl bg-gray-200"
                 >
                   <Text className="text-gray-700 text-center font-semibold">

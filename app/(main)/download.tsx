@@ -171,14 +171,9 @@ export default function DownloadPage() {
       setTimeout(() => {
         // Set success state
         setShowSuccess(true);
-        
-        // Auto-hide success message after 3 seconds  
-        setTimeout(() => {
-          setShowSuccess(false);
-        }, 3000);
       }, 500);
       
-      // Use the actual downloaded counts for the toast
+      // Show info toast only if no records were downloaded
       if (totalDownloaded === 0) {
         console.warn("⚠️ Download completed but no records were returned");
         Toast.show({
@@ -186,13 +181,6 @@ export default function DownloadPage() {
           text1: "Download Complete",
           text2: "No new records available from server",
           visibilityTime: 4000,
-        });
-      } else {
-        Toast.show({
-          type: "success",
-          text1: "Download Complete", 
-          text2: `Downloaded ${masterCountResult} masters and ${productCountResult} products successfully!`,
-          visibilityTime: 3000,
         });
       }
       
@@ -239,6 +227,12 @@ export default function DownloadPage() {
     router.back();
   };
 
+  const handleSuccessOk = () => {
+    setShowSuccess(false);
+    // Navigate to index.tsx page
+    router.push('/');
+  };
+
   useEffect(() => {
     resetDownloadUIState();
     loadStats();
@@ -276,10 +270,10 @@ export default function DownloadPage() {
               Master: {masterCount} | Products: {productCount}
             </Text>
             <Pressable
-              onPress={() => setShowSuccess(false)}
-              className="bg-green-500 rounded-xl py-3 px-8"
+              onPress={handleSuccessOk}
+              className="bg-green-500 rounded-xl py-3 px-8 w-full"
             >
-              <Text className="text-white font-semibold text-center">Continue</Text>
+              <Text className="text-white font-semibold text-center text-lg">OK</Text>
             </Pressable>
           </View>
         </View>
@@ -324,7 +318,7 @@ export default function DownloadPage() {
                     📦 Master: {downloadedMaster.toLocaleString()}
                   </Text>
                   <Text className="text-xs text-blue-600">
-                    🛍 Products: {downloadedProducts.toLocaleString()}
+                    🛒 Products: {downloadedProducts.toLocaleString()}
                   </Text>
                 </View>
                 <Text className="text-center text-xs text-blue-500 mt-1">
@@ -355,7 +349,7 @@ export default function DownloadPage() {
                 📦 <Text className="font-bold">Master:</Text> {masterCount.toLocaleString()}
               </Text>
               <Text className="text-lg text-gray-700 text-center">
-                🛍 <Text className="font-bold">Products:</Text> {productCount.toLocaleString()}
+                🛒 <Text className="font-bold">Products:</Text> {productCount.toLocaleString()}
               </Text>
               <Text className="text-sm text-gray-500 text-center">
                 🕒 <Text className="font-medium">Last Synced:</Text>{" "}
