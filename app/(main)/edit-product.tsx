@@ -29,8 +29,14 @@ export default function EditProduct() {
     if (itemData) {
       const parsedItem = JSON.parse(itemData);
       setProduct(parsedItem);
-      // Use e.cost if available, otherwise use cost
-      setEditedCost(parsedItem.eCost?.toString() || parsedItem.cost?.toString() || "0");
+      
+      // UPDATED LOGIC: If eCost is 0 or not set, use cost value
+      // This ensures E.Cost field shows the current cost by default
+      const initialECost = (parsedItem.eCost && parsedItem.eCost !== 0) 
+        ? parsedItem.eCost 
+        : (parsedItem.cost || 0);
+      
+      setEditedCost(initialECost.toString());
       setEditedQuantity(parsedItem.quantity?.toString() || "1");
       setEditedSupplier(parsedItem.batchSupplier || supplier || "");
     }
@@ -72,7 +78,8 @@ export default function EditProduct() {
     }
   };
 
-  const currentCost = product.eCost || product.cost || 0;
+  // Display the current effective cost (eCost if set, otherwise cost)
+  const currentDisplayCost = (product.eCost && product.eCost !== 0) ? product.eCost : product.cost;
 
   return (
     <KeyboardAvoidingView
@@ -104,7 +111,7 @@ export default function EditProduct() {
             </Text>
             <Text className="text-sm text-gray-600 mt-1">
               Original Cost: <Text className="font-semibold text-orange-600">₹{product.cost || 0}</Text>
-              {" • "}Edited Cost: <Text className="font-semibold text-red-600">₹{product.eCost || 0}</Text>
+              {" • "}Current E.Cost: <Text className="font-semibold text-red-600">₹{currentDisplayCost || 0}</Text>
             </Text>
           </View>
 
@@ -154,12 +161,12 @@ export default function EditProduct() {
               <TextInput
                 value={editedCost}
                 onChangeText={setEditedCost}
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
                 placeholder="0"
                 className="border border-gray-300 rounded-lg px-3 py-2 font-semibold"
               />
               <Text className="text-xs text-gray-500 mt-1">
-                Enter the edited cost. Original cost remains unchanged.
+                Modify this cost if needed. Original cost: ₹{product.cost || 0}
               </Text>
             </View>
           </View>
