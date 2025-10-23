@@ -218,8 +218,9 @@ export default function HomeScreen() {
 
         {/* Footer */}
         <Text style={styles.footer}>
-          Powered by IMC Business Solutions
+          Powered by IMC Business Solutions .V2
         </Text>
+        
       </ScrollView>
     </View>
   );
