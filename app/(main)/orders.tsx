@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +23,7 @@ const orderRoutes = [
     path: "/(main)/entry",
     subtitle: "Add products",
     gradient: ["#6EE7B7", "#3B82F6"],
+    requiresNoUpload: true,
   },
   {
     name: "Upload",
@@ -75,6 +77,33 @@ export default function OrdersScreen() {
     router.back();
   };
 
+  const handleRoutePress = (route: typeof orderRoutes[0]) => {
+    // Check if this route requires no pending uploads
+    if (route.requiresNoUpload && (pendingCount > 0 || pendingItems > 0)) {
+      Alert.alert(
+        "Upload Pending",
+        `You have ${pendingCount > 0 
+          ? `${pendingCount} pending ${pendingCount === 1 ? 'order' : 'orders'}` 
+          : `${pendingItems} pending ${pendingItems === 1 ? 'item' : 'items'}`
+        } waiting to be uploaded.\n\nPlease upload your pending data before adding new entries.`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Go to Upload",
+            onPress: () => router.push("/(main)/upload")
+          }
+        ]
+      );
+      return;
+    }
+
+    // Navigate to the route
+    router.push(route.path);
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
@@ -102,51 +131,71 @@ export default function OrdersScreen() {
 
         {/* Vertical Card List */}
         <View style={styles.columnContainer}>
-          {orderRoutes.map((route) => (
-            <Pressable
-              key={route.name}
-              onPress={() => router.push(route.path)}
-              style={({ pressed }) => [
-                styles.vCard,
-                pressed && { transform: [{ scale: 0.97 }], shadowOpacity: 0.15 },
-              ]}
-            >
-              <LinearGradient
-                colors={route.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.vCardInner}
+          {orderRoutes.map((route) => {
+            const isBlocked = route.requiresNoUpload && (pendingCount > 0 || pendingItems > 0);
+            
+            return (
+              <Pressable
+                key={route.name}
+                onPress={() => handleRoutePress(route)}
+                style={({ pressed }) => [
+                  styles.vCard,
+                  isBlocked && styles.vCardBlocked,
+                  pressed && !isBlocked && { transform: [{ scale: 0.97 }], shadowOpacity: 0.15 },
+                ]}
               >
-                <View style={styles.iconWrapper}>
-                  <Ionicons
-                    name={route.icon}
-                    size={34}
-                    color="#2563EB"
-                    style={styles.iconGlow}
-                  />
-                </View>
-                <View style={{ marginLeft: 16, flex: 1 }}>
-                  <Text style={styles.cardTitle}>{route.name}</Text>
-                  <Text style={styles.cardSubtitle}>{route.subtitle}</Text>
-                  {route.showPending && (pendingCount > 0 || pendingItems > 0) && (
-                    <View style={styles.pendingBadgeContainer}>
-                      <View style={styles.pendingBadge}>
-                        <Text style={styles.pendingText}>
-                          {pendingCount > 0 
-                            ? `Upload pending: ${pendingCount} ${pendingCount === 1 ? 'order' : 'orders'}`
-                            : `Upload pending: ${pendingItems} ${pendingItems === 1 ? 'item' : 'items'}`
-                          }
-                        </Text>
-                      </View>
+                <LinearGradient
+                  colors={isBlocked ? ["#9CA3AF", "#6B7280"] : route.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.vCardInner}
+                >
+                  {isBlocked && (
+                    <View style={styles.blockedOverlay}>
+                      <Ionicons name="lock-closed" size={24} color="rgba(255,255,255,0.9)" />
                     </View>
                   )}
-                </View>
-              </LinearGradient>
-            </Pressable>
-          ))}
+                  <View style={styles.iconWrapper}>
+                    <Ionicons
+                      name={route.icon}
+                      size={34}
+                      color={isBlocked ? "#9CA3AF" : "#2563EB"}
+                      style={styles.iconGlow}
+                    />
+                  </View>
+                  <View style={{ marginLeft: 16, flex: 1 }}>
+                    <Text style={styles.cardTitle}>{route.name}</Text>
+                    <Text style={styles.cardSubtitle}>{route.subtitle}</Text>
+                    {isBlocked && (
+                      <View style={styles.blockedBadgeContainer}>
+                        <View style={styles.blockedBadge}>
+                          <Ionicons name="alert-circle" size={14} color="#EF4444" style={{ marginRight: 4 }} />
+                          <Text style={styles.blockedText}>
+                            Upload required first
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {route.showPending && (pendingCount > 0 || pendingItems > 0) && (
+                      <View style={styles.pendingBadgeContainer}>
+                        <View style={styles.pendingBadge}>
+                          <Text style={styles.pendingText}>
+                            {pendingCount > 0 
+                              ? `Upload pending: ${pendingCount} ${pendingCount === 1 ? 'order' : 'orders'}`
+                              : `Upload pending: ${pendingItems} ${pendingItems === 1 ? 'item' : 'items'}`
+                            }
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {/* Info Banner */}
+        {/* Info Banner - Updated text */}
         <View style={styles.infoCard}>
           <Ionicons
             name="information-circle-outline"
@@ -154,8 +203,17 @@ export default function OrdersScreen() {
             color="#2563EB"
           />
           <Text style={styles.infoText}>
-            Use <Text style={styles.bold}>Entry</Text> to add products and{" "}
-            <Text style={styles.bold}>Upload</Text> to sync with server.
+            {(pendingCount > 0 || pendingItems > 0) ? (
+              <>
+                <Text style={styles.bold}>Upload pending data</Text> before adding new entries. 
+                Use <Text style={styles.bold}>Upload</Text> to sync with server first.
+              </>
+            ) : (
+              <>
+                Use <Text style={styles.bold}>Entry</Text> to add products and{" "}
+                <Text style={styles.bold}>Upload</Text> to sync with server.
+              </>
+            )}
           </Text>
         </View>
 
@@ -210,12 +268,23 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  vCardBlocked: {
+    opacity: 0.85,
+  },
   vCardInner: {
     flexDirection: "row",
     alignItems: "center",
     padding: 20,
     minHeight: 110,
     borderRadius: 15,
+    position: 'relative',
+  },
+
+  blockedOverlay: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 1,
   },
 
   iconWrapper: {
@@ -243,6 +312,28 @@ const styles = StyleSheet.create({
   cardSubtitle: {
     fontSize: 15,
     color: "rgba(255,255,255,0.95)",
+  },
+
+  blockedBadgeContainer: {
+    marginTop: 8,
+  },
+  blockedBadge: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  blockedText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#EF4444",
   },
 
   pendingBadgeContainer: {
