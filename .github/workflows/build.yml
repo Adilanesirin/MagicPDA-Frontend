@@ -1,0 +1,60 @@
+name: Build Android APK (Expo Bare Workflow)
+
+on:
+  workflow_dispatch: # run manually from Actions tab
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout your code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Install Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      # 3️⃣ Install Java & Android SDK
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 4️⃣ Install dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # 5️⃣ Prebuild (convert managed Expo to bare React Native project)
+      - name: Run Expo Prebuild
+        run: npx expo prebuild --platform android
+
+      # 6️⃣ Fix HTTP issues (allow cleartext for dev APIs)
+      - name: Allow cleartext traffic
+        run: |
+          sed -i 's/android:usesCleartextTraffic="false"/android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml || true
+          # If not present, inject it into the manifest
+          if ! grep -q 'usesCleartextTraffic' android/app/src/main/AndroidManifest.xml; then
+            sed -i '/<application/a \ \ \ \ android:usesCleartextTraffic="true"' android/app/src/main/AndroidManifest.xml
+          fi
+
+      # 7️⃣ Build the APK (Release)
+      - name: Build release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      # 8️⃣ Upload the APK as an artifact
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: android/app/build/outputs/apk/release/app-release.apk
