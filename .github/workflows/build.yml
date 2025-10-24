@@ -37,15 +37,6 @@ jobs:
       - name: Run Expo Prebuild
         run: npx expo prebuild --platform android
 
-      # 6️⃣ Fix HTTP issues (allow cleartext for dev APIs)
-      - name: Allow cleartext traffic
-        run: |
-          sed -i 's/android:usesCleartextTraffic="false"/android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml || true
-          # If not present, inject it into the manifest
-          if ! grep -q 'usesCleartextTraffic' android/app/src/main/AndroidManifest.xml; then
-            sed -i '/<application/a \ \ \ \ android:usesCleartextTraffic="true"' android/app/src/main/AndroidManifest.xml
-          fi
-
       # 7️⃣ Build the APK (Release)
       - name: Build release APK
         run: |
@@ -57,4 +48,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: android/app/build/outputs/apk/release/MagicPDA.apk

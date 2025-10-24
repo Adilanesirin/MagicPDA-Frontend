@@ -512,10 +512,42 @@ const styles = StyleSheet.create({
   },
 });
 
-// Initialize pending items table with ALTER TABLE to add column if not exists
+// Initialize orders_to_sync table with robust migration
+const initOrdersTable = async () => {
+  try {
+    console.log("🔄 Initializing orders_to_sync table...");
+    
+    // Drop and recreate the table to ensure all columns exist
+    await db.execAsync(`DROP TABLE IF EXISTS orders_to_sync`);
+    
+    // Create table with all required columns
+    await db.execAsync(`
+      CREATE TABLE orders_to_sync (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_code TEXT NOT NULL,
+        userid TEXT NOT NULL,
+        itemcode TEXT NOT NULL,
+        barcode TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        rate REAL NOT NULL,
+        mrp REAL NOT NULL,
+        order_date TEXT NOT NULL,
+        sync_status TEXT DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        product_name TEXT
+      );
+    `);
+    
+    console.log("✅ orders_to_sync table created successfully with all columns");
+    
+  } catch (error) {
+    console.error("❌ Error initializing orders table:", error);
+  }
+};
+
+// Initialize pending items table
 const initPendingItemsTable = async () => {
   try {
-    // Create table if not exists
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS pending_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -531,87 +563,80 @@ const initPendingItemsTable = async () => {
         scannedAt INTEGER,
         batch_supplier TEXT,
         product TEXT,
-        brand TEXT
+        brand TEXT,
+        isManualEntry INTEGER DEFAULT 0
       );
     `);
-    
-    // Try to add the isManualEntry column if it doesn't exist
-    try {
-      await db.execAsync(`
-        ALTER TABLE pending_items ADD COLUMN isManualEntry INTEGER DEFAULT 0;
-      `);
-      console.log("✅ Added isManualEntry column to pending_items table");
-    } catch (alterError: any) {
-      // Column might already exist, which is fine
-      if (alterError.message && alterError.message.includes('duplicate column name')) {
-        console.log("ℹ️ isManualEntry column already exists");
-      } else {
-        console.log("ℹ️ Column may already exist or other non-critical error:", alterError.message);
-      }
-    }
+    console.log("✅ Pending items table initialized");
   } catch (error) {
     console.error("Error initializing pending_items table:", error);
   }
 };
 
-// Generate a unique product code for manual entries
-const generateManualProductCode = async (): Promise<string> => {
-  try {
-    // Get the highest existing manual entry code
-    const result = await db.getFirstAsync(
-      "SELECT code FROM product_data WHERE code LIKE 'MAN%' ORDER BY code DESC LIMIT 1"
-    ) as { code?: string } | null;
-    
-    if (result && result.code) {
-      const numPart = parseInt(result.code.substring(3));
-      if (!isNaN(numPart)) {
-        return `MAN${(numPart + 1).toString().padStart(6, '0')}`;
-      }
-    }
-    
-    // Default starting code
-    return 'MAN000001';
-  } catch (error) {
-    console.error("Error generating manual product code:", error);
-    return `MAN${Date.now().toString().substring(7)}`; // Fallback using timestamp
-  }
-};
-
-// Save manual entry to product_data table
-const saveManualEntryToProductData = async (entryData: {
+// Save order to sync queue
+const saveOrderToSync = async (orderData: {
+  supplier_code: string;
+  userid: string;
+  itemcode: string;
   barcode: string;
-  name: string;
-  mrp: number;
-  cost: number;
   quantity: number;
-  supplier: string;
-}): Promise<string> => {
+  rate: number;
+  mrp: number;
+  order_date: string;
+  product_name?: string;
+}) => {
   try {
-    // Generate unique product code
-    const productCode = await generateManualProductCode();
+    console.log("💾 Saving order to sync:", orderData.barcode);
     
-    // Insert into product_data table
     await db.runAsync(
-      `INSERT INTO product_data 
-      (code, barcode, name, bmrp, cost, quantity, batch_supplier, product, brand)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders_to_sync 
+      (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date, sync_status, created_at, product_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?)`,
       [
-        productCode,
-        entryData.barcode,
-        entryData.name,
-        entryData.mrp,
-        entryData.cost,
-        entryData.quantity,
-        entryData.supplier,
-        'Manual Entry',
-        'Manual Entry'
+        orderData.supplier_code,
+        orderData.userid,
+        orderData.itemcode,
+        orderData.barcode,
+        orderData.quantity,
+        orderData.rate,
+        orderData.mrp,
+        orderData.order_date,
+        orderData.product_name || '',
       ]
     );
     
-    console.log(`✅ Manual entry saved to product_data with code: ${productCode}`);
-    return productCode;
-  } catch (error) {
-    console.error("Error saving manual entry to product_data:", error);
+    console.log(`✅ Successfully saved order to sync: ${orderData.barcode}`);
+    return true;
+  } catch (error: any) {
+    console.error("❌ Error saving order to sync:", error);
+    
+    // If there's still a column error, try the fallback approach
+    if (error.message && error.message.includes('no column named product_name')) {
+      console.log("🔄 Trying fallback without product_name...");
+      try {
+        await db.runAsync(
+          `INSERT INTO orders_to_sync 
+          (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date, sync_status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))`,
+          [
+            orderData.supplier_code,
+            orderData.userid,
+            orderData.itemcode,
+            orderData.barcode,
+            orderData.quantity,
+            orderData.rate,
+            orderData.mrp,
+            orderData.order_date,
+          ]
+        );
+        console.log(`✅ Fallback save successful for: ${orderData.barcode}`);
+        return true;
+      } catch (fallbackError) {
+        console.error("❌ Fallback save also failed:", fallbackError);
+        throw fallbackError;
+      }
+    }
+    
     throw error;
   }
 };
@@ -654,6 +679,8 @@ export default function BarcodeEntry() {
 
   useEffect(() => {
     const initialize = async () => {
+      console.log("🚀 Initializing BarcodeEntry component...");
+      await initOrdersTable();
       await initPendingItemsTable();
       await loadPendingItems();
     };
@@ -667,6 +694,7 @@ export default function BarcodeEntry() {
         [supplier_code || ""]
       );
       setScannedItems(rows);
+      console.log(`📦 Loaded ${rows.length} pending items`);
     } catch (error) {
       console.error("Error loading pending items:", error);
     }
@@ -695,6 +723,7 @@ export default function BarcodeEntry() {
           item.isManualEntry || 0
         ]
       );
+      console.log(`✅ Saved pending item: ${item.barcode}`);
     } catch (error) {
       console.error("Error saving pending item:", error);
     }
@@ -706,6 +735,7 @@ export default function BarcodeEntry() {
         "DELETE FROM pending_items WHERE id = ?",
         [itemId]
       );
+      console.log(`🗑️ Deleted pending item: ${itemId}`);
     } catch (error) {
       console.error("Error deleting pending item:", error);
     }
@@ -719,6 +749,7 @@ export default function BarcodeEntry() {
         WHERE id = ?`,
         [item.quantity, item.eCost, item.cost, item.batchSupplier, itemId]
       );
+      console.log(`✏️ Updated pending item: ${itemId}`);
     } catch (error) {
       console.error("Error updating pending item:", error);
     }
@@ -951,44 +982,26 @@ export default function BarcodeEntry() {
       return;
     }
 
-    try {
-      // Save to product_data table first and get the generated code
-      const productCode = await saveManualEntryToProductData({
-        barcode: manualEntryData.barcode,
-        name: manualEntryData.name.trim(),
-        mrp: mrp,
-        cost: cost,
-        quantity: quantity,
-        supplier: supplier || '',
-      });
+    const newItem = {
+      barcode: manualEntryData.barcode,
+      name: manualEntryData.name.trim(),
+      bmrp: mrp,
+      cost: cost,
+      quantity: quantity,
+      eCost: 0,
+      currentStock: quantity,
+      batchSupplier: supplier,
+      scannedAt: new Date().getTime(),
+      batch_supplier: supplier,
+      product: '',
+      brand: '',
+      isManualEntry: 1,
+    };
 
-      // Now create the pending item with the product code
-      const newItem = {
-        code: productCode, // Add the generated product code
-        barcode: manualEntryData.barcode,
-        name: manualEntryData.name.trim(),
-        bmrp: mrp,
-        cost: cost,
-        quantity: quantity,
-        eCost: 0,
-        currentStock: quantity,
-        batchSupplier: supplier,
-        scannedAt: new Date().getTime(),
-        batch_supplier: supplier,
-        product: 'Manual Entry',
-        brand: 'Manual Entry',
-        isManualEntry: 1,
-      };
-
-      await savePendingItem(newItem);
-      await loadPendingItems();
-      await loadAllProducts(); // Reload product list to include the new manual entry
-      closeManualEntryModal();
-      Alert.alert("Success", "Product added successfully and saved to local database!");
-    } catch (error) {
-      console.error("Error saving manual entry:", error);
-      Alert.alert("Error", "Failed to save manual entry. Please try again.");
-    }
+    await savePendingItem(newItem);
+    await loadPendingItems();
+    closeManualEntryModal();
+    Alert.alert("Success", "Product added successfully!");
   };
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
@@ -1257,11 +1270,12 @@ export default function BarcodeEntry() {
   };
 
   const updateQuantities = async () => {
-    // Validation: Check for items with missing or zero E.Qty or E.Cost
+    // First validation: Check for items with missing or zero values
     const itemsWithMissingData = scannedItems.filter(item => {
-      const hasInvalidEQty = !item.quantity || item.quantity === 0 || isNaN(item.quantity);
-      const hasInvalidECost = !item.eCost || item.eCost === 0 || isNaN(item.eCost);
-      return hasInvalidEQty || hasInvalidECost;
+      const hasInvalidMrp = !item.bmrp || item.bmrp === 0 || isNaN(item.bmrp);
+      const hasInvalidCost = !item.cost || item.cost === 0 || isNaN(item.cost);
+      const hasInvalidQty = !item.quantity || item.quantity === 0 || isNaN(item.quantity);
+      return hasInvalidMrp || hasInvalidCost || hasInvalidQty;
     });
 
     if (itemsWithMissingData.length > 0) {
@@ -1269,7 +1283,7 @@ export default function BarcodeEntry() {
       
       Alert.alert(
         "⚠️ Incomplete Data Warning",
-        `The following ${itemsWithMissingData.length} item(s) have missing or zero values for E.Qty or E.Cost:\n\n${itemNames}\n\nDo you want to proceed with the update?`,
+        `The following ${itemsWithMissingData.length} item(s) have missing or zero values for MRP, Cost, or Quantity:\n\n${itemNames}\n\nDo you want to proceed with the update?`,
         [
           {
             text: "Cancel",
@@ -1304,15 +1318,20 @@ export default function BarcodeEntry() {
               const userId = await SecureStore.getItemAsync("user_id");
               const today = new Date().toISOString().split("T")[0];
 
-              await db.withTransactionAsync(async () => {
-                for (const item of scannedItems) {
+              let successCount = 0;
+              let errorCount = 0;
+
+              console.log(`🔄 Starting sync for ${scannedItems.length} items...`);
+
+              // Process each item individually
+              for (const item of scannedItems) {
+                try {
                   const finalCost = item.eCost !== 0 ? item.eCost : item.cost;
                   
-                  // Get the product code - for both manual entries and existing products
-                  let itemCode = item.code || item.barcode;
-                  
-                  // If no code exists, try to fetch from database
-                  if (!item.code) {
+                  // For manual entries, use barcode as item code
+                  // For existing products, fetch the actual item code from database
+                  let itemCode = item.barcode;
+                  if (item.isManualEntry !== 1) {
                     const productData = await db.getFirstAsync(
                       "SELECT code FROM product_data WHERE barcode = ?",
                       [item.barcode]
@@ -1320,6 +1339,9 @@ export default function BarcodeEntry() {
                     itemCode = productData?.code || item.barcode;
                   }
                   
+                  console.log(`📤 Syncing item: ${item.barcode} (${item.name})`);
+                  
+                  // Save to sync table
                   await saveOrderToSync({
                     supplier_code: supplier_code || "",
                     userid: userId ?? "unknown",
@@ -1329,27 +1351,56 @@ export default function BarcodeEntry() {
                     rate: finalCost ?? 0,
                     mrp: item.bmrp ?? 0,
                     order_date: today,
+                    product_name: item.name,
                   });
 
-                  // Update the product_data table with new quantity and cost
-                  await db.runAsync(
-                    "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
-                    [item.quantity, finalCost, item.barcode]
-                  );
+                  // Only update product_data if it's not a manual entry and exists in product_data
+                  if (item.isManualEntry !== 1) {
+                    const productExists = await db.getFirstAsync(
+                      "SELECT 1 FROM product_data WHERE barcode = ?",
+                      [item.barcode]
+                    );
+                    
+                    if (productExists) {
+                      await db.runAsync(
+                        "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
+                        [item.quantity, finalCost, item.barcode]
+                      );
+                      console.log(`✅ Updated product_data for: ${item.barcode}`);
+                    }
+                  }
+                  
+                  successCount++;
+                  console.log(`✅ Successfully processed: ${item.barcode}`);
+                  
+                } catch (itemError) {
+                  console.error(`❌ Error processing item ${item.barcode}:`, itemError);
+                  errorCount++;
                 }
-                
-                // Clear pending items for this supplier
+              }
+              
+              // Clear pending items after successful processing
+              if (successCount > 0) {
                 await db.runAsync(
                   "DELETE FROM pending_items WHERE supplier_code = ?",
                   [supplier_code || ""]
                 );
-              });
+                console.log(`🧹 Cleared ${successCount} pending items`);
+              }
 
-              Alert.alert("✓ Success", "Entries saved for sync!");
-              setScannedItems([]);
-              router.push("/(main)/");
+              if (errorCount === 0) {
+                Alert.alert("✅ Success", `All ${successCount} entries saved for sync!`);
+                setScannedItems([]);
+                router.push("/(main)/");
+              } else if (successCount > 0) {
+                Alert.alert("⚠️ Partial Success", 
+                  `${successCount} entries saved for sync, but ${errorCount} failed. The successful entries have been cleared.`);
+                await loadPendingItems(); // Reload to show only failed items
+              } else {
+                Alert.alert("❌ Error", "Failed to save any entries. Please try again.");
+              }
             } catch (err) {
-              console.error("Save failed:", err);
+              console.error("💥 Save failed:", err);
               Alert.alert("Error", "Failed to save entries.");
             }
           }
@@ -1783,29 +1834,4 @@ export default function BarcodeEntry() {
       )}
     </KeyboardAvoidingView>
   );
-}
-
-// Helper function to save order to sync
-async function saveOrderToSync(orderData: any) {
-  try {
-    await db.runAsync(
-      `INSERT INTO orders_to_sync 
-      (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        orderData.supplier_code,
-        orderData.userid,
-        orderData.itemcode,
-        orderData.barcode,
-        orderData.quantity,
-        orderData.rate,
-        orderData.mrp,
-        orderData.order_date
-      ]
-    );
-    console.log(`✅ Order saved to sync with itemcode: ${orderData.itemcode}`);
-  } catch (error) {
-    console.error("Error saving order to sync:", error);
-    throw error;
-  }
 }
