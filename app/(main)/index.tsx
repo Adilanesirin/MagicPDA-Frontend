@@ -58,7 +58,7 @@ export default function HomeScreen() {
             <MaskedView
               style={styles.logoMask}
               maskElement={
-                <Text style={styles.logoText}>MagicPDA</Text>
+                <Text style={styles.logoText}>TaskPMS</Text>
               }
             >
               <LinearGradient
@@ -72,7 +72,7 @@ export default function HomeScreen() {
               style={styles.subtitleMask}
               maskElement={
                 <Text style={styles.subtitleText}>
-                  Your Smart PDA - Making productivity magical
+                  Your Smart PMS - Making productivity magical
                 </Text>
             }
           >

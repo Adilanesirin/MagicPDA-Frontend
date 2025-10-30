@@ -233,11 +233,11 @@ export default function Login() {
             <View className="items-center mb-6">
               <TouchableOpacity onPress={handleLogoPress}>
                 <Image
-                  source={require("../../assets/images/icon.png")}
+                  source={require("../../assets/images/icon.jpg")}
                   style={{ width: 60, height: 60, marginBottom: 8 }}
                 />
               </TouchableOpacity>
-              <Text className="text-lg font-semibold">MagicPDA</Text>
+              <Text className="text-lg font-semibold">TaskPMS</Text>
               {debugMode && (
                 <Text className="text-orange-500 text-sm mt-1">DEBUG MODE</Text>
               )}

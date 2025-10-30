@@ -39,6 +39,28 @@ export default function Upload() {
       const data = await getPendingOrders();
       const s = await getLocalDataStats();
       
+      // 🔍 DEBUG: Log the raw data from database
+      console.log("\n🔍 === RAW ORDERS FROM DATABASE ===");
+      console.log("Total orders loaded:", data.length);
+      
+      // Check manual entries specifically
+      const manualEntries = data.filter((o: any) => 
+        o.is_manual_entry === 1 || o.is_manual_entry === '1'
+      );
+      console.log("Manual entries found:", manualEntries.length);
+      
+      if (manualEntries.length > 0) {
+        console.log("\n📋 Manual Entry Details:");
+        manualEntries.forEach((entry: any, idx: number) => {
+          console.log(`\n  Entry ${idx + 1}:`);
+          console.log(`    barcode: ${entry.barcode}`);
+          console.log(`    product_name: ${entry.product_name}`);
+          console.log(`    is_manual_entry: ${entry.is_manual_entry}`);
+          console.log(`    itemcode: ${entry.itemcode}`);
+        });
+      }
+      console.log("🔍 === END RAW DATA ===\n");
+      
       setOrders(Array.isArray(data) ? data : []);
       setStats(s || {});
     } catch (error) {
@@ -122,7 +144,7 @@ export default function Upload() {
         });
       } else {
         // Handle case where upload didn't return expected success format
-        console.warn("Upload completed but with unexpected response:", result);
+        console.warn("⚠️ Unexpected response format from server:", result);
         
         // Still mark as success if we got this far (200 response)
         await markOrdersAsSynced();

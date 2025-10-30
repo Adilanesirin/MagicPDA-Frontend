@@ -31,13 +31,15 @@ export default function EditProduct() {
       setProduct(parsedItem);
       
       // UPDATED LOGIC: If eCost is 0 or not set, use cost value
-      // This ensures E.Cost field shows the current cost by default
       const initialECost = (parsedItem.eCost && parsedItem.eCost !== 0) 
         ? parsedItem.eCost 
         : (parsedItem.cost || 0);
       
       setEditedCost(initialECost.toString());
-      setEditedQuantity(parsedItem.quantity?.toString() || "1");
+      
+      // FIX: Use the saved quantity value if it exists, otherwise empty string
+      setEditedQuantity(parsedItem.quantity ? parsedItem.quantity.toString() : "");
+      
       setEditedSupplier(parsedItem.batchSupplier || supplier || "");
     }
   }, [itemData]);
@@ -47,7 +49,7 @@ export default function EditProduct() {
       ...product,
       cost: product.cost, // Keep original cost unchanged
       eCost: parseFloat(editedCost) || 0, // Save edited cost as eCost
-      quantity: parseInt(editedQuantity) || 1,
+      quantity: parseInt(editedQuantity) || 0, // Changed from 1 to 0 to allow 0 quantity
       batchSupplier: editedSupplier,
     };
 
@@ -73,8 +75,10 @@ export default function EditProduct() {
 
   const decrementQuantity = () => {
     const currentQty = parseInt(editedQuantity) || 0;
-    if (currentQty > 0) {
+    if (currentQty > 0) { // Changed from > 1 to > 0
       setEditedQuantity((currentQty - 1).toString());
+    } else {
+      setEditedQuantity("0"); // Changed from "" to "0"
     }
   };
 
@@ -142,6 +146,7 @@ export default function EditProduct() {
                   value={editedQuantity}
                   onChangeText={setEditedQuantity}
                   keyboardType="numeric"
+                  placeholder="0"
                   className="flex-1 mx-3 border border-gray-300 rounded-lg px-3 py-2 text-center font-semibold"
                 />
                 <TouchableOpacity

@@ -186,7 +186,7 @@ export default function Pairing() {
             {/* Header Section */}
             <View className="items-center w-full">
               <Image
-                source={require("../../assets/images/icon.png")}
+                source={require("../../assets/images/icon.jpg")}
                 style={{
                   width: 80,
                   height: 80,
@@ -194,7 +194,7 @@ export default function Pairing() {
                 }}
               />
               <Text className="text-2xl font-bold mb-2 text-gray-800">
-                MagicPDA
+              TaskPMS
               </Text>
               <Text className="text-gray-600 mb-8 text-center">
                 Connect to your server
