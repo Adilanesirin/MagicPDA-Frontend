@@ -510,9 +510,41 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+  autocompleteContainer: {
+    position: 'relative',
+    zIndex: 1000,
+  },
+  autocompleteSuggestionsWrapper: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    maxHeight: 200,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 5,
+    zIndex: 1001,
+  },
+  autocompleteSuggestionItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  autocompleteSuggestionText: {
+    fontSize: 15,
+    color: '#1f2937',
+  },
 });
 
-// Initialize orders_to_sync table with robust migration
 const initOrdersTable = async () => {
   try {
     console.log("🔄 Initializing orders_to_sync table...");
@@ -537,14 +569,13 @@ const initOrdersTable = async () => {
       );
     `);
     
-    console.log("✅ orders_to_sync table created successfully with all columns");
+    console.log("✅ orders_to_sync table created successfully");
     
   } catch (error) {
     console.error("❌ Error initializing orders table:", error);
   }
 };
 
-// Initialize pending items table
 const initPendingItemsTable = async () => {
   try {
     await db.execAsync(`
@@ -572,26 +603,22 @@ const initPendingItemsTable = async () => {
   }
 };
 
-// Debug function for manual entries
 const debugManualEntry = async (barcode: string) => {
   console.log("\n🔍 === DEBUGGING MANUAL ENTRY ===");
   
   try {
-    // Check pending_items table
     const pendingItem = await db.getFirstAsync(
       `SELECT barcode, name, isManualEntry FROM pending_items WHERE barcode = ?`,
       [barcode]
     ) as any;
     console.log("1️⃣ pending_items table:", JSON.stringify(pendingItem, null, 2));
     
-    // Check orders_to_sync table
     const syncOrder = await db.getFirstAsync(
       `SELECT barcode, product_name, is_manual_entry, itemcode FROM orders_to_sync WHERE barcode = ? ORDER BY created_at DESC LIMIT 1`,
       [barcode]
     ) as any;
     console.log("2️⃣ orders_to_sync table:", JSON.stringify(syncOrder, null, 2));
     
-    // Check if columns exist
     const tableInfo = await db.getAllAsync(`PRAGMA table_info(orders_to_sync)`);
     console.log("3️⃣ orders_to_sync schema:");
     tableInfo.forEach((col: any) => {
@@ -604,7 +631,6 @@ const debugManualEntry = async (barcode: string) => {
   console.log("🔍 === END DEBUG ===\n");
 };
 
-// Save order to sync queue - WITH DETAILED LOGGING
 const saveOrderToSync = async (orderData: {
   supplier_code: string;
   userid: string;
@@ -620,8 +646,6 @@ const saveOrderToSync = async (orderData: {
   try {
     console.log("\n💾 === SAVING ORDER TO SYNC ===");
     console.log("📋 Input orderData:", JSON.stringify(orderData, null, 2));
-    console.log("🏷️ product_name:", orderData.product_name);
-    console.log("🔢 is_manual_entry:", orderData.is_manual_entry);
     
     await db.runAsync(
       `INSERT INTO orders_to_sync 
@@ -641,7 +665,6 @@ const saveOrderToSync = async (orderData: {
       ]
     );
     
-    // Verify what was saved
     const saved = await db.getFirstAsync(
       `SELECT barcode, product_name, is_manual_entry FROM orders_to_sync WHERE barcode = ? ORDER BY id DESC LIMIT 1`,
       [orderData.barcode]
@@ -682,6 +705,9 @@ export default function BarcodeEntry() {
     cost: '',
     quantity: '',
   });
+
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
 
   const [showScanner, setShowScanner] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -742,7 +768,6 @@ export default function BarcodeEntry() {
         ]
       );
       
-      // Verify what was saved
       const saved = await db.getFirstAsync(
         `SELECT barcode, name, isManualEntry FROM pending_items WHERE barcode = ? ORDER BY id DESC LIMIT 1`,
         [item.barcode]
@@ -895,6 +920,39 @@ export default function BarcodeEntry() {
     }
   };
 
+  const handleNameInputChange = (text: string) => {
+    setManualEntryData({...manualEntryData, name: text});
+    
+    if (text.trim().length >= 1) {
+      const searchLower = text.toLowerCase().trim();
+      
+      const uniqueNames = Array.from(
+        new Set(
+          allProducts
+            .filter((product: any) => 
+              product.name?.toLowerCase().startsWith(searchLower)
+            )
+            .map((product: any) => product.name)
+            .filter((name: string) => name && name.trim() !== '')
+        )
+      ).sort((a, b) => a.localeCompare(b))
+      .slice(0, 20);
+      
+      setNameSuggestions(uniqueNames);
+      setShowNameSuggestions(uniqueNames.length > 0);
+    } else {
+      setNameSuggestions([]);
+      setShowNameSuggestions(false);
+    }
+  };
+
+  const handleSelectNameSuggestion = (name: string) => {
+    setManualEntryData({...manualEntryData, name: name});
+    setShowNameSuggestions(false);
+    setNameSuggestions([]);
+    Keyboard.dismiss();
+  };
+
   const handleSelectSuggestion = (product: any) => {
     setManualBarcode(product.name);
     setShowSuggestions(false);
@@ -959,6 +1017,8 @@ export default function BarcodeEntry() {
       quantity: '',
     });
     setShowManualEntryModal(true);
+    setNameSuggestions([]);
+    setShowNameSuggestions(false);
   };
 
   const closeManualEntryModal = () => {
@@ -970,6 +1030,8 @@ export default function BarcodeEntry() {
       cost: '',
       quantity: '',
     });
+    setNameSuggestions([]);
+    setShowNameSuggestions(false);
   };
 
   const handleSaveManualEntry = async () => {
@@ -1031,7 +1093,6 @@ export default function BarcodeEntry() {
     await savePendingItem(newItem);
     await loadPendingItems();
     
-    // Debug after save
     await debugManualEntry(manualEntryData.barcode);
     
     closeManualEntryModal();
@@ -1303,149 +1364,143 @@ export default function BarcodeEntry() {
     }, 300);
   };
 
- // CRITICAL FIX: Update the updateQuantities function in barcode-entry.tsx
-// Replace the entire updateQuantities function with this corrected version:
+  const updateQuantities = async () => {
+    const itemsWithMissingData = scannedItems.filter(item => {
+      const hasInvalidMrp = !item.bmrp || item.bmrp === 0 || isNaN(item.bmrp);
+      const hasInvalidCost = !item.cost || item.cost === 0 || isNaN(item.cost);
+      const hasInvalidQty = !item.quantity || item.quantity === 0 || isNaN(item.quantity);
+      return hasInvalidMrp || hasInvalidCost || hasInvalidQty;
+    });
 
-const updateQuantities = async () => {
-  const itemsWithMissingData = scannedItems.filter(item => {
-    const hasInvalidMrp = !item.bmrp || item.bmrp === 0 || isNaN(item.bmrp);
-    const hasInvalidCost = !item.cost || item.cost === 0 || isNaN(item.cost);
-    const hasInvalidQty = !item.quantity || item.quantity === 0 || isNaN(item.quantity);
-    return hasInvalidMrp || hasInvalidCost || hasInvalidQty;
-  });
+    if (itemsWithMissingData.length > 0) {
+      const itemNames = itemsWithMissingData.map(item => `• ${item.name}`).join('\n');
+      
+      Alert.alert(
+        "⚠️ Incomplete Data Warning",
+        `The following ${itemsWithMissingData.length} item(s) have missing or zero values:\n\n${itemNames}\n\nDo you want to proceed?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Proceed Anyway", style: "destructive", onPress: () => showFinalConfirmation() }
+        ]
+      );
+    } else {
+      showFinalConfirmation();
+    }
+  };
 
-  if (itemsWithMissingData.length > 0) {
-    const itemNames = itemsWithMissingData.map(item => `• ${item.name}`).join('\n');
-    
+  const showFinalConfirmation = () => {
     Alert.alert(
-      "⚠️ Incomplete Data Warning",
-      `The following ${itemsWithMissingData.length} item(s) have missing or zero values:\n\n${itemNames}\n\nDo you want to proceed?`,
+      "Confirm Update",
+      `Are you sure you want to update quantities for ${scannedItems.length} item(s)?`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Proceed Anyway", style: "destructive", onPress: () => showFinalConfirmation() }
-      ]
-    );
-  } else {
-    showFinalConfirmation();
-  }
-};
+        {
+          text: "Update",
+          style: "default",
+          onPress: async () => {
+            try {
+              const userId = await SecureStore.getItemAsync("user_id");
+              const today = new Date().toISOString().split("T")[0];
 
-const showFinalConfirmation = () => {
-  Alert.alert(
-    "Confirm Update",
-    `Are you sure you want to update quantities for ${scannedItems.length} item(s)?`,
-    [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Update",
-        style: "default",
-        onPress: async () => {
-          try {
-            const userId = await SecureStore.getItemAsync("user_id");
-            const today = new Date().toISOString().split("T")[0];
+              let successCount = 0;
+              let errorCount = 0;
 
-            let successCount = 0;
-            let errorCount = 0;
+              console.log(`\n📄 === STARTING UPDATE QUANTITIES ===`);
+              console.log(`Processing ${scannedItems.length} items...`);
 
-            console.log(`\n📄 === STARTING UPDATE QUANTITIES ===`);
-            console.log(`Processing ${scannedItems.length} items...`);
-
-            for (const item of scannedItems) {
-              try {
-                const finalCost = item.eCost !== 0 ? item.eCost : item.cost;
-                let itemCode = item.barcode;
-                
-                // 🔍 CRITICAL: Check if this is a manual entry
-                const isManualEntry = item.isManualEntry === 1;
-                
-                if (!isManualEntry) {
-                  // Only fetch itemcode from database for NON-manual entries
-                  const productData = await db.getFirstAsync(
-                    "SELECT code FROM product_data WHERE barcode = ?",
-                    [item.barcode]
-                  ) as { code?: string } | null;
-                  itemCode = productData?.code || item.barcode;
-                }
-                
-                console.log(`\n📋 Processing item:`, {
-                  barcode: item.barcode,
-                  name: item.name,
-                  isManualEntry: isManualEntry,
-                  itemCode: itemCode,
-                  product_name: item.name // ✅ This should be logged
-                });
-                
-                // 🎯 FIX: Always pass product_name for ALL items (especially manual entries)
-                await saveOrderToSync({
-                  supplier_code: supplier_code || "",
-                  userid: userId ?? "unknown",
-                  itemcode: itemCode,
-                  barcode: item.barcode,
-                  quantity: item.quantity,
-                  rate: finalCost ?? 0,
-                  mrp: item.bmrp ?? 0,
-                  order_date: today,
-                  product_name: item.name, // ✅ CRITICAL: Always pass the product name
-                  is_manual_entry: isManualEntry ? 1 : 0, // ✅ Explicitly set flag
-                });
-
-                // Only update product_data for NON-manual entries
-                if (!isManualEntry) {
-                  const productExists = await db.getFirstAsync(
-                    "SELECT 1 FROM product_data WHERE barcode = ?",
-                    [item.barcode]
-                  );
+              for (const item of scannedItems) {
+                try {
+                  const finalCost = item.eCost !== 0 ? item.eCost : item.cost;
+                  let itemCode = item.barcode;
                   
-                  if (productExists) {
-                    await db.runAsync(
-                      "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
-                      [item.quantity, finalCost, item.barcode]
-                    );
-                    console.log(`✅ Updated product_data for: ${item.barcode}`);
+                  const isManualEntry = item.isManualEntry === 1;
+                  
+                  if (!isManualEntry) {
+                    const productData = await db.getFirstAsync(
+                      "SELECT code FROM product_data WHERE barcode = ?",
+                      [item.barcode]
+                    ) as { code?: string } | null;
+                    itemCode = productData?.code || item.barcode;
                   }
-                } else {
-                  console.log(`⭐️ Skipping product_data update for manual entry: ${item.barcode}`);
-                }
-                
-                successCount++;
-                
-              } catch (itemError) {
-                console.error(`❌ Error processing item ${item.barcode}:`, itemError);
-                errorCount++;
-              }
-            }
-            
-            console.log(`\n📊 Results: ${successCount} success, ${errorCount} errors`);
-            console.log(`📄 === END UPDATE QUANTITIES ===\n`);
-            
-            if (successCount > 0) {
-              await db.runAsync(
-                "DELETE FROM pending_items WHERE supplier_code = ?",
-                [supplier_code || ""]
-              );
-              console.log(`🧹 Cleared ${successCount} pending items`);
-            }
+                  
+                  console.log(`\n📋 Processing item:`, {
+                    barcode: item.barcode,
+                    name: item.name,
+                    isManualEntry: isManualEntry,
+                    itemCode: itemCode,
+                    product_name: item.name
+                  });
+                  
+                  await saveOrderToSync({
+                    supplier_code: supplier_code || "",
+                    userid: userId ?? "unknown",
+                    itemcode: itemCode,
+                    barcode: item.barcode,
+                    quantity: item.quantity,
+                    rate: finalCost ?? 0,
+                    mrp: item.bmrp ?? 0,
+                    order_date: today,
+                    product_name: item.name,
+                    is_manual_entry: isManualEntry ? 1 : 0,
+                  });
 
-            if (errorCount === 0) {
-              Alert.alert("✅ Success", `All ${successCount} entries saved for sync!`);
-              setScannedItems([]);
-              router.push("/(main)/");
-            } else if (successCount > 0) {
-              Alert.alert("⚠️ Partial Success", 
-                `${successCount} entries saved, ${errorCount} failed.`);
-              await loadPendingItems();
-            } else {
-              Alert.alert("❌ Error", "Failed to save any entries.");
+                  if (!isManualEntry) {
+                    const productExists = await db.getFirstAsync(
+                      "SELECT 1 FROM product_data WHERE barcode = ?",
+                      [item.barcode]
+                    );
+                    
+                    if (productExists) {
+                      await db.runAsync(
+                        "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
+                        [item.quantity, finalCost, item.barcode]
+                      );
+                      console.log(`✅ Updated product_data for: ${item.barcode}`);
+                    }
+                  } else {
+                    console.log(`⭐ Skipping product_data update for manual entry: ${item.barcode}`);
+                  }
+                  
+                  successCount++;
+                  
+                } catch (itemError) {
+                  console.error(`❌ Error processing item ${item.barcode}:`, itemError);
+                  errorCount++;
+                }
+              }
+              
+              console.log(`\n📊 Results: ${successCount} success, ${errorCount} errors`);
+              console.log(`📄 === END UPDATE QUANTITIES ===\n`);
+              
+              if (successCount > 0) {
+                await db.runAsync(
+                  "DELETE FROM pending_items WHERE supplier_code = ?",
+                  [supplier_code || ""]
+                );
+                console.log(`🧹 Cleared ${successCount} pending items`);
+              }
+
+              if (errorCount === 0) {
+                Alert.alert("✅ Success", `All ${successCount} entries saved for sync!`);
+                setScannedItems([]);
+                router.push("/(main)/");
+              } else if (successCount > 0) {
+                Alert.alert("⚠️ Partial Success", 
+                  `${successCount} entries saved, ${errorCount} failed.`);
+                await loadPendingItems();
+              } else {
+                Alert.alert("❌ Error", "Failed to save any entries.");
+              }
+            } catch (err) {
+              console.error("💥 Save failed:", err);
+              Alert.alert("Error", "Failed to save entries.");
             }
-          } catch (err) {
-            console.error("💥 Save failed:", err);
-            Alert.alert("Error", "Failed to save entries.");
           }
         }
-      }
-    ]
-  );
-};
+      ]
+    );
+  };
+
   const renderSuggestionItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.suggestionItem}
@@ -1540,18 +1595,42 @@ const showFinalConfirmation = () => {
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Item Name *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={manualEntryData.name}
-                  onChangeText={(text) => setManualEntryData({...manualEntryData, name: text})}
-                  placeholder="Enter product name"
-                  placeholderTextColor="#9ca3af"
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                  autoFocus={true}
-                  onFocus={() => setIsEditing(true)}
-                  onBlur={() => setIsEditing(false)}
-                />
+                <View style={styles.autocompleteContainer}>
+                  <TextInput
+                    style={styles.formInput}
+                    value={manualEntryData.name}
+                    onChangeText={handleNameInputChange}
+                    placeholder="Enter or select product name"
+                    placeholderTextColor="#9ca3af"
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                    autoFocus={true}
+                    onFocus={() => setIsEditing(true)}
+                    onBlur={() => {
+                      setIsEditing(false);
+                      setTimeout(() => setShowNameSuggestions(false), 200);
+                    }}
+                  />
+                  {showNameSuggestions && nameSuggestions.length > 0 && (
+                    <ScrollView 
+                      style={styles.autocompleteSuggestionsWrapper}
+                      keyboardShouldPersistTaps="handled"
+                      nestedScrollEnabled={true}
+                    >
+                      {nameSuggestions.map((name, index) => (
+                        <TouchableOpacity
+                          key={`${name}-${index}`}
+                          style={styles.autocompleteSuggestionItem}
+                          onPress={() => handleSelectNameSuggestion(name)}
+                        >
+                          <Text style={styles.autocompleteSuggestionText} numberOfLines={1}>
+                            {name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
               </View>
 
               <View style={styles.formGroup}>

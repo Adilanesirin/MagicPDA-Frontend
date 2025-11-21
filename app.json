@@ -2,16 +2,21 @@
   "expo": {
     "name": "TaskPMS",
     "slug": "IMCSync",
-    "owner": "adila2005.2",
+    "owner": "claudeadila",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.jpg",
+    "icon": "./assets/images/task_last.png",
     "scheme": "taskpms",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "jsEngine": "hermes",
     "primaryColor": "#FF8C00",
     "backgroundColor": "#FFFFFF",
+    "splash": {
+      "image": "./assets/images/splash-icon.jpg",
+      "resizeMode": "cover",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.taskpms.app",
@@ -26,13 +31,14 @@
               "NSExceptionRequiresForwardSecrecy": false
             }
           }
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.jpg",
-        "backgroundColor": "#FF8C00"
+        "foregroundImage": "./assets/images/task_last.png",
+        "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -45,17 +51,14 @@
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.taskpms.app",
+      "versionCode": 2,
       "allowBackup": false,
-      "requestLegacyExternalStorage": true,
-      "allowExternalStorage": true,
-      "targetSdkVersion": 33,
-      "compileSdkVersion": 33,
-      "buildToolsVersion": "33.0.0"
+      "requestLegacyExternalStorage": true
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.jpg"
+      "favicon": "./assets/images/task_last.png"
     },
     "plugins": [
       "expo-router",
@@ -64,21 +67,34 @@
         {
           "image": "./assets/images/splash-icon.jpg",
           "imageWidth": 100,
-          "resizeMode": "contain",
-          "backgroundColor": "#fff"
+          "resizeMode": "cover",
+          "backgroundColor": "#ffffff"
         }
       ],
       "expo-secure-store",
       "expo-sqlite",
-      "./plugin/withNetworkConfig"
+      "./plugin/withNetworkConfig",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
+          }
+        }
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "origin": false
+      },
       "eas": {
-        "projectId": "ee603ddc-2674-4167-aea0-dabe67fd77e3"
+        "projectId": "a778aa79-dd28-4da0-896e-15aaec36e380"
       }
     }
   }
