@@ -2,7 +2,7 @@
   "expo": {
     "name": "TaskPMS",
     "slug": "IMCSync",
-    "owner": "claudeadila",
+    "owner": "demoadila",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/task_last.png",
@@ -13,7 +13,7 @@
     "primaryColor": "#FF8C00",
     "backgroundColor": "#FFFFFF",
     "splash": {
-      "image": "./assets/images/splash-icon.jpg",
+      "image": "./assets/images/task_last.png",
       "resizeMode": "cover",
       "backgroundColor": "#ffffff"
     },
@@ -80,7 +80,8 @@
           "android": {
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
-            "buildToolsVersion": "34.0.0"
+            "buildToolsVersion": "34.0.0",
+            "kotlinVersion": "1.9.24"
           }
         }
       ],
@@ -94,7 +95,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "a778aa79-dd28-4da0-896e-15aaec36e380"
+        "projectId": "044839a0-0b0b-4ee3-b37d-db9080d33cae"
       }
     }
   }
