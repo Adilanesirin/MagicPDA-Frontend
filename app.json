@@ -8,7 +8,7 @@
     "icon": "./assets/images/task_last.png",
     "scheme": "taskpms",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "jsEngine": "hermes",
     "primaryColor": "#FF8C00",
     "backgroundColor": "#FFFFFF",
@@ -81,7 +81,9 @@
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
             "buildToolsVersion": "34.0.0",
-            "kotlinVersion": "1.9.24"
+            "kotlinVersion": "2.0.0",
+             "enableProguardInReleaseBuilds": false,
+             "enableShrinkResourcesInReleaseBuilds": false
           }
         }
       ],
