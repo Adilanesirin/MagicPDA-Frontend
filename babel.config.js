@@ -5,16 +5,7 @@ module.exports = function (api) {
       "babel-preset-expo"
     ],
     plugins: [
-      [
-        'module-resolver',
-        {
-          root: ['./'],
-          alias: {
-            '@': './',
-          },
-        },
-      ],
-      'react-native-reanimated/plugin', // This should be last
+      'react-native-reanimated/plugin',
     ],
   };
 };
