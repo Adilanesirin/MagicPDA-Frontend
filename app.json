@@ -2,10 +2,10 @@
   "expo": {
     "name": "TaskPMS",
     "slug": "IMCSync",
-    "owner": "adila2005.2",
+    "owner": "adila-2005",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.jpg",
+    "icon": "./assets/images/BG.png",
     "scheme": "taskpms",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -31,7 +31,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.jpg",
+        "foregroundImage": "./assets/images/BG.png",
         "backgroundColor": "#FF8C00"
       },
       "edgeToEdgeEnabled": true,
@@ -78,7 +78,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ee603ddc-2674-4167-aea0-dabe67fd77e3"
+        "projectId": "f25ceba9-3d51-4b1f-9ca4-3986a0095dd0"
       }
     }
   }
