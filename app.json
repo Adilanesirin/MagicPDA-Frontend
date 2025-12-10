@@ -6,12 +6,14 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/BG.png",
+
     "scheme": "taskpms",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "jsEngine": "hermes",
     "primaryColor": "#FF8C00",
     "backgroundColor": "#FFFFFF",
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.taskpms.app",
@@ -29,11 +31,14 @@
         }
       }
     },
+
     "android": {
+      "icon": "./assets/images/BG.png",
+
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/BG.png",
-        "backgroundColor": "#FF8C00"
+        "backgroundColor": "#FFFFFF"
       },
+
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
@@ -52,11 +57,13 @@
       "compileSdkVersion": 33,
       "buildToolsVersion": "33.0.0"
     },
+
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.jpg"
+      "favicon": "./assets/images/BG.png"
     },
+
     "plugins": [
       "expo-router",
       [
@@ -72,9 +79,11 @@
       "expo-sqlite",
       "./plugin/withNetworkConfig"
     ],
+
     "experiments": {
       "typedRoutes": true
     },
+
     "extra": {
       "router": {},
       "eas": {

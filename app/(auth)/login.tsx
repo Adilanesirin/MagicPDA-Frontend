@@ -1,7 +1,9 @@
 import { createDebugAPI, createEnhancedAPI } from "@/utils/api";
 import { saveToken, saveUserid } from "@/utils/auth";
-import { analyzeServerError, debugLoginPayloads } from "@/utils/debug";
+import { debugLoginPayloads } from "@/utils/debug";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Application from "expo-application";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -31,7 +33,6 @@ export default function Login() {
 
   const router = useRouter();
 
-  // Double-tap logo to enable debug mode
   const handleLogoPress = () => {
     setDebugMode(prev => !prev);
     Toast.show({
@@ -39,6 +40,162 @@ export default function Login() {
       text1: debugMode ? 'Debug mode disabled' : 'Debug mode enabled',
       text2: debugMode ? 'Normal login' : 'Testing all payload formats',
     });
+  };
+
+  const getDeviceId = async () => {
+    try {
+      let id;
+      if (Platform.OS === "android") {
+        id = Application.androidId;
+        if (!id) {
+          id = await AsyncStorage.getItem("deviceId");
+          if (!id) {
+            id = `android_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            await AsyncStorage.setItem("deviceId", id);
+          }
+        }
+      } else if (Platform.OS === "ios") {
+        id = await Application.getIosIdForVendorAsync();
+        if (!id) {
+          id = await AsyncStorage.getItem("deviceId");
+          if (!id) {
+            id = `ios_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            await AsyncStorage.setItem("deviceId", id);
+          }
+        }
+      } else {
+        id = await AsyncStorage.getItem("deviceId");
+        if (!id) {
+          id = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await AsyncStorage.setItem("deviceId", id);
+        }
+      }
+      return id;
+    } catch (error) {
+      console.error("Error getting device ID:", error);
+      return null;
+    }
+  };
+
+  const validateLicenseWithAPI = async () => {
+    try {
+      console.log("=== LICENSE VALIDATION START ===");
+      
+      const storedLicenseKey = await AsyncStorage.getItem("licenseKey");
+      const storedClientId = await AsyncStorage.getItem("clientId");
+      
+      console.log("Stored License Key:", storedLicenseKey);
+      console.log("Stored Client ID:", storedClientId);
+      
+      if (!storedLicenseKey) {
+        console.log("NO LICENSE KEY FOUND");
+        return { 
+          valid: false, 
+          message: "No license found. Please activate your license first.",
+          needsActivation: true
+        };
+      }
+
+      if (!storedClientId) {
+        console.log("NO CLIENT ID FOUND");
+        return { 
+          valid: false, 
+          message: "Client ID missing. Please reactivate your license.",
+          needsActivation: true
+        };
+      }
+
+      const currentDeviceId = await getDeviceId();
+      console.log("Current Device ID:", currentDeviceId);
+      
+      if (!currentDeviceId) {
+        return { valid: false, message: "Device ID not available" };
+      }
+
+      const CHECK_LICENSE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/`;
+      
+      console.log("Calling API:", CHECK_LICENSE_API);
+      const response = await fetch(CHECK_LICENSE_API, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.log("API FAILED");
+        return { 
+          valid: false, 
+          message: "Failed to validate license. Please try again."
+        };
+      }
+
+      if (!data.customers || data.customers.length === 0) {
+        console.log("NO CUSTOMERS");
+        return { 
+          valid: false, 
+          message: "No valid license found. Please contact support."
+        };
+      }
+
+      const customer = data.customers.find(
+        (c: any) => c.license_key === storedLicenseKey
+      );
+
+      if (!customer) {
+        console.log("LICENSE KEY NOT FOUND IN API");
+        return { 
+          valid: false, 
+          message: "Invalid license key. Please reactivate your license.",
+          needsActivation: true
+        };
+      }
+
+      console.log("Customer Found:", customer.customer_name);
+
+      const licenseStatus = String(customer.status || "").toLowerCase().trim();
+      console.log("License Status:", licenseStatus);
+
+      if (licenseStatus !== "active") {
+        console.log("LICENSE NOT ACTIVE");
+        return { 
+          valid: false, 
+          message: `License is ${customer.status}. Please contact support.`
+        };
+      }
+
+      const isDeviceRegistered = customer.registered_devices?.some(
+        (device: any) => device.device_id === currentDeviceId
+      );
+      
+      console.log("Device Registered:", isDeviceRegistered);
+      
+      if (!isDeviceRegistered) {
+        console.log("DEVICE NOT REGISTERED");
+        return { 
+          valid: false, 
+          message: "This device is not registered. Please activate your license again.",
+          needsActivation: true
+        };
+      }
+
+      console.log("=== LICENSE VALID ===");
+      console.log("Returning clientId:", customer.client_id);
+      
+      return {
+        valid: true,
+        customerName: customer.customer_name,
+        clientId: customer.client_id,
+        licenseKey: customer.license_key
+      };
+
+    } catch (error) {
+      console.error("VALIDATION ERROR:", error);
+      return { 
+        valid: false, 
+        message: "Network error. Please check your connection and try again."
+      };
+    }
   };
 
   const handleLogin = async () => {
@@ -62,35 +219,85 @@ export default function Login() {
 
     setLoading(true);
 
-    if (debugMode) {
-      await runDebugLogin();
-    } else {
-      await runNormalLogin();
+    try {
+      console.log("=== LOGIN PROCESS START ===");
+      
+      const licenseValidation = await validateLicenseWithAPI();
+      
+      console.log("License Validation Result:", JSON.stringify(licenseValidation, null, 2));
+      
+      if (!licenseValidation || !licenseValidation.valid) {
+        setLoading(false);
+        console.log("LICENSE VALIDATION FAILED");
+        
+        if (licenseValidation?.needsActivation) {
+          Toast.show({
+            type: "error",
+            text1: "License Not Valid",
+            text2: licenseValidation.message,
+            visibilityTime: 4000,
+          });
+          
+          setTimeout(() => {
+            router.replace("/(auth)/license");
+          }, 1500);
+        } else {
+          Toast.show({
+            type: "error",
+            text1: "License Validation Failed",
+            text2: licenseValidation?.message || "Unknown error",
+            visibilityTime: 4000,
+          });
+        }
+        return;
+      }
+
+      console.log("LICENSE VALIDATED SUCCESSFULLY");
+      console.log("Using Client ID:", licenseValidation.clientId);
+      
+      // Store the clientId for the API calls
+      await AsyncStorage.setItem("clientId", licenseValidation.clientId);
+      
+      if (debugMode) {
+        await runDebugLogin(licenseValidation.clientId);
+      } else {
+        await runNormalLogin(licenseValidation.clientId);
+      }
+      
+    } catch (error) {
+      console.error("LOGIN ERROR:", error);
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "An unexpected error occurred. Please try again.",
+      });
+      setLoading(false);
     }
   };
 
-  const runNormalLogin = async () => {
+  const runNormalLogin = async (clientId: string) => {
     try {
-      console.log("🔄 Creating API instance for login...");
+      console.log("=== NORMAL LOGIN START ===");
+      console.log("Client ID:", clientId);
+      console.log("Username:", username);
+      
       const api = await createEnhancedAPI();
       
-      // Try the most common patterns first
       const commonPayloads = [
-        { userid: username, password }, // Most likely
-        { username, password }, // Original
-        { email: username, password }, // Email based
-        { login: username, password }, // Generic login
+        { userid: username, password, client_id: clientId },
+        { username, password, client_id: clientId },
+        { email: username, password, client_id: clientId },
+        { login: username, password, client_id: clientId },
       ];
 
       let success = false;
       
       for (const [index, payload] of commonPayloads.entries()) {
         try {
-          console.log(`🧪 Attempt ${index + 1}:`, JSON.stringify(payload));
+          console.log(`Attempt ${index + 1}:`, JSON.stringify(payload));
           const res = await api.post("/login", payload);
           
-          console.log("✅ Success with payload:", JSON.stringify(payload));
-          console.log("📥 Response:", res.data);
+          console.log("Response:", res.data);
 
           if (res.data.status === "success") {
             await handleLoginSuccess(res.data);
@@ -98,10 +305,7 @@ export default function Login() {
             break;
           }
         } catch (err: any) {
-          console.log(`❌ Failed with payload ${index + 1}:`, {
-            status: err.response?.status,
-            data: err.response?.data
-          });
+          console.log(`Failed ${index + 1}:`, err.response?.status, err.response?.data);
           continue;
         }
       }
@@ -110,104 +314,67 @@ export default function Login() {
         Toast.show({
           type: "error",
           text1: "Login failed",
-          text2: "Please check username/password format OR check Database connection",
-          
+          text2: "Invalid username or password",
         });
+        setLoading(false);
       }
       
     } catch (err: any) {
-      console.error("💥 Login error:", err);
-      analyzeServerError(err);
-      
+      console.error("LOGIN API ERROR:", err);
       Toast.show({
         type: "error",
         text1: "Connection Error",
         text2: "Cannot connect to server. Please try again.",
       });
-    } finally {
       setLoading(false);
     }
   };
 
-  const runDebugLogin = async () => {
+  const runDebugLogin = async (clientId: string) => {
     try {
       const api = await createDebugAPI();
-      const payloads = debugLoginPayloads(username, password);
+      const basePayloads = debugLoginPayloads(username, password);
       
-      console.log("🔍 DEBUG MODE: Testing all payload formats");
+      // Add client_id to all payloads
+      const payloads = basePayloads.map(p => ({ ...p, client_id: clientId }));
       
-      const results = [];
+      console.log("DEBUG MODE: Testing all formats with clientId:", clientId);
       
       for (const [index, payload] of payloads.entries()) {
         try {
-          console.log(`\n--- Testing Payload ${index + 1} ---`);
-          console.log("Payload:", JSON.stringify(payload, null, 2));
+          console.log(`\n=== Payload ${index + 1} ===`);
+          console.log(JSON.stringify(payload, null, 2));
           
           const res = await api.post("/login", payload);
-          results.push({
-            payloadIndex: index + 1,
-            payload,
-            success: true,
-            response: res.data,
-            status: res.status
-          });
-          
-          console.log("✅ SUCCESS:", res.status, res.data);
+          console.log("SUCCESS:", res.data);
           
           if (res.data.status === "success") {
             await handleLoginSuccess(res.data);
             break;
           }
-          
         } catch (err: any) {
-          results.push({
-            payloadIndex: index + 1,
-            payload,
-            success: false,
-            error: err.response?.data,
-            status: err.response?.status
-          });
-          
-          console.log("❌ FAILED:", err.response?.status, err.response?.data);
+          console.log("FAILED:", err.response?.status, err.response?.data);
         }
         
-        // Small delay between requests
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       
-      // Log all results
-      console.log("\n📊 DEBUG RESULTS SUMMARY:");
-      results.forEach(result => {
-        console.log(`Payload ${result.payloadIndex}: ${result.success ? '✅' : '❌'} ${result.status}`);
-        if (!result.success) {
-          console.log('  Error:', JSON.stringify(result.error, null, 2));
-        }
-      });
-      
-      if (!results.some(r => r.success && r.response?.status === "success")) {
-        Toast.show({
-          type: "error",
-          text1: "Debug Complete",
-          text2: "Check console for results. No successful login format found.",
-        });
-      }
-      
     } catch (err: any) {
-      console.error("💥 Debug mode error:", err);
-      analyzeServerError(err);
+      console.error("DEBUG ERROR:", err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleLoginSuccess = async (data: any) => {
+    console.log("=== LOGIN SUCCESS ===");
     await saveToken(data.token);
     await saveUserid(data.user_id);
     
     Toast.show({
       type: "success",
       text1: "Success",
-      text2: "Welcome, Login successful",
+      text2: "Login successful!",
     });
     
     setTimeout(() => {
@@ -229,7 +396,6 @@ export default function Login() {
           className="bg-gray-100"
         >
           <View className="flex-1 justify-center items-center px-5 pt-20">
-            {/* Logo & Title - Make logo pressable for debug mode */}
             <View className="items-center mb-6">
               <TouchableOpacity onPress={handleLogoPress}>
                 <Image
@@ -243,7 +409,6 @@ export default function Login() {
               )}
             </View>
 
-            {/* Login Box */}
             <View className="w-full max-w-[360px] bg-white rounded-2xl p-6 shadow-lg">
               <Text className="text-center text-2xl font-bold mb-6 text-blue-500">
                 Login to Your Account
@@ -312,18 +477,17 @@ export default function Login() {
                 disabled={loading}
               >
                 <Text className="text-center text-white font-bold text-lg">
-                  {loading ? "Logging in..." : "Login"}
+                  {loading ? "Validating & Logging in..." : "Login"}
                 </Text>
               </Pressable>
 
               {debugMode && (
                 <Text className="text-xs text-gray-500 text-center mt-4">
-                  Debug mode: Testing all field name combinations
+                  Debug: Testing all formats + client_id
                 </Text>
               )}
             </View>
 
-            {/* Footer */}
             <View className="mt-10 mb-6">
               <Text className="text-sm text-gray-400 text-center">
                 Powered by IMC Business Solutions

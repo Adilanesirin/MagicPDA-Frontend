@@ -169,6 +169,10 @@ export default function Pairing() {
     }
   };
 
+  const handleBackToLicense = () => {
+    router.push("/(auth)/license");
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -176,6 +180,21 @@ export default function Pairing() {
     >
       {/* Status Bar */}
       <StatusBar backgroundColor="#FB923C" />
+
+      {/* Back Button */}
+      <TouchableOpacity
+        onPress={handleBackToLicense}
+        className="absolute top-12 left-5 z-10 bg-white rounded-full p-2 shadow-lg"
+        style={{
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.25,
+          shadowRadius: 3.84,
+          elevation: 5,
+        }}
+      >
+        <Ionicons name="arrow-back" size={24} color="#FB923C" />
+      </TouchableOpacity>
 
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView
@@ -194,7 +213,7 @@ export default function Pairing() {
                 }}
               />
               <Text className="text-2xl font-bold mb-2 text-gray-800">
-              TaskPMS
+                TaskPMS
               </Text>
               <Text className="text-gray-600 mb-8 text-center">
                 Connect to your server

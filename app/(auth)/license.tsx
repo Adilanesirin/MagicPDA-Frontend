@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Application from "expo-application";
+import * as Device from "expo-device";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -9,12 +10,14 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
   StatusBar,
   Text,
   TextInput,
+  TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
@@ -25,6 +28,7 @@ export default function License() {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [deviceId, setDeviceId] = useState("");
+  const [deviceName, setDeviceName] = useState("");
   const [licenseError, setLicenseError] = useState(false);
 
   const router = useRouter();
@@ -50,9 +54,31 @@ export default function License() {
     }
   };
 
+  const getDeviceName = async () => {
+    try {
+      let name = "";
+      
+      if (Platform.OS === "android") {
+        const brand = Device.brand || "";
+        const modelName = Device.modelName || "";
+        name = `${brand} ${modelName}`.trim() || "Android Device";
+      } else if (Platform.OS === "ios") {
+        const modelName = Device.modelName || "";
+        name = modelName || "iOS Device";
+      } else {
+        name = "Unknown Device";
+      }
+      
+      return name;
+    } catch (error) {
+      console.error("Error getting device name:", error);
+      return "Unknown Device";
+    }
+  };
+
   const checkDeviceRegistration = async (deviceIdToCheck: string) => {
     try {
-      const CHECK_LICENSE_API = `https://activate.imcbs.com/mobileapp/api/project/sastest/`;
+      const CHECK_LICENSE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/`;
 
       const response = await fetch(CHECK_LICENSE_API, {
         method: "GET",
@@ -66,15 +92,15 @@ export default function License() {
 
       if (!response.ok || !data.success) {
         console.log("API check failed");
-        return false;
+        return { found: false };
       }
 
       if (!data.customers || data.customers.length === 0) {
         console.log("No customers found");
-        return false;
+        return { found: false };
       }
 
-      // Check if this device is registered
+      // Check if this device is registered under any customer
       for (const customer of data.customers) {
         if (customer.registered_devices && customer.registered_devices.length > 0) {
           const deviceFound = customer.registered_devices.some(
@@ -83,25 +109,22 @@ export default function License() {
 
           if (deviceFound) {
             console.log("Device found in customer:", customer.customer_name);
-
-            // Store customer info
-            await AsyncStorage.setItem("licenseActivated", "true");
-            await AsyncStorage.setItem("licenseKey", customer.license_key);
-            await AsyncStorage.setItem("deviceId", deviceIdToCheck);
-            await AsyncStorage.setItem("customerName", customer.customer_name);
-            await AsyncStorage.setItem("projectName", data.project_name);
-            await AsyncStorage.setItem("clientId", customer.client_id);
-
-            return true;
+            console.log("Customer status:", customer.status);
+            
+            return {
+              found: true,
+              customer: customer,
+              projectName: data.project_name
+            };
           }
         }
       }
 
       console.log("Device not found in any customer");
-      return false;
+      return { found: false };
     } catch (error) {
       console.error("Error checking device registration:", error);
-      return false;
+      return { found: false };
     }
   };
 
@@ -113,27 +136,73 @@ export default function License() {
         const id = await getDeviceId();
         setDeviceId(id);
 
+        const name = await getDeviceName();
+        setDeviceName(name);
+
         console.log("Checking if device is already registered...");
         console.log("Device ID:", id);
+        console.log("Device Name:", name);
 
-        const isRegistered = await checkDeviceRegistration(id);
+        // IMPORTANT: Check local license status FIRST
+        const licenseActivated = await AsyncStorage.getItem("licenseActivated");
+        const storedDeviceId = await AsyncStorage.getItem("deviceId");
+        
+        console.log("📱 Local License Status:");
+        console.log("  - License Activated:", licenseActivated);
+        console.log("  - Stored Device ID:", storedDeviceId);
+        console.log("  - Current Device ID:", id);
 
-        if (isRegistered) {
-          console.log("Device already registered, skipping license screen");
-          Toast.show({
-            type: "success",
-            text1: "Welcome Back! 🎉",
-            text2: "Device already registered",
-          });
+        // Only skip to pairing if:
+        // 1. License is marked as activated locally
+        // 2. Stored device ID matches current device ID
+        if (licenseActivated === "true" && storedDeviceId === id) {
+          console.log("✅ Local license valid, verifying with server...");
           
-          // Navigate to pairing screen
-          setTimeout(() => {
-            router.replace("/(auth)/pairing");
-          }, 500);
+          // Double-check with server
+          const registrationCheck = await checkDeviceRegistration(id);
+          
+          if (registrationCheck.found) {
+            console.log("✅ Server confirms device is registered");
+            
+            // Ensure all data is stored
+            await AsyncStorage.setItem("licenseActivated", "true");
+            await AsyncStorage.setItem("licenseKey", registrationCheck.customer.license_key);
+            await AsyncStorage.setItem("deviceId", id);
+            await AsyncStorage.setItem("customerName", registrationCheck.customer.customer_name);
+            await AsyncStorage.setItem("projectName", registrationCheck.projectName);
+            await AsyncStorage.setItem("clientId", registrationCheck.customer.client_id);
+            
+            Toast.show({
+              type: "success",
+              text1: "Welcome Back! 🎉",
+              text2: "Device already registered",
+            });
+
+            // Navigate to pairing screen
+            setTimeout(() => {
+              router.replace("/(auth)/pairing");
+            }, 500);
+            return; // Exit early
+          } else {
+            console.log("⚠️ Server says device not registered, clearing local data");
+            // Clear invalid local data
+            await AsyncStorage.multiRemove([
+              "licenseActivated",
+              "licenseKey",
+              "deviceId",
+              "customerName",
+              "projectName",
+              "clientId",
+            ]);
+          }
         } else {
-          console.log("Device not registered, showing license screen");
-          setChecking(false);
+          console.log("❌ No valid local license found");
         }
+
+        // If we reach here, show the license activation screen
+        console.log("Showing license activation screen");
+        setChecking(false);
+        
       } catch (error) {
         console.error("Initialization error:", error);
         setChecking(false);
@@ -159,7 +228,9 @@ export default function License() {
     setLicenseError(false);
 
     try {
-      // STEP 1: Check if license key is valid
+      // ============================================
+      // STEP 1: Check if license key is valid (GET API)
+      // ============================================
       const CHECK_LICENSE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/`;
 
       console.log("Validating license key...");
@@ -173,16 +244,18 @@ export default function License() {
       const checkData = await checkResponse.json();
       console.log("Check response:", checkData);
 
+      // Check if API call was successful
       if (!checkResponse.ok || !checkData.success) {
         Toast.show({
           type: "error",
           text1: "Validation Failed",
-          text2: checkData.message || "Failed to validate license",
+          text2: checkData.message || "Failed to validate license. Please try again.",
         });
         setLoading(false);
         return;
       }
 
+      // Check if customer exists
       if (!checkData.customers || checkData.customers.length === 0) {
         Toast.show({
           type: "error",
@@ -208,18 +281,21 @@ export default function License() {
         return;
       }
 
-      // Check if device already registered
+      // Check if this device is already registered for this license
       const isAlreadyRegistered = customer.registered_devices?.some(
         (device: any) => device.device_id === deviceId
       );
 
       if (isAlreadyRegistered) {
+        // Device already registered, just save and continue
         await AsyncStorage.setItem("licenseActivated", "true");
         await AsyncStorage.setItem("licenseKey", licenseKey.trim());
         await AsyncStorage.setItem("deviceId", deviceId);
         await AsyncStorage.setItem("customerName", customer.customer_name);
         await AsyncStorage.setItem("projectName", checkData.project_name);
         await AsyncStorage.setItem("clientId", customer.client_id);
+
+        console.log("✅ Stored client_id:", customer.client_id);
 
         Toast.show({
           type: "success",
@@ -234,7 +310,7 @@ export default function License() {
         return;
       }
 
-      // Check device limit
+      // Check if device limit reached
       if (
         customer.license_summary.registered_count >=
         customer.license_summary.max_devices
@@ -242,16 +318,22 @@ export default function License() {
         Toast.show({
           type: "error",
           text1: "License Limit Reached",
-          text2: `Maximum devices (${customer.license_summary.max_devices}) already registered`,
+          text2: `Maximum devices (${customer.license_summary.max_devices}) already registered for this license`,
         });
         setLoading(false);
         return;
       }
 
-      // STEP 2: Register device
+      // ============================================
+      // STEP 2: Register device (POST API)
+      // ============================================
       const POST_DEVICE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/license/register/`;
 
       console.log("Registering new device...");
+      console.log("License Key:", licenseKey.trim());
+      console.log("Device ID:", deviceId);
+      console.log("Device Name:", deviceName);
+
       const deviceResponse = await fetch(POST_DEVICE_API, {
         method: "POST",
         headers: {
@@ -260,6 +342,7 @@ export default function License() {
         body: JSON.stringify({
           license_key: licenseKey.trim(),
           device_id: deviceId,
+          device_name: deviceName,
         }),
       });
 
@@ -274,7 +357,7 @@ export default function License() {
         Toast.show({
           type: "error",
           text1: "Server Error",
-          text2: "Invalid response from server",
+          text2: "Invalid response from server. Please contact support.",
         });
         setLoading(false);
         return;
@@ -283,7 +366,7 @@ export default function License() {
       console.log("Device registration response:", deviceData);
 
       if (deviceResponse.ok && deviceData.success) {
-        // Success - store activation status
+        // Success - store activation status INCLUDING CLIENT_ID
         await AsyncStorage.setItem("licenseActivated", "true");
         await AsyncStorage.setItem("licenseKey", licenseKey.trim());
         await AsyncStorage.setItem("deviceId", deviceId);
@@ -296,18 +379,19 @@ export default function License() {
         Toast.show({
           type: "success",
           text1: "Success! 🎉",
-          text2: `Welcome ${customer.customer_name}!`,
+          text2: `Welcome ${customer.customer_name}! Device registered successfully.`,
         });
 
         setTimeout(() => {
           router.replace("/(auth)/pairing");
         }, 500);
       } else {
+        // Handle error from device registration API
         const errorMessage =
           deviceData.message ||
           deviceData.error ||
           deviceData.detail ||
-          "Failed to register device";
+          "Failed to register device. Please try again.";
 
         console.error("Registration failed:", errorMessage);
 
@@ -320,7 +404,7 @@ export default function License() {
     } catch (error: any) {
       console.error("Activation error:", error);
 
-      let errorMessage = "Network error. Please check your connection.";
+      let errorMessage = "Network error. Please check your connection and try again.";
 
       if (error.message) {
         errorMessage = `Error: ${error.message}`;
@@ -330,7 +414,7 @@ export default function License() {
         error.name === "TypeError" &&
         error.message.includes("Network request failed")
       ) {
-        errorMessage = "Cannot connect to server. Check your internet connection.";
+        errorMessage = "Cannot connect to server. Please check your internet connection.";
       }
 
       Toast.show({
@@ -340,6 +424,38 @@ export default function License() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Function to handle social link clicks
+  const handleSocialLink = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert("Error", `Cannot open URL: ${url}`);
+      }
+    } catch (error) {
+      console.error("Error opening URL:", error);
+      Alert.alert("Error", "Failed to open link");
+    }
+  };
+
+  // Function to handle email
+  const handleEmail = async () => {
+    const email = "info@imcbs.com";
+    const url = `mailto:${email}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert("Error", "Cannot open email client");
+      }
+    } catch (error) {
+      console.error("Error opening email:", error);
+      Alert.alert("Error", "Failed to open email");
     }
   };
 
@@ -405,10 +521,19 @@ export default function License() {
                     Device ID
                   </Text>
                   <Text
-                    className="text-gray-600 text-xs font-mono"
+                    className="text-gray-600 text-xs font-mono mb-3"
                     numberOfLines={1}
                   >
                     {deviceId || "Loading..."}
+                  </Text>
+                  <Text className="text-gray-700 font-semibold mb-2">
+                    Device Name
+                  </Text>
+                  <Text
+                    className="text-gray-600 text-xs font-mono"
+                    numberOfLines={1}
+                  >
+                    {deviceName || "Loading..."}
                   </Text>
                 </View>
 
@@ -455,7 +580,7 @@ export default function License() {
                     </View>
                   ) : (
                     <Text className="text-center text-white font-bold text-lg">
-                      🔑 Activate License
+                      🔐 Activate License
                     </Text>
                   )}
                 </Pressable>
@@ -475,14 +600,36 @@ export default function License() {
               </View>
             </View>
 
-            {/* Footer */}
-            <View className="mt-8">
-              <Text className="text-sm text-gray-400 text-center">
-                Powered by IMC Business Solutions
-              </Text>
-              <Text className="text-xs text-gray-400 text-center mt-1">
-                By activating, you agree to our terms of service
-              </Text>
+            {/* Social Links Footer */}
+            <View className="mt-1 items-center">
+              <Text className="text-sm text-gray-500 mb-4"></Text>
+              <View className="flex-row justify-center items-center space-x-6">
+                {/* Website Link */}
+                <TouchableOpacity
+                  onPress={() => handleSocialLink("https://imcbs.com/")}
+                  className="bg-gray-100 rounded-full p-3 shadow-sm"
+                >
+                  <Ionicons name="globe-outline" size={28} color="#FB923C" />
+                </TouchableOpacity>
+
+                {/* Facebook Link */}
+                <TouchableOpacity
+                  onPress={() =>
+                    handleSocialLink("https://www.facebook.com/106935927735565")
+                  }
+                  className="bg-gray-100 rounded-full p-3 shadow-sm mx-4"
+                >
+                  <Ionicons name="logo-facebook" size={28} color="#1877F2" />
+                </TouchableOpacity>
+
+                {/* Email Link */}
+                <TouchableOpacity
+                  onPress={handleEmail}
+                  className="bg-gray-100 rounded-full p-3 shadow-sm"
+                >
+                  <Ionicons name="mail-outline" size={28} color="#EA4335" />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </ScrollView>
