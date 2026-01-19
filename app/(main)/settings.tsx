@@ -4,7 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import Toast from "react-native-toast-message";
 
 export default function Settings() {
@@ -12,6 +12,7 @@ export default function Settings() {
   const [pinging, setPinging] = useState(false);
   const [pingStatus, setPingStatus] = useState<"success" | "failed" | null>(null);
   const [removingLicense, setRemovingLicense] = useState(false);
+  const [mrpEditable, setMrpEditable] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<{
     customerName: string;
     licenseKey: string;
@@ -25,6 +26,10 @@ export default function Settings() {
       if (saved === "camera" || saved === "hardware") {
         setMode(saved);
       }
+
+      // Load MRP editable setting
+      const mrpSetting = await SecureStore.getItemAsync("mrpEditable");
+      setMrpEditable(mrpSetting === "true");
 
       // Load license info
       const customerName = await AsyncStorage.getItem("customerName");
@@ -41,6 +46,17 @@ export default function Settings() {
   const saveSetting = async (selected: "hardware" | "camera") => {
     await SecureStore.setItemAsync("scanMode", selected);
     setMode(selected);
+  };
+
+  const toggleMrpEditable = async (value: boolean) => {
+    await SecureStore.setItemAsync("mrpEditable", value.toString());
+    setMrpEditable(value);
+    Toast.show({
+      type: "success",
+      text1: value ? "MRP Edit Enabled" : "MRP Edit Disabled",
+      text2: value ? "You can now edit MRP in GRN products" : "MRP editing is now disabled",
+      visibilityTime: 2000,
+    });
   };
 
   const handlePingServer = async () => {
@@ -349,6 +365,51 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
 
+        {/* MRP Edit Settings */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>GRN Settings</Text>
+          <Text style={styles.cardSubtitle}>
+            Configure GRN product editing options
+          </Text>
+
+          <View style={styles.switchOption}>
+            <View style={styles.switchContent}>
+              <Ionicons 
+                name="pricetag-outline" 
+                size={24} 
+                color={mrpEditable ? "#3B82F6" : "#6B7280"} 
+              />
+              <View style={styles.switchText}>
+                <Text style={[
+                  styles.switchTitle,
+                  mrpEditable && styles.switchTitleActive
+                ]}>
+                  Enable MRP Editing
+                </Text>
+                <Text style={styles.switchDescription}>
+                  Allow editing MRP in GRN products
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={mrpEditable}
+              onValueChange={toggleMrpEditable}
+              trackColor={{ false: "#D1D5DB", true: "#BFDBFE" }}
+              thumbColor={mrpEditable ? "#3B82F6" : "#9CA3AF"}
+              ios_backgroundColor="#D1D5DB"
+            />
+          </View>
+
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle-outline" size={18} color="#3B82F6" />
+            <Text style={styles.infoText}>
+              {mrpEditable 
+                ? "MRP field will be editable when editing GRN products"
+                : "MRP field will be read-only in GRN product edit page"}
+            </Text>
+          </View>
+        </View>
+
         {/* Server Status */}
         <View style={styles.card}>
           {(pingStatus || pinging) && (
@@ -551,6 +612,55 @@ const styles = StyleSheet.create({
   optionDescription: {
     fontSize: 14,
     color: "#6B7280",
+  },
+  switchOption: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  switchContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  switchText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  switchTitle: {
+    fontWeight: "600",
+    fontSize: 16,
+    color: "#111827",
+  },
+  switchTitleActive: {
+    color: "#1D4ED8",
+  },
+  switchDescription: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  infoBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#EBF8FF",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    gap: 8,
+  },
+  infoText: {
+    fontSize: 13,
+    color: "#1D4ED8",
+    flex: 1,
+    lineHeight: 18,
   },
   statusIndicator: {
     position: "absolute",

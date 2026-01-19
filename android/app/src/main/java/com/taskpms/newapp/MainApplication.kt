@@ -1,4 +1,4 @@
-package com.taskpms.app
+package com.taskpms.newapp
 
 import android.app.Application
 import android.content.res.Configuration

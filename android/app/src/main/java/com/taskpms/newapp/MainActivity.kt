@@ -1,4 +1,4 @@
-package com.taskpms.app
+package com.taskpms.newapp
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

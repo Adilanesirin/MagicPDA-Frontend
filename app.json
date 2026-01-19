@@ -3,20 +3,31 @@
     "name": "TaskPMS",
     "slug": "IMCSync",
     "owner": "adila-2005",
-    "version": "1.0.0",
+    "version": "3.1.0",
     "orientation": "portrait",
-    "icon": "./assets/images/BG.png",
-
+    "icon": "./assets/images/task-pms-adaptive-foreground-1024.png",
     "scheme": "taskpms",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "jsEngine": "hermes",
     "primaryColor": "#FF8C00",
     "backgroundColor": "#FFFFFF",
-
+    "splash": {
+      "image": "./assets/images/icon-foreground.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/ee603ddc-2674-4167-aea0-dabe67fd77e3",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.taskpms.app",
+      "bundleIdentifier": "com.taskpms.newapp",
+      "buildNumber": "4",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
@@ -31,59 +42,39 @@
         }
       }
     },
-
     "android": {
-      "icon": "./assets/images/BG.png",
-
+      "package": "com.taskpms.newapp",
+      "versionCode": 4,
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./assets/images/task-pms-adaptive-foreground-1024-fixed.png",
+        "backgroundColor": "#ffffff"
       },
-
-      "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.ACCESS_WIFI_STATE",
-        "android.permission.CHANGE_WIFI_STATE",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_PHONE_STATE"
       ],
-      "package": "com.taskpms.app",
       "allowBackup": false,
-      "requestLegacyExternalStorage": true,
-      "allowExternalStorage": true,
-      "targetSdkVersion": 33,
-      "compileSdkVersion": 33,
-      "buildToolsVersion": "33.0.0"
+      "requestLegacyExternalStorage": true
     },
-
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/BG.png"
+      "favicon": "./assets/images/BG-fix.png"
     },
-
     "plugins": [
       "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.jpg",
-          "imageWidth": 100,
-          "resizeMode": "contain",
-          "backgroundColor": "#fff"
-        }
-      ],
       "expo-secure-store",
       "expo-sqlite",
       "./plugin/withNetworkConfig"
     ],
-
     "experiments": {
       "typedRoutes": true
     },
-
     "extra": {
       "router": {},
       "eas": {

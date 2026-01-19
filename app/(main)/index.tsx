@@ -34,7 +34,7 @@ export default function HomeScreen() {
             await logout();
             await clearPairing();
             await deleteUserid();
-            router.replace("/(auth)/pairing");
+            router.replace("/(auth)/login");
             Toast.show({
               type: "success",
               text1: "Logged out successfully",
@@ -44,6 +44,14 @@ export default function HomeScreen() {
         },
       ],
       { cancelable: true }
+    );
+  };
+
+  const handleAboutUs = () => {
+    Alert.alert(
+      "About IMCB Solutions LLP",
+      "IMCB Solutions LLP, known as IMC Business Solutions, has been delivering smart software and IT services since 2009.\n\n📍 Palakkunnummal Building, Near Govt Ayurveda Hospital\nEmily - Kalpetta, Wayanad - Kerala - 673121\n\n📧 info@imcbs.com\n📞 +91 9072791379\n\nVision: Empowering businesses through innovative, reliable technology and personalized support—driving digital growth and building lasting partnerships.\n\nMission: Deliver innovative digital solutions that simplify processes and drive efficiency through collaboration and continuous improvement.",
+      [{ text: "Close", style: "cancel" }]
     );
   };
 
@@ -127,9 +135,9 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        {/* 2x2 Grid */}
+        {/* Grid Container */}
         <View style={styles.gridContainer}>
-          {/* First Row */}
+          {/* First Row - Orders & GRN */}
           <View style={styles.gridRow}>
             <TouchableOpacity
               style={styles.gridItem}
@@ -145,12 +153,35 @@ export default function HomeScreen() {
                   </LinearGradient>
                 </View>
                 <View style={styles.cardTextContainer}>
-                  <Text style={styles.cardTitle}>Orders</Text>
+                  <Text style={styles.cardTitle}>P.Orders</Text>
                   <Text style={styles.cardDescription}>Entry & Upload</Text>
                 </View>
               </View>
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={styles.gridItem}
+              onPress={() => router.push("/(main)/grn")}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#EC4899', '#DB2777']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="clipboard-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>GRN</Text>
+                  <Text style={styles.cardDescription}>Goods Receipt</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Second Row - Download & Tracker */}
+          <View style={styles.gridRow}>
             <TouchableOpacity
               style={styles.gridItem}
               onPress={() => router.push("/(main)/download")}
@@ -170,10 +201,7 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-          </View>
 
-          {/* Second Row */}
-          <View style={styles.gridRow}>
             <TouchableOpacity
               style={styles.gridItem}
               onPress={() => router.push("/(main)/tracker")}
@@ -193,7 +221,10 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
+          </View>
 
+          {/* Third Row - Settings & About Us */}
+          <View style={styles.gridRow}>
             <TouchableOpacity
               style={styles.gridItem}
               onPress={() => router.push("/(main)/settings")}
@@ -213,12 +244,32 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.gridItem}
+              onPress={handleAboutUs}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#06B6D4', '#0891B2']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="information-circle-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>About Us</Text>
+                  <Text style={styles.cardDescription}>Company Info</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* Footer */}
         <Text style={styles.footer}>
-          Powered by IMC Business Solutions .V3
+          Powered by IMC Business Solutions .V5
         </Text>
         
       </ScrollView>

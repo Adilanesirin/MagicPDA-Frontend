@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   supplierTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#3b82f6',
+    color: '#ec4899',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     borderRightColor: '#d1d5db',
   },
   toggleButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ec4899',
   },
   toggleIcon: {
     marginRight: 6,
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   getButton: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ec4899',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   detailChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#e0e7ff',
+    backgroundColor: '#fce7f3',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   editButton: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ec4899',
     padding: 8,
     borderRadius: 4,
   },
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 40,
     height: 40,
-    borderColor: '#3b82f6',
+    borderColor: '#ec4899',
   },
   topLeft: {
     top: 0,
@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   modalHeader: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ec4899',
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: 20,
     paddingHorizontal: 20,
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
   },
   modalButtonSave: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ec4899',
   },
   modalButtonText: {
     fontSize: 16,
@@ -545,14 +545,14 @@ const styles = StyleSheet.create({
   },
 });
 
-const initOrdersTable = async () => {
+const initGRNOrdersTable = async () => {
   try {
-    console.log("🔄 Initializing orders_to_sync table...");
+    console.log("🔄 Initializing grn_to_sync table...");
     
-    await db.execAsync(`DROP TABLE IF EXISTS orders_to_sync`);
+    await db.execAsync(`DROP TABLE IF EXISTS grn_to_sync`);
     
     await db.execAsync(`
-      CREATE TABLE orders_to_sync (
+      CREATE TABLE grn_to_sync (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_code TEXT NOT NULL,
         userid TEXT NOT NULL,
@@ -561,7 +561,7 @@ const initOrdersTable = async () => {
         quantity INTEGER NOT NULL,
         rate REAL NOT NULL,
         mrp REAL NOT NULL,
-        order_date TEXT NOT NULL,
+        grn_date TEXT NOT NULL,
         sync_status TEXT DEFAULT 'pending',
         created_at TEXT NOT NULL,
         product_name TEXT,
@@ -569,165 +569,58 @@ const initOrdersTable = async () => {
       );
     `);
     
-    console.log("✅ orders_to_sync table created successfully");
+    console.log("✅ grn_to_sync table created successfully");
     
   } catch (error) {
-    console.error("❌ Error initializing orders table:", error);
+    console.error("❌ Error initializing GRN table:", error);
   }
 };
 
-const initPendingItemsTable = async () => {
+const initPendingGRNItemsTable = async () => {
   try {
-    console.log("🔄 Initializing pending_items table...");
-    
-    // First, check if table exists
-    const tableExists = await db.getFirstAsync(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='pending_items'"
-    ) as any;
-    
-    if (!tableExists) {
-      // Create new table with complete schema
-      await db.execAsync(`
-        CREATE TABLE pending_items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          supplier_code TEXT NOT NULL DEFAULT '',
-          barcode TEXT NOT NULL,
-          name TEXT,
-          bmrp REAL DEFAULT 0,
-          cost REAL DEFAULT 0,
-          quantity INTEGER DEFAULT 0,
-          eCost REAL DEFAULT 0,
-          currentStock INTEGER DEFAULT 0,
-          batchSupplier TEXT,
-          scannedAt INTEGER,
-          batch_supplier TEXT,
-          product TEXT,
-          brand TEXT,
-          isManualEntry INTEGER DEFAULT 0
-        );
-      `);
-      console.log("✅ Created pending_items table with complete schema");
-      return;
-    }
-    
-    // Table exists, get its column information
-    const tableInfo = await db.getAllAsync(`PRAGMA table_info(pending_items)`) as Array<{name: string}>;
-    const existingColumns = tableInfo.map((col: any) => col.name);
-    
-    console.log("📋 Existing columns in pending_items:", existingColumns.join(", "));
-    
-    // Define required columns
-    const requiredColumns = [
-      'id', 'supplier_code', 'barcode', 'name', 'bmrp', 'cost', 
-      'quantity', 'eCost', 'currentStock', 'batchSupplier', 
-      'scannedAt', 'batch_supplier', 'product', 'brand', 'isManualEntry'
-    ];
-    
-    const missingColumns = requiredColumns.filter(col => !existingColumns.includes(col));
-    
-    if (missingColumns.length > 0) {
-      console.log("🔄 Migrating pending_items table - missing columns:", missingColumns.join(", "));
-      
-      // Create new table with complete schema
-      await db.execAsync(`
-        CREATE TABLE pending_items_new (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          supplier_code TEXT NOT NULL DEFAULT '',
-          barcode TEXT NOT NULL,
-          name TEXT,
-          bmrp REAL DEFAULT 0,
-          cost REAL DEFAULT 0,
-          quantity INTEGER DEFAULT 0,
-          eCost REAL DEFAULT 0,
-          currentStock INTEGER DEFAULT 0,
-          batchSupplier TEXT,
-          scannedAt INTEGER,
-          batch_supplier TEXT,
-          product TEXT,
-          brand TEXT,
-          isManualEntry INTEGER DEFAULT 0
-        );
-      `);
-      
-      // Build INSERT statement using only columns that exist in both tables
-      const commonColumns = existingColumns.filter(col => 
-        requiredColumns.includes(col) && col !== 'id'
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS pending_grn_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_code TEXT NOT NULL,
+        barcode TEXT NOT NULL,
+        name TEXT,
+        bmrp REAL,
+        cost REAL,
+        quantity INTEGER,
+        eCost REAL,
+        currentStock INTEGER,
+        batchSupplier TEXT,
+        scannedAt INTEGER,
+        batch_supplier TEXT,
+        product TEXT,
+        brand TEXT,
+        isManualEntry INTEGER DEFAULT 0
       );
-      
-      if (commonColumns.length > 0) {
-        const columnsList = commonColumns.join(', ');
-        
-        try {
-          await db.execAsync(`
-            INSERT INTO pending_items_new (${columnsList})
-            SELECT ${columnsList}
-            FROM pending_items
-          `);
-          console.log(`✅ Migrated ${commonColumns.length} columns of data`);
-        } catch (copyError) {
-          console.log("⚠️ Could not copy old data (table might be empty):", copyError);
-        }
-      }
-      
-      // Drop old table and rename new one
-      await db.execAsync(`DROP TABLE pending_items`);
-      await db.execAsync(`ALTER TABLE pending_items_new RENAME TO pending_items`);
-      
-      console.log("✅ Successfully migrated pending_items table");
-    } else {
-      console.log("✅ pending_items table already has all required columns");
-    }
-    
+    `);
+    console.log("✅ Pending GRN items table initialized");
   } catch (error) {
-    console.error("❌ Error initializing pending_items table:", error);
-    // If all else fails, try to recreate the table from scratch
-    try {
-      console.log("🔄 Attempting to recreate table from scratch...");
-      await db.execAsync(`DROP TABLE IF EXISTS pending_items`);
-      await db.execAsync(`
-        CREATE TABLE pending_items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          supplier_code TEXT NOT NULL DEFAULT '',
-          barcode TEXT NOT NULL,
-          name TEXT,
-          bmrp REAL DEFAULT 0,
-          cost REAL DEFAULT 0,
-          quantity INTEGER DEFAULT 0,
-          eCost REAL DEFAULT 0,
-          currentStock INTEGER DEFAULT 0,
-          batchSupplier TEXT,
-          scannedAt INTEGER,
-          batch_supplier TEXT,
-          product TEXT,
-          brand TEXT,
-          isManualEntry INTEGER DEFAULT 0
-        );
-      `);
-      console.log("✅ Successfully recreated pending_items table");
-    } catch (recreateError) {
-      console.error("❌ Failed to recreate table:", recreateError);
-    }
+    console.error("Error initializing pending_grn_items table:", error);
   }
 };
 
-const debugManualEntry = async (barcode: string) => {
-  console.log("\n🔍 === DEBUGGING MANUAL ENTRY ===");
+const debugManualGRNEntry = async (barcode: string) => {
+  console.log("\n🔍 === DEBUGGING GRN MANUAL ENTRY ===");
   
   try {
     const pendingItem = await db.getFirstAsync(
-      `SELECT barcode, name, isManualEntry, supplier_code FROM pending_items WHERE barcode = ?`,
+      `SELECT barcode, name, isManualEntry FROM pending_grn_items WHERE barcode = ?`,
       [barcode]
     ) as any;
-    console.log("1️⃣ pending_items table:", JSON.stringify(pendingItem, null, 2));
+    console.log("1️⃣ pending_grn_items table:", JSON.stringify(pendingItem, null, 2));
     
-    const syncOrder = await db.getFirstAsync(
-      `SELECT barcode, product_name, is_manual_entry, itemcode FROM orders_to_sync WHERE barcode = ? ORDER BY created_at DESC LIMIT 1`,
+    const syncGRN = await db.getFirstAsync(
+      `SELECT barcode, product_name, is_manual_entry, itemcode FROM grn_to_sync WHERE barcode = ? ORDER BY created_at DESC LIMIT 1`,
       [barcode]
     ) as any;
-    console.log("2️⃣ orders_to_sync table:", JSON.stringify(syncOrder, null, 2));
+    console.log("2️⃣ grn_to_sync table:", JSON.stringify(syncGRN, null, 2));
     
-    const tableInfo = await db.getAllAsync(`PRAGMA table_info(pending_items)`);
-    console.log("3️⃣ pending_items schema:");
+    const tableInfo = await db.getAllAsync(`PRAGMA table_info(grn_to_sync)`);
+    console.log("3️⃣ grn_to_sync schema:");
     tableInfo.forEach((col: any) => {
       console.log(`   - ${col.name} (${col.type})`);
     });
@@ -735,10 +628,10 @@ const debugManualEntry = async (barcode: string) => {
     console.error("Debug error:", error);
   }
   
-  console.log("🔍 === END DEBUG ===\n");
+  console.log("🔍 === END GRN DEBUG ===\n");
 };
 
-const saveOrderToSync = async (orderData: {
+const saveGRNOrderToSync = async (grnData: {
   supplier_code: string;
   userid: string;
   itemcode: string;
@@ -746,47 +639,47 @@ const saveOrderToSync = async (orderData: {
   quantity: number;
   rate: number;
   mrp: number;
-  order_date: string;
+  grn_date: string;
   product_name?: string;
   is_manual_entry?: number; 
 }) => {
   try {
-    console.log("\n💾 === SAVING ORDER TO SYNC ===");
-    console.log("📋 Input orderData:", JSON.stringify(orderData, null, 2));
+    console.log("\n💾 === SAVING GRN TO SYNC ===");
+    console.log("📋 Input grnData:", JSON.stringify(grnData, null, 2));
     
     await db.runAsync(
-      `INSERT INTO orders_to_sync 
-      (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date, sync_status, created_at, product_name, is_manual_entry)
+      `INSERT INTO grn_to_sync 
+      (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, grn_date, sync_status, created_at, product_name, is_manual_entry)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?, ?)`,
       [
-        orderData.supplier_code,
-        orderData.userid,
-        orderData.itemcode,
-        orderData.barcode,
-        orderData.quantity,
-        orderData.rate,
-        orderData.mrp,
-        orderData.order_date,
-        orderData.product_name || '',
-        orderData.is_manual_entry || 0,
+        grnData.supplier_code,
+        grnData.userid,
+        grnData.itemcode,
+        grnData.barcode,
+        grnData.quantity,
+        grnData.rate,
+        grnData.mrp,
+        grnData.grn_date,
+        grnData.product_name || '',
+        grnData.is_manual_entry || 0,
       ]
     );
     
     const saved = await db.getFirstAsync(
-      `SELECT barcode, product_name, is_manual_entry FROM orders_to_sync WHERE barcode = ? ORDER BY id DESC LIMIT 1`,
-      [orderData.barcode]
+      `SELECT barcode, product_name, is_manual_entry FROM grn_to_sync WHERE barcode = ? ORDER BY id DESC LIMIT 1`,
+      [grnData.barcode]
     );
-    console.log("✅ Verified saved data:", JSON.stringify(saved, null, 2));
-    console.log("💾 === END SAVING ===\n");
+    console.log("✅ Verified saved GRN data:", JSON.stringify(saved, null, 2));
+    console.log("💾 === END SAVING GRN ===\n");
     
     return true;
   } catch (error: any) {
-    console.error("❌ Error saving order to sync:", error);
+    console.error("❌ Error saving GRN to sync:", error);
     throw error;
   }
 };
 
-export default function BarcodeEntry() {
+export default function GRNBarcodeEntry() {
   const { supplier, supplier_code, updatedItem, itemIndex } = useLocalSearchParams<{
     supplier: string;
     supplier_code: string;
@@ -827,84 +720,34 @@ export default function BarcodeEntry() {
 
   useEffect(() => {
     const initialize = async () => {
-      console.log("🚀 Initializing BarcodeEntry component...");
-      await initOrdersTable();
-      await initPendingItemsTable();
-      await loadPendingItems();
+      console.log("🚀 Initializing GRNBarcodeEntry component...");
+      await initGRNOrdersTable();
+      await initPendingGRNItemsTable();
+      await loadPendingGRNItems();
     };
     initialize();
   }, [supplier_code]);
 
-  const loadPendingItems = async () => {
+  const loadPendingGRNItems = async () => {
     try {
-      // Query with all required columns
       const rows = await db.getAllAsync(
-        `SELECT 
-          id,
-          supplier_code,
-          barcode,
-          name,
-          COALESCE(bmrp, 0) as bmrp,
-          COALESCE(cost, 0) as cost,
-          COALESCE(quantity, 0) as quantity,
-          COALESCE(eCost, 0) as eCost,
-          COALESCE(currentStock, 0) as currentStock,
-          batchSupplier,
-          scannedAt,
-          batch_supplier,
-          product,
-          brand,
-          COALESCE(isManualEntry, 0) as isManualEntry
-        FROM pending_items 
-        WHERE supplier_code = ? 
-        ORDER BY scannedAt DESC`,
+        "SELECT * FROM pending_grn_items WHERE supplier_code = ? ORDER BY scannedAt DESC",
         [supplier_code || ""]
       );
-      
-      console.log(`📦 Loaded ${rows.length} pending items for supplier: ${supplier_code}`);
       setScannedItems(rows);
+      console.log(`📦 Loaded ${rows.length} pending GRN items`);
     } catch (error) {
-      console.error("❌ Error loading pending items:", error);
-      
-      // Fallback: Try without supplier_code filter
-      try {
-        console.log("⚠️ Attempting fallback query without supplier filter...");
-        const rows = await db.getAllAsync(
-          `SELECT 
-            id,
-            supplier_code,
-            barcode,
-            name,
-            COALESCE(bmrp, 0) as bmrp,
-            COALESCE(cost, 0) as cost,
-            COALESCE(quantity, 0) as quantity,
-            COALESCE(eCost, 0) as eCost,
-            COALESCE(currentStock, 0) as currentStock,
-            batchSupplier,
-            scannedAt,
-            batch_supplier,
-            product,
-            brand,
-            COALESCE(isManualEntry, 0) as isManualEntry
-          FROM pending_items 
-          ORDER BY scannedAt DESC`
-        );
-        console.log(`📦 Loaded ${rows.length} pending items (no supplier filter)`);
-        setScannedItems(rows);
-      } catch (fallbackError) {
-        console.error("❌ Fallback query also failed:", fallbackError);
-        setScannedItems([]);
-      }
+      console.error("Error loading pending GRN items:", error);
     }
   };
 
-  const savePendingItem = async (item: any) => {
+  const savePendingGRNItem = async (item: any) => {
     try {
-      console.log("\n💾 === SAVING PENDING ITEM ===");
-      console.log("Item data:", JSON.stringify(item, null, 2));
+      console.log("\n💾 === SAVING PENDING GRN ITEM ===");
+      console.log("GRN Item data:", JSON.stringify(item, null, 2));
       
       await db.runAsync(
-        `INSERT INTO pending_items 
+        `INSERT INTO pending_grn_items 
         (supplier_code, barcode, name, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, isManualEntry)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -926,40 +769,40 @@ export default function BarcodeEntry() {
       );
       
       const saved = await db.getFirstAsync(
-        `SELECT barcode, name, isManualEntry FROM pending_items WHERE barcode = ? ORDER BY id DESC LIMIT 1`,
+        `SELECT barcode, name, isManualEntry FROM pending_grn_items WHERE barcode = ? ORDER BY id DESC LIMIT 1`,
         [item.barcode]
       );
-      console.log("✅ Verified saved pending item:", JSON.stringify(saved, null, 2));
-      console.log("💾 === END SAVING PENDING ITEM ===\n");
+      console.log("✅ Verified saved pending GRN item:", JSON.stringify(saved, null, 2));
+      console.log("💾 === END SAVING PENDING GRN ITEM ===\n");
       
     } catch (error) {
-      console.error("Error saving pending item:", error);
+      console.error("Error saving pending GRN item:", error);
     }
   };
 
-  const deletePendingItem = async (itemId: number) => {
+  const deletePendingGRNItem = async (itemId: number) => {
     try {
       await db.runAsync(
-        "DELETE FROM pending_items WHERE id = ?",
+        "DELETE FROM pending_grn_items WHERE id = ?",
         [itemId]
       );
-      console.log(`🗑️ Deleted pending item: ${itemId}`);
+      console.log(`🗑️ Deleted pending GRN item: ${itemId}`);
     } catch (error) {
-      console.error("Error deleting pending item:", error);
+      console.error("Error deleting pending GRN item:", error);
     }
   };
 
-  const updatePendingItem = async (itemId: number, item: any) => {
+  const updatePendingGRNItem = async (itemId: number, item: any) => {
     try {
       await db.runAsync(
-        `UPDATE pending_items 
-        SET quantity = ?, eCost = ?, cost = ?, batchSupplier = ?, supplier_code = ?
+        `UPDATE pending_grn_items 
+        SET quantity = ?, eCost = ?, cost = ?, batchSupplier = ?
         WHERE id = ?`,
-        [item.quantity, item.eCost, item.cost, item.batchSupplier, supplier_code, itemId]
+        [item.quantity, item.eCost, item.cost, item.batchSupplier, itemId]
       );
-      console.log(`✏️ Updated pending item: ${itemId}`);
+      console.log(`✏️ Updated pending GRN item: ${itemId}`);
     } catch (error) {
-      console.error("Error updating pending item:", error);
+      console.error("Error updating pending GRN item:", error);
     }
   };
 
@@ -997,7 +840,7 @@ export default function BarcodeEntry() {
           if (index >= 0 && index < newItems.length) {
             newItems[index] = { ...newItems[index], ...parsedItem };
             if (newItems[index].id) {
-              updatePendingItem(newItems[index].id, newItems[index]);
+              updatePendingGRNItem(newItems[index].id, newItems[index]);
             }
           } else {
             newItems.unshift(parsedItem);
@@ -1032,10 +875,16 @@ export default function BarcodeEntry() {
     if (showManualEntryModal) {
       return;
     }
+
     
     if (searchMode === 'barcode' && scanMode === 'hardware' && hardwareScanValue.length > 0 && hardwareScanValue.trim() !== "") {
+
+      if (!processingAlertRef.current) {
       handleBarCodeScanned({ data: hardwareScanValue.trim() });
       setHardwareScanValue("");
+    }else {
+      setHardwareScanValue("");
+    }
     }
   }, [hardwareScanValue, searchMode, scanMode, showManualEntryModal]);
 
@@ -1135,8 +984,8 @@ export default function BarcodeEntry() {
       isManualEntry: 0,
     };
     
-    await savePendingItem(newItem);
-    await loadPendingItems();
+    await savePendingGRNItem(newItem);
+    await loadPendingGRNItems();
     setManualBarcode("");
   };
 
@@ -1222,7 +1071,7 @@ export default function BarcodeEntry() {
       return;
     }
 
-    console.log("\n🎯 === CREATING MANUAL ENTRY ===");
+    console.log("\n🎯 === CREATING GRN MANUAL ENTRY ===");
     console.log("Input data:", {
       barcode: manualEntryData.barcode,
       name: manualEntryData.name.trim(),
@@ -1247,10 +1096,10 @@ export default function BarcodeEntry() {
 
     console.log("💾 About to save newItem:", JSON.stringify(newItem, null, 2));
     
-    await savePendingItem(newItem);
-    await loadPendingItems();
+    await savePendingGRNItem(newItem);
+    await loadPendingGRNItems();
     
-    await debugManualEntry(manualEntryData.barcode);
+    await debugManualGRNEntry(manualEntryData.barcode);
     
     closeManualEntryModal();
     Alert.alert("Success", "Product added successfully!");
@@ -1270,6 +1119,7 @@ export default function BarcodeEntry() {
       const allMatches = await searchBarcodeWithVariants(data);
 
       if (allMatches.length === 0) {
+        processingAlertRef.current = true;
         Alert.alert(
           "Product not found", 
           `Barcode: ${data}\n\nWould you like to add this product manually?`,
@@ -1278,16 +1128,17 @@ export default function BarcodeEntry() {
               text: 'Cancel',
               style: 'cancel',
               onPress: () => {
+                processingAlertRef.current = false;
                 if (showScanner) {
                   setScanned(false);
                   scanLockRef.current = false;
-                  processingAlertRef.current = false;
                 }
               }
             },
             {
               text: 'Add Manually',
               onPress: () => {
+                processingAlertRef.current = false;
                 openManualEntryModal(data);
                 if (showScanner) {
                   setScanned(false);
@@ -1306,14 +1157,16 @@ export default function BarcodeEntry() {
         const existing = scannedItems.find((item) => item.barcode === product.barcode);
         
         if (existing) {
+          processingAlertRef.current = true;
           Alert.alert("Info", `Product already scanned: ${existing.name}`, [
             {
               text: 'OK',
               onPress: () => {
+                processingAlertRef.current = false;
                 if (showScanner) {
                   setScanned(false);
                   scanLockRef.current = false;
-                  processingAlertRef.current = false;
+                 
                 }
               }
             }
@@ -1332,8 +1185,8 @@ export default function BarcodeEntry() {
           isManualEntry: 0,
         };
         
-        await savePendingItem(newItem);
-        await loadPendingItems();
+        await savePendingGRNItem(newItem);
+        await loadPendingGRNItems();
         
         if (showScanner) {
           setTimeout(() => {
@@ -1354,10 +1207,12 @@ export default function BarcodeEntry() {
       }
     } catch (err) {
       console.error("Error fetching product:", err);
+      processingAlertRef.current = true;
       Alert.alert("Error", "Failed to scan product.", [
         {
           text: 'OK',
           onPress: () => {
+            processingAlertRef.current = false;
             if (showScanner) {
               setScanned(false);
               scanLockRef.current = false;
@@ -1415,8 +1270,8 @@ export default function BarcodeEntry() {
             isManualEntry: 0,
           };
 
-          await savePendingItem(newItem);
-          await loadPendingItems();
+          await savePendingGRNItem(newItem);
+          await loadPendingGRNItems();
           
           setManualBarcode("");
         } else {
@@ -1448,7 +1303,7 @@ export default function BarcodeEntry() {
 
   const handleEditItem = (item: any, index: number) => {
     router.push({
-      pathname: "/edit-product",
+      pathname: "/edit-grn-product",
       params: {
         itemData: JSON.stringify(item),
         itemIndex: index.toString(),
@@ -1473,9 +1328,9 @@ export default function BarcodeEntry() {
           onPress: async () => {
             const item = scannedItems[index];
             if (item.id) {
-              await deletePendingItem(item.id);
+              await deletePendingGRNItem(item.id);
             }
-            await loadPendingItems();
+            await loadPendingGRNItems();
           }
         }
       ]
@@ -1548,7 +1403,7 @@ export default function BarcodeEntry() {
   const showFinalConfirmation = () => {
     Alert.alert(
       "Confirm Update",
-      `Are you sure you want to update quantities for ${scannedItems.length} item(s)?`,
+      `Are you sure you want to update GRN quantities for ${scannedItems.length} item(s)?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -1562,8 +1417,8 @@ export default function BarcodeEntry() {
               let successCount = 0;
               let errorCount = 0;
 
-              console.log(`\n📄 === STARTING UPDATE QUANTITIES ===`);
-              console.log(`Processing ${scannedItems.length} items...`);
+              console.log(`\n📄 === STARTING UPDATE GRN QUANTITIES ===`);
+              console.log(`Processing ${scannedItems.length} GRN items...`);
 
               for (const item of scannedItems) {
                 try {
@@ -1580,7 +1435,7 @@ export default function BarcodeEntry() {
                     itemCode = productData?.code || item.barcode;
                   }
                   
-                  console.log(`\n📋 Processing item:`, {
+                  console.log(`\n📋 Processing GRN item:`, {
                     barcode: item.barcode,
                     name: item.name,
                     isManualEntry: isManualEntry,
@@ -1588,7 +1443,7 @@ export default function BarcodeEntry() {
                     product_name: item.name
                   });
                   
-                  await saveOrderToSync({
+                  await saveGRNOrderToSync({
                     supplier_code: supplier_code || "",
                     userid: userId ?? "unknown",
                     itemcode: itemCode,
@@ -1596,7 +1451,7 @@ export default function BarcodeEntry() {
                     quantity: item.quantity,
                     rate: finalCost ?? 0,
                     mrp: item.bmrp ?? 0,
-                    order_date: today,
+                    grn_date: today,
                     product_name: item.name,
                     is_manual_entry: isManualEntry ? 1 : 0,
                   });
@@ -1612,49 +1467,45 @@ export default function BarcodeEntry() {
                         "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
                         [item.quantity, finalCost, item.barcode]
                       );
-                      console.log(`✅ Updated product_data for: ${item.barcode}`);
+                      console.log(`✅ Updated product_data for GRN: ${item.barcode}`);
                     }
                   } else {
-                    console.log(`⭐ Skipping product_data update for manual entry: ${item.barcode}`);
+                    console.log(`⭐ Skipping product_data update for GRN manual entry: ${item.barcode}`);
                   }
                   
                   successCount++;
                   
                 } catch (itemError) {
-                  console.error(`❌ Error processing item ${item.barcode}:`, itemError);
+                  console.error(`❌ Error processing GRN item ${item.barcode}:`, itemError);
                   errorCount++;
                 }
               }
               
-              console.log(`\n📊 Results: ${successCount} success, ${errorCount} errors`);
-              console.log(`📄 === END UPDATE QUANTITIES ===\n`);
+              console.log(`\n📊 GRN Results: ${successCount} success, ${errorCount} errors`);
+              console.log(`📄 === END UPDATE GRN QUANTITIES ===\n`);
               
               if (successCount > 0) {
-                try {
-                  await db.runAsync(
-                    "DELETE FROM pending_items WHERE supplier_code = ?",
-                    [supplier_code || ""]
-                  );
-                  console.log(`🧹 Cleared ${successCount} pending items`);
-                } catch (deleteError) {
-                  console.error("❌ Could not delete pending items:", deleteError);
-                }
+                await db.runAsync(
+                  "DELETE FROM pending_grn_items WHERE supplier_code = ?",
+                  [supplier_code || ""]
+                );
+                console.log(`🧹 Cleared ${successCount} pending GRN items`);
               }
 
               if (errorCount === 0) {
-                Alert.alert("✅ Success", `All ${successCount} entries saved for sync!`);
+                Alert.alert("✅ Success", `All ${successCount} GRN entries saved for sync!`);
                 setScannedItems([]);
                 router.push("/(main)/");
               } else if (successCount > 0) {
                 Alert.alert("⚠️ Partial Success", 
-                  `${successCount} entries saved, ${errorCount} failed.`);
-                await loadPendingItems();
+                  `${successCount} GRN entries saved, ${errorCount} failed.`);
+                await loadPendingGRNItems();
               } else {
-                Alert.alert("❌ Error", "Failed to save any entries.");
+                Alert.alert("❌ Error", "Failed to save any GRN entries.");
               }
             } catch (err) {
-              console.error("💥 Save failed:", err);
-              Alert.alert("Error", "Failed to save entries.");
+              console.error("💥 GRN Save failed:", err);
+              Alert.alert("Error", "Failed to save GRN entries.");
             }
           }
         }
@@ -1808,9 +1659,6 @@ export default function BarcodeEntry() {
                   onBlur={() => setIsEditing(false)}
                 />
               </View>
-
-              // This is the continuation of the JSX return statement
-// Add this after the last formGroup in the modal
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Cost (₹) *</Text>
@@ -2100,7 +1948,7 @@ export default function BarcodeEntry() {
               onPress={updateQuantities}
             >
               <Text style={styles.saveButtonText}>
-                Update Quantities ({scannedItems.length} items)
+                Update GRN Quantities ({scannedItems.length} items)
               </Text>
             </TouchableOpacity>
 
