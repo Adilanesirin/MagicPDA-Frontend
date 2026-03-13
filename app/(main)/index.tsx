@@ -1,6 +1,8 @@
+// app/(main)/index.tsx
 import { deleteUserid, getUserid, logout } from "@/utils/auth";
 import { clearPairing } from "@/utils/pairing";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
@@ -10,16 +12,52 @@ import Toast from "react-native-toast-message";
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [username, setUsername] = useState(null);
+  const [username, setUsername] = useState<string | null>(null);
+  const [licenseType, setLicenseType] = useState<string | null>(null);
+  const [demoExpiresAt, setDemoExpiresAt] = useState<string | null>(null);
+  const [demoDaysRemaining, setDemoDaysRemaining] = useState<string | null>(null);
+  const [allowedModules, setAllowedModules] = useState<string[]>([]);
+  const [licenseModules, setLicenseModules] = useState<string[]>([]);
+  const [userModules, setUserModules] = useState<string[]>([]);
+
 
   useEffect(() => {
-    const fetchUsername = async () => {
-      const user = await getUserid();
-      setUsername(user);
-    };
+  const fetchUserData = async () => {
+    const user = await getUserid();
+    setUsername(user);
 
-    fetchUsername();
-  }, []);
+    const raw = await AsyncStorage.getItem("allowed_modules");
+    const parsedLicenseModules: string[] = JSON.parse(raw || "[]");
+    setLicenseModules(parsedLicenseModules);
+
+    const moreoptions = await AsyncStorage.getItem("user_moreoptions");
+
+    let parsedUserModules: string[] = [];
+    let finalModules: string[] = [];
+
+    if (moreoptions && moreoptions.trim() !== "") {
+      parsedUserModules = moreoptions.match(/##(.*?)##/g)
+        ?.map((code: string) => code.replace(/##/g, "")) || [];
+      finalModules = parsedLicenseModules.filter(mod => parsedUserModules.includes(mod));
+    }
+
+    setUserModules(parsedUserModules);
+    setAllowedModules(finalModules);
+    
+    // ✅ NEW: Load demo license data
+    const type = await AsyncStorage.getItem("licenseType");
+    setLicenseType(type);
+    
+    if (type === "DEMO") {
+      const expires = await AsyncStorage.getItem("demoExpiresAt");
+      const days = await AsyncStorage.getItem("demoDaysRemaining");
+      setDemoExpiresAt(expires);
+      setDemoDaysRemaining(days);
+    }
+  };
+
+  fetchUserData();
+}, []);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -34,6 +72,14 @@ export default function HomeScreen() {
             await logout();
             await clearPairing();
             await deleteUserid();
+            
+            // Clear any additional AsyncStorage login flags
+            try {
+              await AsyncStorage.removeItem("userLoggedIn");
+            } catch (e) {
+              console.log("Error clearing AsyncStorage:", e);
+            }
+            
             router.replace("/(auth)/login");
             Toast.show({
               type: "success",
@@ -47,17 +93,44 @@ export default function HomeScreen() {
     );
   };
 
-  const handleAboutUs = () => {
+    const showComingSoon = (moduleName: string) => {
     Alert.alert(
-      "About IMCB Solutions LLP",
-      "IMCB Solutions LLP, known as IMC Business Solutions, has been delivering smart software and IT services since 2009.\n\n📍 Palakkunnummal Building, Near Govt Ayurveda Hospital\nEmily - Kalpetta, Wayanad - Kerala - 673121\n\n📧 info@imcbs.com\n📞 +91 9072791379\n\nVision: Empowering businesses through innovative, reliable technology and personalized support—driving digital growth and building lasting partnerships.\n\nMission: Deliver innovative digital solutions that simplify processes and drive efficiency through collaboration and continuous improvement.",
-      [{ text: "Close", style: "cancel" }]
+      "🚧 Oops!",
+      `${moduleName} is Under Construction.\n\nComing Soon!`,
+      [{ text: "OK" }]
     );
+  };
+ const getModuleStatus = (moduleCode: string): "allowed" | "not_licensed" | "no_privilege" => {
+    const inLicense = licenseModules.includes(moduleCode);
+    const inUser = userModules.includes(moduleCode);
+    if (!inLicense) return "not_licensed";
+    if (inLicense && inUser) return "allowed";
+    return "no_privilege";
+  };
+
+  const handleModulePress = (moduleCode: string, onAllowed: () => void) => {
+    const status = getModuleStatus(moduleCode);
+    if (status === "allowed") {
+      onAllowed();
+    } else if (status === "not_licensed") {
+      Alert.alert(
+        "🔒 Module Not Purchased",
+        "You have not purchased this module.\nPlease contact your server vendor.",
+        [{ text: "OK" }]
+      );
+    } else {
+      Alert.alert(
+        "⛔ Insufficient Privilege",
+        "You do not have permission to access this module.",
+        [{ text: "OK" }]
+      );
+    }
   };
 
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+      
       
       {/* Header */}
       <View style={styles.header}>
@@ -123,6 +196,19 @@ export default function HomeScreen() {
               <Text style={styles.usernameText}>
                 {username || "User"}
               </Text>
+              
+              {/* ✅ NEW: Demo License Info */}
+              {licenseType === "DEMO" && (
+                <View style={styles.demoInfoContainer}>
+                  <View style={styles.demoBadge}>
+                    <Ionicons name="time-outline" size={14} color="#F59E0B" />
+                    <Text style={styles.demoText}>DEMO MODE</Text>
+                  </View>
+                  <Text style={styles.demoExpiryText}>
+                    Expires: {demoExpiresAt} ({demoDaysRemaining} days left)
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -137,12 +223,14 @@ export default function HomeScreen() {
 
         {/* Grid Container */}
         <View style={styles.gridContainer}>
+
           {/* First Row - Orders & GRN */}
-          <View style={styles.gridRow}>
-            <TouchableOpacity
-              style={styles.gridItem}
-              onPress={() => router.push("/(main)/orders")}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 15 }}>
+           <TouchableOpacity
+              style={[styles.gridItem, !allowedModules.includes("MOD004") && styles.gridItemLocked]}
+              onPress={() => handleModulePress("MOD004", () => router.push("/(main)/orders"))}
             >
+
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
                   <LinearGradient
@@ -158,10 +246,10 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-
+            
             <TouchableOpacity
-              style={styles.gridItem}
-              onPress={() => router.push("/(main)/grn")}
+              style={[styles.gridItem, !allowedModules.includes("MOD003") && styles.gridItemLocked]}
+              onPress={() => handleModulePress("MOD003", () => router.push("/(main)/grn"))}
             >
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
@@ -178,10 +266,28 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-          </View>
+          
+                    
+            <TouchableOpacity
+              style={[styles.gridItem, !allowedModules.includes("MOD025") && styles.gridItemLocked]}
+              onPress={() => handleModulePress("MOD025", () => router.push("/(main)/purchase-return"))}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#EF4444', '#DC2626']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="return-up-back-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Purchase Return</Text>
+                  <Text style={styles.cardDescription}>Return Items</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
 
-          {/* Second Row - Download & Tracker */}
-          <View style={styles.gridRow}>
             <TouchableOpacity
               style={styles.gridItem}
               onPress={() => router.push("/(main)/download")}
@@ -201,10 +307,10 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-
+                    
             <TouchableOpacity
-              style={styles.gridItem}
-              onPress={() => router.push("/(main)/tracker")}
+              style={[styles.gridItem, !allowedModules.includes("MOD005") && styles.gridItemLocked]}
+              onPress={() => handleModulePress("MOD005", () => router.push("/(main)/tracker"))}
             >
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
@@ -221,10 +327,8 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-          </View>
+            
 
-          {/* Third Row - Settings & About Us */}
-          <View style={styles.gridRow}>
             <TouchableOpacity
               style={styles.gridItem}
               onPress={() => router.push("/(main)/settings")}
@@ -244,10 +348,72 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
+                    
+            <TouchableOpacity
+              style={[styles.gridItem, !allowedModules.includes("MOD026") && styles.gridItemLocked]}
+              onPress={() => handleModulePress("MOD026", () => router.push("/(main)/sales"))}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#131f3d', '#131f3d']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="cart-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Sales</Text>
+                  <Text style={styles.cardDescription}>Manage Sales</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.gridItem}
-              onPress={handleAboutUs}
+              style={[styles.gridItem, !allowedModules.includes("MOD027") && styles.gridItemLocked]}
+              onPress={() => handleModulePress("MOD027", () => showComingSoon("Sales Return"))}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#F97316', '#EA580C']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="arrow-undo-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Sales Return</Text>
+                  <Text style={styles.cardDescription}>Return Sales</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          
+
+            <TouchableOpacity
+              style={[styles.gridItem, !allowedModules.includes("MOD028") && styles.gridItemLocked]}
+              onPress={() => handleModulePress("MOD028", () => showComingSoon("Point Redeem"))}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#8B5CF6', '#7C3AED']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="gift-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Point Redeem</Text>
+                  <Text style={styles.cardDescription}>Redeem Points</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          
+
+            <TouchableOpacity
+              style={[styles.gridItem, !allowedModules.includes("MOD006") && styles.gridItemLocked]}
+              onPress={() => handleModulePress("MOD006", () => showComingSoon("Stock Taking"))}
             >
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
@@ -255,15 +421,18 @@ export default function HomeScreen() {
                     colors={['#06B6D4', '#0891B2']}
                     style={styles.iconGradient}
                   >
-                    <Ionicons name="information-circle-outline" size={32} color="white" />
+                    <Ionicons name="cube-outline" size={32} color="white" />
                   </LinearGradient>
                 </View>
                 <View style={styles.cardTextContainer}>
-                  <Text style={styles.cardTitle}>About Us</Text>
-                  <Text style={styles.cardDescription}>Company Info</Text>
+                  <Text style={styles.cardTitle}>Stock Taking</Text>
+                  <Text style={styles.cardDescription}>Inventory Count</Text>
                 </View>
               </View>
             </TouchableOpacity>
+            
+
+
           </View>
         </View>
 
@@ -448,6 +617,10 @@ const styles = StyleSheet.create({
     width: '47%',
     height: 140,
   },
+
+  gridItemLocked: {
+    opacity: 0.45,
+  },
   
   gridItemPressed: {
     opacity: 0.95,
@@ -498,5 +671,38 @@ const styles = StyleSheet.create({
     marginTop: 40,
     fontWeight: "400",
     includeFontPadding: false,
+  },
+
+  demoInfoContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#FED7AA",
+  },
+
+  demoBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    marginBottom: 4,
+  },
+
+  demoText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#F59E0B",
+    marginLeft: 4,
+    letterSpacing: 0.5,
+  },
+
+  demoExpiryText: {
+    fontSize: 12,
+    color: "#DC2626",
+    fontWeight: "500",
+    marginTop: 2,
   },
 });

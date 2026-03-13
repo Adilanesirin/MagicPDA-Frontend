@@ -1,23 +1,104 @@
 import {
-    cleanupDuplicateGRNOrders,
-    getLocalGRNDataStats,
-    getPendingGRNOrders,
-    markGRNOrdersAsSynced
+  getLocalGRNDataStats,
+  getPendingGRNOrders,
+  markGRNOrdersAsSynced
 } from "@/utils/sync";
 import { uploadPendingGRNOrders } from "@/utils/upload";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import * as SQLite from "expo-sqlite";
 import LottieView from "lottie-react-native";
 import React, { useEffect, useState } from "react";
 import {
-    Alert,
-    Pressable,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View
+  Pressable,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
+
+const db = SQLite.openDatabaseSync("magicpedia.db");
+
+// Utility function to convert UTC to IST
+const convertUTCtoIST = (utcDateString: string): Date => {
+  const utcDate = new Date(utcDateString);
+  // Convert UTC to IST (UTC + 5:30)
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istDate = new Date(utcDate.getTime() + istOffset);
+  return istDate;
+};
+
+// Save synced GRN data to permanent history table
+const saveToReportsHistory = async () => {
+  try {
+    console.log("📚 Saving GRN data to permanent reports history...");
+    
+    // First, ensure the history table exists
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS grn_reports_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_code TEXT NOT NULL,
+        barcode TEXT NOT NULL,
+        product_name TEXT,
+        quantity INTEGER NOT NULL,
+        rate REAL NOT NULL,
+        mrp REAL NOT NULL,
+        grn_date TEXT NOT NULL,
+        uploaded_at TEXT NOT NULL,
+        is_manual_entry INTEGER DEFAULT 0
+      );
+    `);
+    
+    // Copy all synced GRN data to permanent history table
+    const syncedData = await db.getAllAsync(
+      `SELECT * FROM grn_to_sync WHERE sync_status = 'synced'`
+    ) as any[];
+
+    console.log(`📋 Found ${syncedData.length} synced records to save to history`);
+
+    let savedCount = 0;
+    let skippedCount = 0;
+
+    for (const record of syncedData) {
+      // Check if already exists in history
+      const exists = await db.getFirstAsync(
+        `SELECT id FROM grn_reports_history 
+         WHERE supplier_code = ? 
+         AND barcode = ? 
+         AND grn_date = ? 
+         AND uploaded_at = ?`,
+        [record.supplier_code, record.barcode, record.grn_date, record.created_at]
+      );
+
+      if (!exists) {
+        await db.runAsync(
+          `INSERT INTO grn_reports_history 
+           (supplier_code, barcode, product_name, quantity, rate, mrp, grn_date, uploaded_at, is_manual_entry)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            record.supplier_code,
+            record.barcode,
+            record.product_name || '',
+            record.quantity,
+            record.rate,
+            record.mrp,
+            record.grn_date,
+            record.created_at,
+            record.is_manual_entry || 0
+          ]
+        );
+        savedCount++;
+      } else {
+        skippedCount++;
+      }
+    }
+    
+    console.log(`✅ GRN history saved: ${savedCount} new, ${skippedCount} already existed`);
+  } catch (error) {
+    console.error("❌ Error saving to reports history:", error);
+  }
+};
 
 export default function GRNUpload() {
   const [loading, setLoading] = useState(false);
@@ -28,43 +109,12 @@ export default function GRNUpload() {
 
   const loadData = async () => {
     try {
-      try {
-        await cleanupDuplicateGRNOrders();
-      } catch (cleanupError) {
-        console.warn("⚠️ GRN cleanup failed, continuing without cleanup:", cleanupError);
-      }
-      
       const data = await getPendingGRNOrders();
       const s = await getLocalGRNDataStats();
-      
-      console.log("\n📁 === RAW GRN ORDERS FROM DATABASE ===");
-      console.log("Total GRN orders loaded:", data.length);
-      
-      const manualEntries = data.filter((o: any) => 
-        o.is_manual_entry === 1 || o.is_manual_entry === '1'
-      );
-      console.log("Manual GRN entries found:", manualEntries.length);
-      
-      if (manualEntries.length > 0) {
-        console.log("\n📋 Manual GRN Entry Details:");
-        manualEntries.forEach((entry: any, idx: number) => {
-          console.log(`\n  Entry ${idx + 1}:`);
-          console.log(`    barcode: ${entry.barcode}`);
-          console.log(`    product_name: ${entry.product_name}`);
-          console.log(`    is_manual_entry: ${entry.is_manual_entry}`);
-        });
-      }
-      console.log("📁 === END RAW GRN DATA ===\n");
-      
       setOrders(Array.isArray(data) ? data : []);
       setStats(s || {});
     } catch (error) {
-      console.error("❌ Error loading GRN data:", error);
-      Toast.show({
-        type: "error",
-        text1: "Load Error",
-        text2: "Failed to load pending GRN orders",
-      });
+      console.error("Error loading GRN data:", error);
     }
   };
 
@@ -93,37 +143,17 @@ export default function GRNUpload() {
     try {
       setLoading(true);
       
-      if (orders.length > 10) {
-        Alert.alert(
-          "Confirm Upload",
-          `You are about to upload ${orders.length} GRN orders. Continue?`,
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Upload", onPress: actuallyUpload }
-          ]
-        );
-      } else {
-        actuallyUpload();
-      }
-    } catch (err: any) {
-      console.error("GRN upload error:", err);
-      Toast.show({
-        type: "error",
-        text1: "❌ Upload Failed",
-        text2: err.message || "Something went wrong.",
-      });
-      setLoading(false);
-    }
-  };
-
-  const actuallyUpload = async () => {
-    try {
-      console.log("📤 Starting GRN upload of", orders.length, "orders");
-      
+      console.log("Uploading", orders.length, "GRN orders...");
       const result = await uploadPendingGRNOrders(orders);
       
       if (result && (result.success === true || result.status === "success")) {
+        // Mark as synced
         await markGRNOrdersAsSynced();
+        
+        // Save to permanent history table
+        await saveToReportsHistory();
+        
+        // Reload data
         await loadData();
         
         setUploadResult(result);
@@ -135,16 +165,10 @@ export default function GRNUpload() {
           text2: result.message || `Uploaded ${orders.length} GRN orders`,
         });
       } else {
-        console.warn("⚠️ Unexpected response format from server:", result);
-        
+        // Even if result is not explicitly success, mark as synced and save to history
         await markGRNOrdersAsSynced();
+        await saveToReportsHistory();
         await loadData();
-        
-        setUploadResult({
-          success: true,
-          message: "GRN orders processed successfully",
-          uploaded_count: orders.length
-        });
         setUploadSuccess(true);
         
         Toast.show({
@@ -154,7 +178,7 @@ export default function GRNUpload() {
         });
       }
     } catch (err: any) {
-      console.error("GRN upload error:", err);
+      console.error("Upload error:", err);
       Toast.show({
         type: "error",
         text1: "❌ Upload Failed",
@@ -175,7 +199,27 @@ export default function GRNUpload() {
     router.push('/');
   };
 
-  const totalItems = orders.reduce((acc, order) => acc + (order.quantity || 0), 0);
+  const totalItems = orders.reduce((acc, order) => acc + (parseInt(order.quantity) || 0), 0);
+
+  // Format last synced time to IST
+  const getFormattedLastSynced = () => {
+    if (!stats.lastSynced) return null;
+    
+    try {
+      const istDate = convertUTCtoIST(stats.lastSynced);
+      return istDate.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return new Date(stats.lastSynced).toLocaleString();
+    }
+  };
 
   return (
     <View className="flex-1 bg-gray-100">
@@ -193,7 +237,6 @@ export default function GRNUpload() {
           alignItems: 'center', 
           padding: 16 
         }}
-        keyboardShouldPersistTaps="handled"
       >
         <View className="w-full max-w-[400px] bg-white rounded-2xl shadow-lg p-6">
           {uploadSuccess ? (
@@ -216,6 +259,9 @@ export default function GRNUpload() {
                 </Text>
                 <Text className="text-green-600 text-center">
                   Total items: {totalItems}
+                </Text>
+                <Text className="text-green-600 text-center text-sm mt-2">
+                  ✅ Saved to reports history
                 </Text>
               </View>
 
@@ -280,10 +326,10 @@ export default function GRNUpload() {
                     <Text className="font-semibold">{totalItems}</Text>
                   </View>
                   {stats.lastSynced && (
-                    <View className="flex flex-row justify-between">
-                      <Text className="text-pink-700">Last Synced:</Text>
-                      <Text className="text-pink-600">
-                        {new Date(stats.lastSynced).toLocaleString()}
+                    <View className="flex flex-col mt-2">
+                      <Text className="text-pink-700 mb-1">Last Synced:</Text>
+                      <Text className="text-pink-600 text-xs font-medium">
+                        {getFormattedLastSynced()}
                       </Text>
                     </View>
                   )}

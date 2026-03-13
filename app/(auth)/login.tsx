@@ -264,15 +264,74 @@ export default function Login() {
       console.log("=== LICENSE VALIDATION START ===");
       
       const storedLicenseKey = await AsyncStorage.getItem("licenseKey");
-      const storedClientId = await AsyncStorage.getItem("clientId");
-      const storedDeviceId = await AsyncStorage.getItem("deviceId");
-      const licenseDeviceId = await AsyncStorage.getItem("license_device_id");
+    const storedClientId = await AsyncStorage.getItem("clientId");
+    const storedDeviceId = await AsyncStorage.getItem("deviceId");
+    const licenseDeviceId = await AsyncStorage.getItem("license_device_id");
+    const licenseType = await AsyncStorage.getItem("licenseType");
+    const demoLicenseKey = await AsyncStorage.getItem("demoLicenseKey");
+    
+    console.log("License Type:", licenseType);
+    console.log("Stored License Key:", storedLicenseKey);
+    console.log("Demo License Key:", demoLicenseKey);
+    console.log("Stored Client ID:", storedClientId);
+    console.log("Stored Device ID:", storedDeviceId);
+    console.log("License Device ID:", licenseDeviceId);
+    
+    // ✅ NEW: Handle Demo License Validation
+    if (licenseType === "DEMO") {
+      console.log("🎭 Demo license detected, validating...");
       
-      console.log("Stored License Key:", storedLicenseKey);
-      console.log("Stored Client ID:", storedClientId);
-      console.log("Stored Device ID:", storedDeviceId);
-      console.log("License Device ID:", licenseDeviceId);
+      const demoExpiresAt = await AsyncStorage.getItem("demoExpiresAt");
+      const demoStatus = await AsyncStorage.getItem("demoStatus");
+      const demoCompany = await AsyncStorage.getItem("demoCompany");
       
+      if (!demoLicenseKey || !demoExpiresAt) {
+        return {
+          valid: false,
+          message: "Demo license data missing. Please reactivate.",
+          needsActivation: true
+        };
+      }
+      
+      // Check if demo expired
+      const expiryDate = new Date(demoExpiresAt);
+      const today = new Date();
+      
+      if (expiryDate < today) {
+        return {
+          valid: false,
+          message: "Demo license has expired. Please contact support.",
+          needsActivation: true
+        };
+      }
+      
+      // Check demo status
+      if (demoStatus?.toLowerCase() !== "active") {
+        return {
+          valid: false,
+          message: `Demo license is ${demoStatus}`,
+          needsActivation: true
+        };
+      }
+      
+      // Calculate days remaining
+      const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Update days remaining in storage
+      await AsyncStorage.setItem("demoDaysRemaining", String(daysRemaining));
+      
+      console.log("✅ Demo license valid, days remaining:", daysRemaining);
+      
+      return {
+        valid: true,
+        customerName: demoCompany,
+        clientId: storedClientId,
+        licenseKey: demoLicenseKey,
+        isDemoMode: true,
+        daysRemaining: daysRemaining
+      };
+    }
+    
       if (!storedLicenseKey) {
         console.log("NO LICENSE KEY FOUND");
         return { 
@@ -424,7 +483,9 @@ export default function Login() {
         valid: true,
         customerName: customer.customer_name,
         clientId: customer.client_id,
-        licenseKey: customer.license_key
+        licenseKey: customer.license_key,
+        modules: customer.modules  // ← ADD THIS
+
       };
 
     } catch (error) {
@@ -496,6 +557,9 @@ export default function Login() {
       
       // Ensure client ID is stored
       await AsyncStorage.setItem("clientId", licenseValidation.clientId);
+      await AsyncStorage.setItem("allowed_modules",
+       JSON.stringify(licenseValidation.modules?.map((m: any) => m.module_code) || [])
+  );
       
       if (debugMode) {
         await runDebugLogin(licenseValidation.clientId);
@@ -519,8 +583,8 @@ export default function Login() {
       console.log("=== NORMAL LOGIN START ===");
       console.log("Client ID:", clientId);
       console.log("Username:", username);
-      
-      const currentDeviceId = await getDeviceId();
+
+     const currentDeviceId = await getDeviceId();
       console.log("Device ID for login:", currentDeviceId);
       
       const storedIP = await SecureStore.getItemAsync("paired_ip");
@@ -655,20 +719,78 @@ export default function Login() {
 
   const handleLoginSuccess = async (data: any) => {
     console.log("=== LOGIN SUCCESS ===");
+    console.log("Saving token and marking user as logged in...");
     await saveToken(data.token);
     await saveUserid(data.user_id);
-    
+    await SecureStore.setItemAsync("user_role", data.role || "");
+
+    try {
+      const storedIP = await SecureStore.getItemAsync("paired_ip")
+                    || await AsyncStorage.getItem("pairing_ip")
+                    || await AsyncStorage.getItem("server_ip");
+
+      console.log("📡 Fetching users from IP:", storedIP);
+      console.log("🔑 Token available:", data.token ? "yes" : "no");
+
+      const usersResponse = await fetch(`http://${storedIP}:8000/users`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${data.token}`,
+        },
+      });
+
+      console.log("📡 Users response HTTP status:", usersResponse.status);
+
+      const rawData = await usersResponse.json();
+      console.log("📦 Raw response type:", Array.isArray(rawData) ? "direct array" : typeof rawData);
+      console.log("📦 Raw response keys:", Object.keys(rawData));
+
+      const usersList = Array.isArray(rawData)
+        ? rawData
+        : Array.isArray(rawData.data)
+          ? rawData.data
+          : Array.isArray(rawData.users)
+            ? rawData.users
+            : [];
+
+      console.log("📋 Users list length:", usersList.length);
+      console.log("🔍 Looking for user_id:", data.user_id);
+
+      const currentUser = usersList.find(
+        (u: any) => String(u.id).trim().toUpperCase() ===
+                    String(data.user_id).trim().toUpperCase()
+      );
+
+      console.log("👤 Found user:", currentUser?.id);
+      console.log("🔑 moreoptions value:", currentUser?.moreoptions);
+
+      if (currentUser && currentUser.moreoptions) {
+        await AsyncStorage.setItem("user_moreoptions", currentUser.moreoptions);
+        console.log("✅ moreoptions saved:", currentUser.moreoptions);
+      } else {
+        await AsyncStorage.setItem("user_moreoptions", "");
+        console.log("⚠️ No moreoptions found for user:", data.user_id);
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch moreoptions from /users:", err);
+      await AsyncStorage.setItem("user_moreoptions", "");
+    }
+
+
+    const isLoggedIn = await SecureStore.getItemAsync("userLoggedIn");
+    console.log("User logged in status after save:", isLoggedIn);
+
     Toast.show({
       type: "success",
       text1: "Success",
       text2: "Welcome, Login successful",
     });
-    
+
     setTimeout(() => {
       router.replace("/(main)");
     }, 300);
-  };
-
+};
   const openEmail = () => {
     Linking.openURL('mailto:info@imcbs.com');
   };

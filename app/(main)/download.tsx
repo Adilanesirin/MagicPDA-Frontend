@@ -61,12 +61,19 @@ export default function DownloadPage() {
     try {
       console.log("🧹 Preparing for fresh download...");
       updateProgress(5, "Preparing download...");
+      
+      // CRITICAL FIX: Initialize database first to ensure tables exist
+      const { initDatabase } = await import("@/utils/database");
+      await initDatabase();
+      console.log("✅ Database initialized");
+      
       await resetDownloadState();
       await clearDownloadArtifacts();
       updateProgress(10, "Ready to download");
       console.log("✅ Download state reset successful");
     } catch (err) {
       console.warn("⚠️ Error preparing download:", err);
+      throw err; // Re-throw to stop download if preparation fails
     }
   };
 
@@ -109,29 +116,21 @@ export default function DownloadPage() {
       
       // Simulate progress updates during download
       const progressInterval = setInterval(() => {
-        setDownloadProgress(prev => {
-          if (prev < 85) {
-            const increment = Math.random() * 10 + 5;
-            const newProgress = Math.min(prev + increment, 85);
-            
-            if (newProgress > 30 && newProgress <= 50) {
-              setCurrentStep("Downloading master data...");
-            } else if (newProgress > 50 && newProgress <= 75) {
-              setCurrentStep("Downloading product data...");
-            } else if (newProgress > 75) {
-              setCurrentStep("Processing data...");
-            }
-            
-            return newProgress;
-          }
-          return prev;
-        });
-      }, 800);
+  setDownloadProgress(prev => {
+    if (prev < 85) {
+      const increment = Math.random() * 10 + 5;
+      const newProgress = Math.min(prev + increment, 85);
+      if (newProgress > 30 && newProgress <= 50) setCurrentStep("Downloading master data...");
+      else if (newProgress > 50 && newProgress <= 75) setCurrentStep("Downloading product data...");
+      else if (newProgress > 75) setCurrentStep("Processing data...");
+      return newProgress;
+    }
+    return prev;
+  });
+}, 800);
 
-      const result = await downloadWithRetry();
-      
-      // Clear the progress interval
-      clearInterval(progressInterval);
+const result = await downloadWithRetry();
+clearInterval(progressInterval);
       
       // Get actual counts from the result
       const masterCountResult = result.masterData?.length || 0;
@@ -192,6 +191,62 @@ export default function DownloadPage() {
     }
   };
 
+  const handleFastDownload = async () => {
+  try {
+    resetDownloadUIState();
+    setLoading(true);
+
+    await checkAuthBeforeDownload();
+    await prepareForDownload();
+
+    updateProgress(25, "Starting fast download...");
+
+   const progressInterval = setInterval(() => {
+  setDownloadProgress(prev => {
+    if (prev < 85) {
+      const increment = Math.random() * 10 + 5;
+      const newProgress = Math.min(prev + increment, 85);
+      if (newProgress > 30 && newProgress <= 50) setCurrentStep("Downloading master data...");
+      else if (newProgress > 50 && newProgress <= 75) setCurrentStep("Downloading product data...");
+      else if (newProgress > 75) setCurrentStep("Processing data...");
+      return newProgress;
+    }
+    return prev;
+  });
+}, 800);
+
+    const { downloadWithRetryFast } = await import("@/utils/download");
+    const result = await downloadWithRetryFast();
+
+    clearInterval(progressInterval);
+
+    const masterCountResult = result.masterCount;
+    const productCountResult = result.productCount;
+    const totalDownloaded = masterCountResult + productCountResult;
+
+    updateProgress(90, "Saving data locally...", masterCountResult, productCountResult);
+    updateProgress(95, "Updating sync status...");
+    await updateLastSynced();
+    await loadStats();
+    updateProgress(100, "Download complete!");
+
+    setTimeout(() => { setShowSuccess(true); }, 500);
+
+    if (totalDownloaded === 0) {
+      Toast.show({
+        type: "info",
+        text1: "Fast Download Complete",
+        text2: "No new records available from server",
+        visibilityTime: 4000,
+      });
+    }
+  } catch (error: any) {
+    console.error("❌ Fast download failed:", error.message);
+    handleDownloadError(error);
+  } finally {
+    setLoading(false);
+  }
+};
   const handleDownloadError = (error: any) => {
     resetDownloadUIState();
     
@@ -372,7 +427,24 @@ export default function DownloadPage() {
                 Tap to sync latest data
               </Text>
             </Pressable>
+            {/* Download Button */}
 
+
+{/* Fast Download Button - Memory Optimized for low RAM devices */}
+<Pressable
+  onPress={handleFastDownload}
+  disabled={loading}
+  className={`rounded-2xl py-6 shadow-lg mb-4 ${
+    loading ? "bg-green-300" : "bg-green-600"
+  }`}
+>
+  <Text className="font-bold text-xl text-center text-white">
+    {loading ? "Downloading..." : "⚡ Fast Download"}
+  </Text>
+  <Text className="text-green-100 text-center text-sm mt-1">
+    Optimized for this device
+  </Text>
+</Pressable>
             {/* Error Display */}
             {downloadStatus.lastError && (
               <View className="p-3 bg-red-50 rounded-lg border border-red-200">
@@ -387,3 +459,4 @@ export default function DownloadPage() {
     </View>
   );
 }
+

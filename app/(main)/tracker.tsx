@@ -1,4 +1,4 @@
-import { createEnhancedAPI } from "@/utils/api";
+// app/tracker.tsx - COMPLETE FIXED VERSION WITH ENHANCED PRICE DISPLAY
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
@@ -24,14 +24,25 @@ import {
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Open the database
 const db = SQLite.openDatabaseSync("magicpedia.db");
+
+interface PriceData {
+  price_code: string;
+  price_name: string;
+  value: string;
+}
+interface GodownStock {
+  goddownid: string;   // e.g. "VN", "BR1"
+  product: string;
+  barcode: string;
+  quantity: number;
+}
 
 interface ProductData {
   code: string;
   name: string;
   catagory: string;
+  category: string;
   product: string;
   brand: string;
   unit: string;
@@ -39,13 +50,18 @@ interface ProductData {
   productcode: string;
   barcode: string;
   quantity: number;
-  cost: number;
-  bmrp: number;
-  salesprice: number;
-  secondprice: number;
-  thirdprice: number;
-  supplier: string;
+  supplier: string | null;
   expirydate: string | null;
+  prices: PriceData[];
+  cost?: number;
+  bmrp?: number;
+  CO?: number;
+  MR?: number;
+  S1?: number;
+  S2?: number;
+  batch_supplier?: string;
+  goddown_stock: GodownStock[];
+
 }
 
 export default function StockTrackerScreen() {
@@ -57,18 +73,70 @@ export default function StockTrackerScreen() {
   const [suggestions, setSuggestions] = useState<ProductData[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchMode, setSearchMode] = useState<'barcode' | 'name'>('barcode');
-  const [dataSource, setDataSource] = useState<'api' | 'database'>('api');
+  const [dataSource] = useState<'api' | 'database'>('database');
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [godownList, setGodownList] = useState<{goddownid: string, name: string}[]>([]);
+  const [godownLoading, setGodownLoading] = useState(false);
+  const [apiProductsCache, setApiProductsCache] = useState<any[]>([]); 
   const inputRef = useRef<TextInput>(null);
+  const [hardwareScanValue, setHardwareScanValue] = useState('');
 
-  // Camera scanner states
   const [showScanner, setShowScanner] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanMode, setScanMode] = useState<"hardware" | "camera">("hardware");
   const [scanned, setScanned] = useState(false);
   const scanLockRef = useRef(false);
-  const processingAlertRef = useRef(false);
+  const hardwareScanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
-  // Load scan mode from settings
+  // 🔥 FIX: Copy data from category to catagory if needed
+  useEffect(() => {
+    const fixDatabaseColumns = async () => {
+      try {
+        // Check if catagory column is empty
+        const result = await db.getFirstAsync(
+          "SELECT COUNT(*) as count FROM product_data WHERE catagory IS NULL OR catagory = ''"
+        ) as { count: number };
+        
+        if (result.count > 0) {
+          console.log(`🔧 Fixing ${result.count} products: copying category → catagory`);
+          await db.runAsync('UPDATE product_data SET catagory = category WHERE catagory IS NULL OR catagory = ""');
+          console.log("✅ Database fix complete!");
+        }
+      } catch (error) {
+        console.error("❌ Fix failed:", error);
+      }
+    };
+    
+    fixDatabaseColumns();
+  }, []);
+useEffect(() => {
+  const fetchInitialData = async () => {
+    try {
+      const { createEnhancedAPI } = await import('@/utils/api');
+      const api = await createEnhancedAPI();
+
+      // Fetch both in parallel
+      const [godownRes, productsRes] = await Promise.all([
+        api.get('/acc-goddown'),
+        api.get('/product-details', { timeout: 30000 })
+      ]);
+
+      if (Array.isArray(godownRes.data?.data)) {
+        setGodownList(godownRes.data.data);
+        console.log('✅ Godown list loaded:', godownRes.data.data.length);
+      }
+
+      if (Array.isArray(productsRes.data?.data)) {
+        setApiProductsCache(productsRes.data.data);
+        console.log('✅ API products cached:', productsRes.data.data.length);
+      }
+    } catch (e) {
+      console.log('⚠️ Could not fetch initial data:', e);
+    }
+  };
+  fetchInitialData();
+}, []); // ← runs ONCE only
   useEffect(() => {
     const loadScanMode = async () => {
       const saved = await SecureStore.getItemAsync("scanMode");
@@ -79,316 +147,338 @@ export default function StockTrackerScreen() {
     loadScanMode();
   }, []);
 
-  // Initialize database and fetch products
   useEffect(() => {
-    initializeDatabase();
-  }, []);
+    if (!isInitialized) {
+      initializeDatabase();
+    }
+  }, [isInitialized]);
 
-  // Reset scan lock when scanner closes
   useEffect(() => {
     if (!showScanner) {
       setTimeout(() => {
         setScanned(false);
         scanLockRef.current = false;
-        processingAlertRef.current = false;
       }, 300);
     }
   }, [showScanner]);
 
+  useEffect(() => {
+    return () => {
+      if (hardwareScanTimeoutRef.current) {
+        clearTimeout(hardwareScanTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // ADD THIS USEEFFECT after line 132
+useEffect(() => {
+  if (hardwareScanValue && hardwareScanValue.trim()) {
+    const trimmed = hardwareScanValue.trim();
+    console.log(`📟 Hardware scan detected: "${trimmed}"`);
+    setHardwareScanValue('');
+    
+    // Process hardware scan immediately
+    searchBarcodeWithVariants(trimmed).then(foundProducts => {
+      if (foundProducts.length === 1) {
+        displayProduct(foundProducts[0]);
+      } else if (foundProducts.length > 1) {
+        setSuggestions(foundProducts);
+        setShowSuggestions(true);
+        setProductData(null);
+      } else {
+        Alert.alert('Not Found', `No product found for barcode: ${trimmed}`);
+        setProductData(null);
+      }
+    });
+  }
+}, [hardwareScanValue]);
+
+// ADD THIS USEEFFECT after the hardware scan useEffect
+useEffect(() => {
+  if (searchMode === 'barcode' && !showScanner) {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }
+}, [searchMode, showScanner]);
+
+useEffect(() => {
+  SecureStore.getItemAsync("user_role").then(role => setUserRole(role));
+}, []);
+
+useEffect(() => {
+    const fetchInitialData = async () => {
+      const { createEnhancedAPI } = await import('@/utils/api');
+      const api = await createEnhancedAPI();
+
+      // Fetch godown list separately
+      try {
+        const godownRes = await api.get('/acc-goddown');
+        if (Array.isArray(godownRes.data?.data)) {
+          setGodownList(godownRes.data.data);
+          console.log('✅ Godown list loaded:', godownRes.data.data.length);
+        }
+      } catch (e) {
+        console.log('⚠️ Could not fetch godown list:', e);
+      }
+
+      // Fetch product cache separately
+      try {
+        const productsRes = await api.get('/product-details', { timeout: 30000 });
+        if (Array.isArray(productsRes.data?.data)) {
+          setApiProductsCache(productsRes.data.data);
+          console.log('✅ API products cached:', productsRes.data.data.length);
+        }
+      } catch (e) {
+        console.log('⚠️ Could not fetch product cache:', e);
+      }
+    };
+    fetchInitialData();
+  }, []);
+
   const initializeDatabase = async () => {
     try {
-      console.log('🔧 Initializing database schema...');
-      
-      // Check if new columns exist, if not add them
-      await addMissingColumns();
-      
-      // Fetch products (with better error handling)
-      try {
-        await fetchAllProducts();
-      } catch (error) {
-        console.error('❌ Failed to fetch products during init:', error);
-        // Already falls back to database in fetchAllProducts
-      }
+      console.log('🔧 Initializing tracker...');
+      await fetchFromDatabase();
+      setIsInitialized(true);
     } catch (error) {
       console.error('❌ Database initialization error:', error);
-      // Fallback: try to load from database directly
-      try {
-        await fetchFromDatabase();
-      } catch (dbError) {
-        console.error('❌ Critical: Cannot load data from database:', dbError);
-        Alert.alert('Error', 'Failed to initialize. Please restart the app.');
-      }
-    }
-  };
-
-  const addMissingColumns = async () => {
-    try {
-      // Get existing columns
-      const tableInfo = await db.getAllAsync("PRAGMA table_info(product_data)");
-      const existingColumns = tableInfo.map((col: any) => col.name);
-      
-      console.log('📋 Existing columns:', existingColumns.join(', '));
-
-      // Define required columns
-      const requiredColumns = [
-        { name: 'category', type: 'TEXT', default: '' },
-        { name: 'product', type: 'TEXT', default: '' },
-        { name: 'brand', type: 'TEXT', default: '' },
-        { name: 'unit', type: 'TEXT', default: '' },
-        { name: 'taxcode', type: 'TEXT', default: '0' },
-        { name: 'productcode', type: 'TEXT', default: '' },
-        { name: 'secondprice', type: 'REAL', default: 0 },
-        { name: 'thirdprice', type: 'REAL', default: 0 },
-        { name: 'expirydate', type: 'TEXT', default: null },
-      ];
-
-      // Add missing columns
-      for (const col of requiredColumns) {
-        if (!existingColumns.includes(col.name)) {
-          const defaultValue = col.default === null ? 'NULL' : 
-                              typeof col.default === 'string' ? `'${col.default}'` : 
-                              col.default;
-          
-          const sql = `ALTER TABLE product_data ADD COLUMN ${col.name} ${col.type} DEFAULT ${defaultValue}`;
-          await db.execAsync(sql);
-          console.log(`✅ Added column: ${col.name}`);
-        }
-      }
-
-      console.log('✅ Database schema updated successfully');
-    } catch (error) {
-      console.error('❌ Error adding columns:', error);
-      // If table doesn't exist, create it
-      await createProductTable();
-    }
-  };
-
-  const createProductTable = async () => {
-    try {
-      console.log('🔨 Creating product_data table...');
-      
-      await db.execAsync(`
-        CREATE TABLE IF NOT EXISTS product_data (
-          code TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          barcode TEXT,
-          quantity REAL DEFAULT 0,
-          salesprice REAL DEFAULT 0,
-          bmrp REAL DEFAULT 0,
-          cost REAL DEFAULT 0,
-          batch_supplier TEXT,
-          e_cost REAL DEFAULT 0,
-          e_qty REAL DEFAULT 0,
-          category TEXT DEFAULT '',
-          product TEXT DEFAULT '',
-          brand TEXT DEFAULT '',
-          unit TEXT DEFAULT '',
-          taxcode TEXT DEFAULT '0',
-          productcode TEXT DEFAULT '',
-          secondprice REAL DEFAULT 0,
-          thirdprice REAL DEFAULT 0,
-          expirydate TEXT DEFAULT NULL
-        )
-      `);
-      
-      console.log('✅ Table created successfully');
-    } catch (error) {
-      console.error('❌ Error creating table:', error);
-    }
-  };
-
-  const fetchAllProducts = async () => {
-    try {
-      console.log('📦 Attempting to fetch from API...');
-      
-      const apiPromise = (async () => {
-        const api = await createEnhancedAPI();
-        
-        // Override the default timeout for this specific request
-        return await api.get("/product-details", {
-          timeout: 7000, // 7 seconds - shorter than our catch timeout
-          headers: {
-            'X-Silent-Error': 'true' // Mark as silent to suppress error logging
-          }
-        });
-      })();
-      
-      const response = await apiPromise;
-      
-      let products: any[] = [];
-
-      if (Array.isArray(response.data)) {
-        products = response.data;
-      } else if (typeof response.data === 'string') {
-        products = JSON.parse(response.data);
-      } else if (response.data && typeof response.data === 'object') {
-        if (Array.isArray(response.data.data)) {
-          products = response.data.data;
-        } else if (Array.isArray(response.data.products)) {
-          products = response.data.products;
-        }
-      }
-
-      if (products.length > 0) {
-        // Check if we need to sync (only if database is empty or outdated)
-        const existingCount = await db.getFirstAsync<{ count: number }>(
-          'SELECT COUNT(*) as count FROM product_data'
-        );
-        
-        // Only save if database is empty or has significantly fewer products
-        if (!existingCount || existingCount.count < products.length * 0.9) {
-          console.log(`💾 Syncing ${products.length} products to database...`);
-          await saveProductsToDatabase(products);
-        } else {
-          console.log('✅ Database already synced, skipping save');
-        }
-      }
-
-      // Map API data to ProductData format
-      const mappedProducts = products.map((row: any) => ({
-        code: String(row.code || row.item_code || row.itemcode || '').trim(),
-        name: String(row.name || row.item_name || row.itemname || 'Unknown').trim(),
-        catagory: String(row.catagory || row.category || row.cat || '').trim(),
-        product: String(row.product || row.product_type || '').trim(),
-        brand: String(row.brand || row.brand_name || '').trim(),
-        unit: String(row.unit || row.unit_type || '').trim(),
-        taxcode: String(row.taxcode || row.gst || row.tax || '0').trim(),
-        productcode: String(row.productcode || row.product_code || '').trim(),
-        barcode: String(row.barcode || row.bar_code || '').trim(),
-        quantity: Number(row.quantity || row.stock || 0),
-        cost: Number(row.cost || row.cost_price || 0),
-        bmrp: Number(row.bmrp || row.mrp || 0),
-        salesprice: Number(row.salesprice || row.sales_price || 0),
-        secondprice: Number(row.secondprice || row.second_price || 0),
-        thirdprice: Number(row.thirdprice || row.third_price || 0),
-        supplier: String(row.supplier || row.batch_supplier || '').trim(),
-        expirydate: row.expirydate || row.expiry_date || null
-      }));
-
-      setAllProducts(mappedProducts);
-      setDataSource('api');
-      console.log(`✅ Loaded ${mappedProducts.length} products from API`);
-    } catch (error: any) {
-      // Silently fall back to database - this is expected behavior when offline
-      // Check if it's an abort error (expected) or actual error
-      if (error?.name === 'AbortError' || error?.name === 'CanceledError' || error?.code === 'ECONNABORTED') {
-        console.log('⚠️ API timeout - using local database');
-      } else {
-        console.log('⚠️ API not available - using local database');
-      }
-      await fetchFromDatabase();
-    }
-  };
-
-  const saveProductsToDatabase = async (products: any[]) => {
-    try {
-      console.log('💾 Saving products to database...');
-      const startTime = Date.now();
-      
-      // Use a transaction for much faster inserts
-      await db.withTransactionAsync(async () => {
-        // Clear existing data
-        await db.runAsync('DELETE FROM product_data');
-        
-        // Prepare batch insert with multiple values
-        const batchSize = 100;
-        
-        for (let i = 0; i < products.length; i += batchSize) {
-          const batch = products.slice(i, i + batchSize);
-          
-          // Create placeholders for batch insert
-          const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(',');
-          
-          // Flatten all values
-          const values = batch.flatMap(product => [
-            String(product.code || product.item_code || ''),
-            String(product.name || product.item_name || 'Unknown'),
-            String(product.barcode || ''),
-            Number(product.quantity || 0),
-            Number(product.salesprice || product.sales_price || 0),
-            Number(product.bmrp || product.mrp || 0),
-            Number(product.cost || 0),
-            String(product.supplier || product.batch_supplier || ''),
-            Number(product.e_cost || 0),
-            Number(product.e_qty || 0),
-            String(product.catagory || product.category || ''),
-            String(product.product || product.product_type || ''),
-            String(product.brand || ''),
-            String(product.unit || ''),
-            String(product.taxcode || product.gst || '0'),
-            String(product.productcode || product.product_code || ''),
-            Number(product.secondprice || product.second_price || 0),
-            Number(product.thirdprice || product.third_price || 0),
-            product.expirydate || product.expiry_date || null
-          ]);
-          
-          // Insert batch
-          await db.runAsync(
-            `INSERT OR REPLACE INTO product_data (
-              code, name, barcode, quantity, salesprice, bmrp, cost, 
-              batch_supplier, e_cost, e_qty, category, product, brand, 
-              unit, taxcode, productcode, secondprice, thirdprice, expirydate
-            ) VALUES ${placeholders}`,
-            values
-          );
-          
-          // Log progress every 10 batches
-          if (i % (batchSize * 10) === 0) {
-            const progress = Math.round((i / products.length) * 100);
-            console.log(`💾 Progress: ${progress}% (${i}/${products.length})`);
-          }
-        }
-      });
-      
-      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-      console.log(`✅ Successfully saved ${products.length} products in ${duration}s`);
-    } catch (error) {
-      console.error('❌ Error saving to database:', error);
+      setIsInitialized(true);
+      setAllProducts([]);
     }
   };
 
   const fetchFromDatabase = async () => {
     try {
+      console.log('📊 Loading products from database...');
+      
       const rows = await db.getAllAsync("SELECT * FROM product_data");
       
       if (rows.length === 0) {
-        console.log('❌ No data in database');
-        Alert.alert('No Data', 'Local database is empty. Please connect to internet to sync data.');
+        console.log('📭 Database is empty');
+        setAllProducts([]);
         return;
       }
 
-      console.log('📊 DATABASE COLUMNS:', Object.keys(rows[0]).join(', '));
+      console.log(`📊 Found ${rows.length} products`);
       
-      const products: ProductData[] = rows.map((row: any) => ({
-        code: String(row.code || '').trim(),
-        name: String(row.name || 'Unknown').trim(),
-        catagory: String(row.category || '').trim(),
-        product: String(row.product || '').trim(),
-        brand: String(row.brand || '').trim(),
-        unit: String(row.unit || '').trim(),
-        taxcode: String(row.taxcode || '0').trim(),
-        productcode: String(row.productcode || '').trim(),
-        barcode: String(row.barcode || '').trim(),
-        quantity: Number(row.quantity || 0),
-        cost: Number(row.cost || 0),
-        bmrp: Number(row.bmrp || 0),
-        salesprice: Number(row.salesprice || 0),
-        secondprice: Number(row.secondprice || 0),
-        thirdprice: Number(row.thirdprice || 0),
-        supplier: String(row.batch_supplier || '').trim(),
-        expirydate: row.expirydate || null
-      }));
+      const products: ProductData[] = rows.map((row: any) => {
+        let prices: PriceData[] = [];
+        try {
+          if (row.prices_json && row.prices_json !== '[]') {
+            prices = JSON.parse(row.prices_json);
+          }
+        } catch (e) {}
+        
+        // 🔥 FIX: Try catagory first, then fallback to category
+        const categoryValue = String(row.catagory || row.category || '').trim();
+        
+        return {
+          code: String(row.code || '').trim(),
+          name: String(row.name || 'Unknown').trim(),
+          catagory: categoryValue,
+          category: categoryValue,
+          product: String(row.product || '').trim(),
+          brand: String(row.brand || '').trim(),
+          unit: String(row.unit || '').trim(),
+          taxcode: String(row.taxcode || '0').trim(),
+          productcode: String(row.productcode || '').trim(),
+          barcode: String(row.barcode || '').trim(),
+          quantity: Number(row.quantity || 0),
+          supplier: row.supplier || null,
+          expirydate: row.expirydate || null,
+          prices: prices,
+          cost: Number(row.cost || 0),
+          bmrp: Number(row.bmrp || 0),
+          CO: Number(row.CO || 0),
+          MR: Number(row.MR || 0),
+          S1: Number(row.S1 || 0),
+          S2: Number(row.S2 || 0),
+          batch_supplier: String(row.batch_supplier || '').trim(),
+          goddown_stock: []
+
+        };
+      });
 
       setAllProducts(products);
-      setDataSource('database');
-      console.log(`✅ Loaded ${products.length} products from local database`);
+      console.log(`✅ Loaded ${products.length} products`);
       
-      if (products.length > 0) {
-        console.log('📋 SAMPLE PRODUCT:', JSON.stringify(products[0], null, 2));
+      const withCategory = products.filter(p => p.category).length;
+      const withSupplier = products.filter(p => p.supplier).length;
+      const withBrand = products.filter(p => p.brand).length;
+      
+      console.log(`📊 Stats - Category: ${withCategory}, Supplier: ${withSupplier}, Brand: ${withBrand}`);
+      
+    } catch (error: any) {
+      console.error('❌ Error fetching from database:', error?.message);
+      setAllProducts([]);
+    }
+  };
+
+const displayProduct = async (product: any) => {
+      let prices: PriceData[] = [];
+    if (product.prices && Array.isArray(product.prices)) {
+      prices = product.prices;
+    } else if (product.prices_json) {
+      try {
+        prices = JSON.parse(product.prices_json);
+      } catch (e) {}
+    }
+    
+    // 🔥 FIX: Try catagory first, then fallback to category
+    const categoryValue = product.catagory || product.category || '';
+    
+    const validatedProduct: ProductData = {
+      code: String(product.code || '').trim(),
+      name: String(product.name || 'Unknown').trim(),
+      catagory: categoryValue,
+      category: categoryValue,
+      product: String(product.product || '').trim(),
+      brand: String(product.brand || '').trim(),
+      unit: String(product.unit || '').trim(),
+      taxcode: String(product.taxcode || '0').trim(),
+      productcode: String(product.productcode || '').trim(),
+      barcode: String(product.barcode || '').trim(),
+      quantity: Number(product.quantity || 0),
+      supplier: product.supplier || null,
+      expirydate: product.expirydate || null,
+      prices: prices,
+      cost: Number(product.cost || 0),
+      bmrp: Number(product.bmrp || 0),
+      CO: Number(product.CO || 0),
+      MR: Number(product.MR || 0),
+      S1: Number(product.S1 || 0),
+      S2: Number(product.S2 || 0),
+      batch_supplier: String(product.batch_supplier || '').trim(),
+      goddown_stock: Array.isArray(product.goddown_stock) ? product.goddown_stock : []
+
+    };
+    
+    // 🔥 CRITICAL DEBUG - Log everything about prices
+    console.log('====================================');
+    console.log('💰 PRODUCT LOADED - PRICE DEBUG');
+    console.log('====================================');
+    console.log('Product:', validatedProduct.code, '-', validatedProduct.name);
+    console.log('---');
+    console.log('Prices Array:', {
+      exists: !!validatedProduct.prices,
+      isArray: Array.isArray(validatedProduct.prices),
+      length: validatedProduct.prices?.length || 0,
+      data: validatedProduct.prices
+    });
+    console.log('---');
+    console.log('Individual Price Columns:', {
+      CO: validatedProduct.CO,
+      MR: validatedProduct.MR,
+      S1: validatedProduct.S1,
+      S2: validatedProduct.S2,
+      cost: validatedProduct.cost,
+      bmrp: validatedProduct.bmrp
+    });
+    console.log('---');
+    console.log('Raw product data:', {
+      CO: product.CO,
+      MR: product.MR,
+      S1: product.S1,
+      S2: product.S2,
+      prices_json: product.prices_json
+    });
+    console.log('====================================');
+    
+setProductData(validatedProduct);
+    try {
+      setGodownLoading(true);
+      // Use cached data instead of fresh API call
+      if (apiProductsCache.length > 0) {
+        const apiData = apiProductsCache.find((p: any) => 
+          String(p.code).trim() === String(validatedProduct.code).trim()
+        );
+        console.log('🏪 Godown match:', apiData?.code, '→ stock:', apiData?.goddown_stock);
+        if (apiData && Array.isArray(apiData.goddown_stock) && apiData.goddown_stock.length > 0) {
+          setProductData(prev => prev ? { ...prev, goddown_stock: apiData.goddown_stock } : prev);
+        } else {
+          console.log('⚠️ No goddown_stock for:', validatedProduct.code);
+        }
+      } else {
+        // Fallback to API if cache is empty
+        const { createEnhancedAPI } = await import('@/utils/api');
+        const api = await createEnhancedAPI();
+        const response = await api.get('/product-details', { timeout: 10000 });
+        const products = response.data?.data;
+        if (Array.isArray(products)) {
+          const apiData = products.find((p: any) => 
+            String(p.code).trim() === String(validatedProduct.code).trim()
+          );
+          if (apiData && Array.isArray(apiData.goddown_stock) && apiData.goddown_stock.length > 0) {
+            setProductData(prev => prev ? { ...prev, goddown_stock: apiData.goddown_stock } : prev);
+          }
+        }
       }
+    } catch (e) {
+      console.log('⚠️ Could not fetch godown stock:', e);
+    } finally {
+      setGodownLoading(false);
+    }
+  };
+  
+
+  const searchBarcodeWithVariants = async (barcode: string): Promise<ProductData[]> => {
+    try {
+      const exactRows = await db.getAllAsync(
+        "SELECT * FROM product_data WHERE barcode = ?",
+        [barcode]
+      );
+
+      const variantRows1 = await db.getAllAsync(
+        "SELECT * FROM product_data WHERE barcode LIKE ?",
+        [`${barcode} :%`]
+      );
+
+      const variantRows2 = await db.getAllAsync(
+        "SELECT * FROM product_data WHERE barcode LIKE ?",
+        [`${barcode}:%`]
+      );
+
+      const allMatches = [...exactRows, ...variantRows1, ...variantRows2];
+      
+      return allMatches.map((row: any) => {
+        let prices: PriceData[] = [];
+        try {
+          if (row.prices_json) prices = JSON.parse(row.prices_json);
+        } catch (e) {}
+        
+        // 🔥 FIX: Try catagory first, then fallback to category
+        const categoryValue = String(row.catagory || row.category || '').trim();
+        
+        return {
+          code: String(row.code || '').trim(),
+          name: String(row.name || 'Unknown').trim(),
+          catagory: categoryValue,
+          category: categoryValue,
+          product: String(row.product || '').trim(),
+          brand: String(row.brand || '').trim(),
+          unit: String(row.unit || '').trim(),
+          taxcode: String(row.taxcode || '0').trim(),
+          productcode: String(row.productcode || '').trim(),
+          barcode: String(row.barcode || '').trim(),
+          quantity: Number(row.quantity || 0),
+          supplier: row.supplier || null,
+          expirydate: row.expirydate || null,
+          prices: prices,
+          cost: Number(row.cost || 0),
+          bmrp: Number(row.bmrp || 0),
+          CO: Number(row.CO || 0),
+          MR: Number(row.MR || 0),
+          S1: Number(row.S1 || 0),
+          S2: Number(row.S2 || 0),
+          batch_supplier: String(row.batch_supplier || '').trim(),
+          goddown_stock: []
+        };
+      });
     } catch (error) {
-      console.error('❌ Error fetching from database:', error);
-      Alert.alert('Error', 'Failed to load products from local database: ' + error);
+      console.error('❌ Error searching barcode:', error);
+      return [];
     }
   };
 
@@ -407,143 +497,35 @@ export default function StockTrackerScreen() {
   };
 
   const handleSearchTextChange = (text: string) => {
-    setSearchText(text);
-    
-    if (text.trim().length === 0) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
+  setSearchText(text);
+  
+  // Remove the hardware scanning logic - it's now handled by useEffect
+  
+  if (text.trim().length === 0) {
+    setSuggestions([]);
+    setShowSuggestions(false);
+    return;
+  }
 
-    if (searchMode === 'name' && text.trim().length >= 2) {
-      const searchLower = text.toLowerCase().trim();
-      const filtered = allProducts.filter(product => 
-        product.name.toLowerCase().includes(searchLower) ||
-        product.brand?.toLowerCase().includes(searchLower) ||
-        product.product?.toLowerCase().includes(searchLower)
-      ).slice(0, 50);
+  if (searchMode === 'name' && text.trim().length >= 2) {
+    const searchLower = text.toLowerCase().trim();
+    const filtered = allProducts.filter(product => 
+      product.name.toLowerCase().includes(searchLower) ||
+      product.brand?.toLowerCase().includes(searchLower) ||
+      product.category?.toLowerCase().includes(searchLower) ||
+      product.product?.toLowerCase().includes(searchLower)
+    ).slice(0, 50);
 
-      setSuggestions(filtered);
-      setShowSuggestions(filtered.length > 0);
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
+    setSuggestions(filtered);
+    setShowSuggestions(filtered.length > 0);
+  }
+};
 
   const handleSelectSuggestion = (product: ProductData) => {
     setSearchText(product.name);
     setShowSuggestions(false);
     Keyboard.dismiss();
     displayProduct(product);
-  };
-
-  const displayProduct = (product: any) => {
-    const validatedProduct: ProductData = {
-      code: String(product.code || '').trim(),
-      name: String(product.name || 'Unknown').trim(),
-      catagory: String(product.catagory || product.category || '').trim(),
-      product: String(product.product || '').trim(),
-      brand: String(product.brand || '').trim(),
-      unit: String(product.unit || '').trim(),
-      taxcode: String(product.taxcode || product.gst || '0').trim(),
-      productcode: String(product.productcode || product.product_code || '').trim(),
-      barcode: String(product.barcode || '').trim(),
-      quantity: Number(product.quantity) || 0,
-      cost: Number(product.cost) || 0,
-      bmrp: Number(product.bmrp) || Number(product.mrp) || 0,
-      salesprice: Number(product.salesprice) || Number(product.sales_price) || 0,
-      secondprice: Number(product.secondprice) || Number(product.second_price) || 0,
-      thirdprice: Number(product.thirdprice) || Number(product.third_price) || 0,
-      supplier: String(product.supplier || product.batch_supplier || '').trim(),
-      expirydate: product.expirydate || product.expiry_date || null
-    };
-    
-    setProductData(validatedProduct);
-  };
-
-  // FIXED: Search barcode with variants function (CASE-INSENSITIVE)
-  const searchBarcodeWithVariants = async (barcode: string): Promise<ProductData[]> => {
-    try {
-      const trimmedBarcode = barcode.trim();
-      
-      console.log('🔍 Starting barcode search for:', trimmedBarcode);
-      
-      // SQLite LIKE is case-insensitive by default, but to be extra safe we'll use COLLATE NOCASE
-      // Search for exact match (case-insensitive)
-      const exactRows = await db.getAllAsync(
-        `SELECT * FROM product_data 
-         WHERE LOWER(barcode) = LOWER(?) 
-            OR LOWER(productcode) = LOWER(?) 
-            OR LOWER(code) = LOWER(?)`,
-        [trimmedBarcode, trimmedBarcode, trimmedBarcode]
-      );
-
-      // Search for variants WITH space before colon (barcode : 1, barcode : 2) - case-insensitive
-      const variantRows1 = await db.getAllAsync(
-        `SELECT * FROM product_data 
-         WHERE LOWER(barcode) LIKE LOWER(?) 
-            OR LOWER(productcode) LIKE LOWER(?) 
-            OR LOWER(code) LIKE LOWER(?)`,
-        [`${trimmedBarcode} :%`, `${trimmedBarcode} :%`, `${trimmedBarcode} :%`]
-      );
-
-      // Search for variants WITHOUT space (barcode:1, barcode:2) - case-insensitive
-      const variantRows2 = await db.getAllAsync(
-        `SELECT * FROM product_data 
-         WHERE LOWER(barcode) LIKE LOWER(?) 
-            OR LOWER(productcode) LIKE LOWER(?) 
-            OR LOWER(code) LIKE LOWER(?)`,
-        [`${trimmedBarcode}:%`, `${trimmedBarcode}:%`, `${trimmedBarcode}:%`]
-      );
-
-      console.log('📊 Exact matches:', exactRows.length);
-      console.log('📊 Variants (with space):', variantRows1.length);
-      console.log('📊 Variants (no space):', variantRows2.length);
-
-      // Combine all results and remove duplicates
-      const allRows = [...exactRows, ...variantRows1, ...variantRows2];
-      
-      // Remove duplicates based on barcode (case-insensitive comparison)
-      const uniqueRows = allRows.filter((row: any, index: number, self: any[]) => 
-        index === self.findIndex((r: any) => 
-          String(r.barcode || '').toLowerCase() === String(row.barcode || '').toLowerCase()
-        )
-      );
-
-      console.log('📊 Total unique matches:', uniqueRows.length);
-
-      // Map to ProductData format
-      const mappedProducts: ProductData[] = uniqueRows.map((row: any) => ({
-        code: String(row.code || '').trim(),
-        name: String(row.name || 'Unknown').trim(),
-        catagory: String(row.category || '').trim(),
-        product: String(row.product || '').trim(),
-        brand: String(row.brand || '').trim(),
-        unit: String(row.unit || '').trim(),
-        taxcode: String(row.taxcode || '0').trim(),
-        productcode: String(row.productcode || '').trim(),
-        barcode: String(row.barcode || '').trim(),
-        quantity: Number(row.quantity || 0),
-        cost: Number(row.cost || 0),
-        bmrp: Number(row.bmrp || 0),
-        salesprice: Number(row.salesprice || 0),
-        secondprice: Number(row.secondprice || 0),
-        thirdprice: Number(row.thirdprice || 0),
-        supplier: String(row.batch_supplier || '').trim(),
-        expirydate: row.expirydate || null
-      }));
-
-      console.log('✅ Returning', mappedProducts.length, 'products');
-      if (mappedProducts.length > 0) {
-        console.log('📋 First match:', mappedProducts[0].name, '|', mappedProducts[0].barcode);
-      }
-      
-      return mappedProducts;
-    } catch (error) {
-      console.error('❌ Error searching barcode with variants:', error);
-      return [];
-    }
   };
 
   const handleSearch = async () => {
@@ -558,66 +540,41 @@ export default function StockTrackerScreen() {
 
     try {
       if (searchMode === 'barcode') {
-        await handleBarcodeSearch();
+        const foundProducts = await searchBarcodeWithVariants(searchText.trim());
+        if (foundProducts.length === 1) {
+          displayProduct(foundProducts[0]);
+        } else if (foundProducts.length > 1) {
+          setSuggestions(foundProducts);
+          setShowSuggestions(true);
+          setProductData(null);
+        } else {
+          Alert.alert('Not Found', `No product found for barcode: ${searchText}`);
+          setProductData(null);
+        }
       } else {
-        await handleNameSearch();
+        const searchLower = searchText.toLowerCase().trim();
+        const matches = allProducts.filter(product => 
+          product.name.toLowerCase().includes(searchLower) ||
+          product.brand?.toLowerCase().includes(searchLower) ||
+          product.category?.toLowerCase().includes(searchLower) ||
+          product.product?.toLowerCase().includes(searchLower)
+        );
+
+        if (matches.length === 1) {
+          displayProduct(matches[0]);
+        } else if (matches.length > 1) {
+          setSuggestions(matches);
+          setShowSuggestions(true);
+          setProductData(null);
+        } else {
+          Alert.alert('Not Found', `No products found matching: "${searchText}"`);
+          setProductData(null);
+        }
       }
     } catch (error) {
-      console.error('❌ Search error:', error);
-      Alert.alert('Error', 'Failed to search. Please try again.');
+      Alert.alert('Error', 'Failed to search');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleBarcodeSearch = async () => {
-    const searchBarcode = searchText.trim();
-    
-    // Use the new variant search function (now async and case-insensitive)
-    const foundProducts = await searchBarcodeWithVariants(searchBarcode);
-    
-    if (foundProducts.length === 0) {
-      Alert.alert(
-        'Not Found', 
-        `No exact match found for barcode: ${searchBarcode}\n\nPlease verify the barcode and try again.`
-      );
-      setProductData(null);
-    } else if (foundProducts.length === 1) {
-      // Single match - display directly
-      console.log('🎯 Exact barcode match found:', foundProducts[0].name);
-      displayProduct(foundProducts[0]);
-    } else {
-      // Multiple matches (variants) - show suggestions
-      console.log(`📊 Found ${foundProducts.length} variants - showing suggestions`);
-      setSuggestions(foundProducts);
-      setShowSuggestions(true);
-      setProductData(null);
-    }
-  };
-
-  const handleNameSearch = async () => {
-    const searchLower = searchText.toLowerCase().trim();
-    
-    const matches = allProducts.filter(product => 
-      product.name.toLowerCase().includes(searchLower) ||
-      product.brand?.toLowerCase().includes(searchLower) ||
-      product.product?.toLowerCase().includes(searchLower)
-    );
-
-    if (matches.length === 1) {
-      console.log('🎯 Single match found:', matches[0].name);
-      displayProduct(matches[0]);
-    } else if (matches.length > 1) {
-      console.log(`📊 Found ${matches.length} matches`);
-      setSuggestions(matches);
-      setShowSuggestions(true);
-      setProductData(null);
-    } else {
-      Alert.alert(
-        'Not Found',
-        `No products found matching: "${searchText}"`
-      );
-      setProductData(null);
     }
   };
 
@@ -630,94 +587,55 @@ export default function StockTrackerScreen() {
 
   const handleScanBarcode = async () => {
     if (scanMode === "camera") {
-      if (!permission) {
-        return;
-      }
-
-      if (!permission.granted) {
+      if (!permission?.granted) {
         const { granted } = await requestPermission();
         if (!granted) {
-          Alert.alert(
-            "Camera Permission",
-            "Camera permission is required to scan barcodes. Please enable it in settings."
-          );
+          Alert.alert("Camera Permission", "Camera permission is required");
           return;
         }
       }
-
       setScanned(false);
       scanLockRef.current = false;
-      processingAlertRef.current = false;
       setProductData(null);
       setSearchText('');
       setShowScanner(true);
     } else {
-      Alert.alert('Scanner', 'Hardware scanner is active. Please scan using the device scanner.');
+      setProductData(null);
+      setSearchText('');
+      setSuggestions([]);
+      setShowSuggestions(false);
+      
+      Alert.alert('Hardware Scanner Ready', 'Scan barcode using Zebra scanner');
     }
   };
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    if (scanLockRef.current || scanned || processingAlertRef.current) {
-      return;
-    }
+    if (scanLockRef.current) return;
     
     scanLockRef.current = true;
     setScanned(true);
     setShowScanner(false);
     
-    // Use the new variant search function (now async and case-insensitive)
     const foundProducts = await searchBarcodeWithVariants(data);
     
-    if (foundProducts.length === 0) {
-      processingAlertRef.current = true;
-      
-      setTimeout(() => {
-        Alert.alert(
-          'Not Found', 
-          `No product found for barcode: ${data}`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setScanned(false);
-                scanLockRef.current = false;
-                processingAlertRef.current = false;
-              }
-            }
-          ],
-          { 
-            cancelable: false,
-            onDismiss: () => {
-              setScanned(false);
-              scanLockRef.current = false;
-              processingAlertRef.current = false;
-            }
-          }
-        );
-      }, 300);
-    } else if (foundProducts.length === 1) {
-      // Single match - display directly
-      console.log('🎯 Barcode scanned:', foundProducts[0].name);
+    if (foundProducts.length === 1) {
       setSearchText(data);
       setSearchMode('barcode');
       displayProduct(foundProducts[0]);
-      setTimeout(() => {
-        setScanned(false);
-        scanLockRef.current = false;
-      }, 500);
-    } else {
-      // Multiple matches (variants) - show suggestions
-      console.log(`📊 Found ${foundProducts.length} variants from scan`);
+    } else if (foundProducts.length > 1) {
       setSearchText(data);
       setSearchMode('barcode');
       setSuggestions(foundProducts);
       setShowSuggestions(true);
       setProductData(null);
-      setTimeout(() => {
-        setScanned(false);
-        scanLockRef.current = false;
-      }, 500);
+    } else {
+      Alert.alert('Not Found', `No product found for barcode: ${data}`);
     }
+    
+    setTimeout(() => {
+      setScanned(false);
+      scanLockRef.current = false;
+    }, 500);
   };
 
   const handleCloseScanner = () => {
@@ -725,8 +643,18 @@ export default function StockTrackerScreen() {
     setTimeout(() => {
       setScanned(false);
       scanLockRef.current = false;
-      processingAlertRef.current = false;
     }, 300);
+  };
+
+  const syncWithAPI = () => {
+    Alert.alert(
+      'Sync Products',
+      'Download all product data from server?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sync', onPress: () => router.push('/download') }
+      ]
+    );
   };
 
   const renderSuggestionItem = ({ item }: { item: ProductData }) => (
@@ -743,46 +671,62 @@ export default function StockTrackerScreen() {
             <Text style={styles.detailChipLabel}>Stock:</Text>
             <Text style={styles.detailChipValue}>{Math.abs(item.quantity)}</Text>
           </View>
-          <View style={[styles.detailChip, styles.detailChipMRP]}>
-            <Text style={styles.detailChipLabel}>MRP:</Text>
-            <Text style={styles.detailChipValue}>₹{item.bmrp.toFixed(2)}</Text>
-          </View>
-          <View style={[styles.detailChip, styles.detailChipPrice]}>
-            <Text style={styles.detailChipLabel}>S.Price:</Text>
-            <Text style={styles.detailChipValue}>₹{item.salesprice.toFixed(2)}</Text>
-          </View>
-          {item.barcode && (
-            <View style={[styles.detailChip, styles.detailChipBarcode]}>
-              <Ionicons name="barcode-outline" size={12} color="#5E35B1" style={{ marginRight: 2 }} />
-              <Text style={styles.detailChipValue} numberOfLines={1}>{item.barcode}</Text>
+          {item.category ? (
+            <View style={styles.detailChip}>
+              <Text style={styles.detailChipLabel}>Cat:</Text>
+              <Text style={styles.detailChipValue} numberOfLines={1}>{item.category}</Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#999999" />
     </TouchableOpacity>
   );
 
+  // Helper function to get price from prices array OR individual columns
+  const getPriceValue = (priceCode: string): number => {
+    if (!productData) return 0;
+    
+    // Try to get from prices array first
+    if (productData.prices && productData.prices.length > 0) {
+      const price = productData.prices.find(p => p.price_code === priceCode);
+      if (price && parseFloat(price.value) > 0) {
+        return parseFloat(price.value);
+      }
+    }
+    
+    // Fallback to individual columns (these are always saved by sync.ts)
+    switch(priceCode) {
+      case 'CO': return productData.CO || 0;
+      case 'MR': return productData.MR || 0;
+      case 'S1': return productData.S1 || 0;
+      case 'S2': return productData.S2 || 0;
+      default: return 0;
+    }
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={22} color="#007AFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>STOCK TRACKER</Text>
-        <TouchableOpacity onPress={handleScanBarcode} style={styles.searchButton}>
-          <Ionicons name="barcode-outline" size={22} color="#007AFF" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={syncWithAPI} style={styles.syncButton}>
+            <Ionicons name="refresh" size={22} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleScanBarcode} style={styles.searchButton}>
+            <Ionicons name="barcode-outline" size={22} color="#007AFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Camera Scanner Modal */}
       <Modal
         visible={showScanner}
         animationType="slide"
@@ -794,34 +738,19 @@ export default function StockTrackerScreen() {
             facing="back"
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
             barcodeScannerSettings={{
-              barcodeTypes: [
-                "qr",
-                "ean13",
-                "ean8",
-                "code128",
-                "code39",
-                "upc_a",
-                "upc_e",
-                "code93",
-                "itf14",
-              ],
+              barcodeTypes: ["ean13", "ean8", "code128", "code39", "upc_a", "upc_e"]
             }}
           >
             <View style={styles.scannerOverlay}>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={handleCloseScanner}
-              >
+              <TouchableOpacity style={styles.closeButton} onPress={handleCloseScanner}>
                 <Ionicons name="close" size={32} color="white" />
               </TouchableOpacity>
-
               <View style={styles.scanFrame}>
                 <View style={[styles.corner, styles.topLeft]} />
                 <View style={[styles.corner, styles.topRight]} />
                 <View style={[styles.corner, styles.bottomLeft]} />
                 <View style={[styles.corner, styles.bottomRight]} />
               </View>
-
               <View style={styles.instructionsContainer}>
                 <Text style={styles.instructionsText}>
                   {scanned ? 'Processing...' : 'Align barcode within the frame'}
@@ -832,7 +761,19 @@ export default function StockTrackerScreen() {
         </View>
       </Modal>
 
-      {/* Search Mode Toggle */}
+      
+    {searchMode === 'barcode' && !showScanner && (
+      <TextInput
+        ref={inputRef}
+        autoFocus
+        value={hardwareScanValue}
+        onChangeText={(text) => setHardwareScanValue(text)}
+        style={styles.hiddenInput}
+        showSoftInputOnFocus={false}
+        blurOnSubmit={false}
+      />
+    )}
+
       <View style={styles.toggleContainer}>
         <TouchableOpacity
           style={[
@@ -840,19 +781,15 @@ export default function StockTrackerScreen() {
             styles.toggleButtonLeft,
             searchMode === 'barcode' && styles.toggleButtonActive
           ]}
-          onPress={() => searchMode !== 'barcode' && toggleSearchMode()}
+          onPress={toggleSearchMode}
         >
           <Ionicons 
             name="barcode-outline" 
             size={18} 
             color={searchMode === 'barcode' ? '#FFFFFF' : '#666666'} 
-            style={styles.toggleIcon}
           />
-          <Text style={[
-            styles.toggleText,
-            searchMode === 'barcode' && styles.toggleTextActive
-          ]}>
-            Barcode Search
+          <Text style={[styles.toggleText, searchMode === 'barcode' && styles.toggleTextActive]}>
+            Barcode
           </Text>
         </TouchableOpacity>
         
@@ -862,24 +799,19 @@ export default function StockTrackerScreen() {
             styles.toggleButtonRight,
             searchMode === 'name' && styles.toggleButtonActive
           ]}
-          onPress={() => searchMode !== 'name' && toggleSearchMode()}
+          onPress={toggleSearchMode}
         >
           <Ionicons 
             name="search" 
             size={18} 
             color={searchMode === 'name' ? '#FFFFFF' : '#666666'} 
-            style={styles.toggleIcon}
           />
-          <Text style={[
-            styles.toggleText,
-            searchMode === 'name' && styles.toggleTextActive
-          ]}>
+          <Text style={[styles.toggleText, searchMode === 'name' && styles.toggleTextActive]}>
             Item Search
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Search Input */}
       <View style={styles.searchSection}>
         <View style={styles.inputContainer}>
           <Ionicons 
@@ -889,9 +821,9 @@ export default function StockTrackerScreen() {
             style={styles.inputIcon}
           />
           <TextInput
-            ref={inputRef}
+            ref={null}  
             style={styles.searchInput}
-            placeholder={searchMode === 'barcode' ? 'Enter barcode...' : 'Search by name...'}
+            placeholder={searchMode === 'barcode' ? 'Scan or enter barcode...' : 'Search by name...'}
             value={searchText}
             onChangeText={handleSearchTextChange}
             returnKeyType="search"
@@ -907,27 +839,18 @@ export default function StockTrackerScreen() {
         </View>
       </View>
 
-      {/* Autocomplete Suggestions Dropdown */}
       {showSuggestions && suggestions.length > 0 ? (
         <View style={styles.suggestionsContainer}>
-          {searchMode === 'barcode' && suggestions.length > 1 && (
-            <Text style={styles.variantsHeader}>
-              Found {suggestions.length} variants - Select one:
-            </Text>
-          )}
           <FlatList
             data={suggestions}
-            keyExtractor={(item, index) => `${item.barcode}-${index}`}
+            keyExtractor={(item, index) => `${item.code}-${index}`}
             renderItem={renderSuggestionItem}
             keyboardShouldPersistTaps="handled"
             style={styles.suggestionsList}
-            contentContainerStyle={styles.suggestionsContentContainer}
-            showsVerticalScrollIndicator={true}
           />
         </View>
       ) : (
         <>
-          {/* Action Buttons */}
           <View style={styles.actionButtons}>
             <TouchableOpacity 
               style={styles.itemDetailsButton}
@@ -940,59 +863,205 @@ export default function StockTrackerScreen() {
                 <Text style={styles.buttonText}>Search</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={handleClearAll} 
-              style={styles.clearButton}
-              disabled={loading}
-            >
-              <Text style={styles.clearButtonText}>Clear All</Text>
+            <TouchableOpacity onPress={handleClearAll} style={styles.clearButton}>
+              <Text style={styles.clearButtonText}>Clear</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.scrollView}>
-            {/* Item Details Section */}
             {productData && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Item Details</Text>
+              <>
+                {/* Product Details Section */}
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Product Details</Text>
+                  </View>
+                  <View style={styles.detailsContainer}>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Product Name:</Text>
+                      <Text style={styles.detailValue}>{productData.name}</Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Product Code:</Text>
+                      <Text style={styles.detailValue}>{productData.code}</Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Barcode:</Text>
+                      <Text style={styles.detailValue}>{productData.barcode}</Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Stock Quantity:</Text>
+                      <Text style={styles.detailValue}>
+                        {Math.abs(productData.quantity)} {productData.quantity < 0 ? '(Negative)' : ''}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Category:</Text>
+                      <Text style={[styles.detailValue, !productData.category && styles.emptyField]}>
+                        {productData.category || 'Not Available'}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Product Type:</Text>
+                      <Text style={[styles.detailValue, !productData.product && styles.emptyField]}>
+                        {productData.product || 'Not Available'}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Brand:</Text>
+                      <Text style={[styles.detailValue, !productData.brand && styles.emptyField]}>
+                        {productData.brand || 'Not Available'}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Unit:</Text>
+                      <Text style={[styles.detailValue, !productData.unit && styles.emptyField]}>
+                        {productData.unit || 'Not Available'}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>GST/Tax Code:</Text>
+                      <Text style={[styles.detailValue, !productData.taxcode && styles.emptyField]}>
+                        {productData.taxcode || '0'}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Supplier:</Text>
+                      <Text style={[styles.detailValue, !productData.supplier && styles.emptyField]}>
+                        {productData.supplier || 'Not Available'}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Batch Supplier:</Text>
+                      <Text style={[styles.detailValue, !productData.batch_supplier && styles.emptyField]}>
+                        {productData.batch_supplier || 'Not Available'}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Expiry Date:</Text>
+                      <Text style={[styles.detailValue, !productData.expirydate && styles.emptyField]}>
+                        {productData.expirydate || 'Not Available'}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.detailsContainer}>
-                  <DetailRow label="Item Name" value={productData.name || 'N/A'} />
-                  <DetailRow label="Item Code" value={productData.code || 'N/A'} />
-                  <DetailRow label="Category" value={productData.catagory || 'N/A'} />
-                  <DetailRow label="Product" value={productData.product || 'N/A'} />
-                  <DetailRow label="Brand" value={productData.brand || 'N/A'} />
-                  <DetailRow label="Unit" value={productData.unit || 'N/A'} />
-                  <DetailRow label="GST" value={productData.taxcode ? `${productData.taxcode}%` : 'N/A'} />
-                </View>
-              </View>
-            )}
 
-            {/* Barcode Details Section */}
-            {productData && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Barcode Details</Text>
-                  <Text style={styles.liveData}>
-                    {dataSource === 'api' ? 'Live Data' : 'Offline Data'}
-                  </Text>
+                {/* Price Details Section - Simple Table Format */}
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Price Details</Text>
+                  </View>
+                  <View style={styles.detailsContainer}>
+                    {/* Always try to show prices - check both arrays and individual fields */}
+                    {(() => {
+                      // Check if we have prices from array
+                      const hasPricesArray = productData.prices && productData.prices.length > 0;
+                      
+                      // Check if we have prices from individual fields
+                      const CO = productData.CO || 0;
+                      const MR = productData.MR || 0;
+                      const S1 = productData.S1 || 0;
+                      const S2 = productData.S2 || 0;
+                      const hasIndividualPrices = CO > 0 || MR > 0 || S1 > 0 || S2 > 0;
+                      
+                      console.log('💰 Price Display Check:', {
+                        hasPricesArray,
+                        hasIndividualPrices,
+                        CO, MR, S1, S2,
+                        pricesArrayLength: productData.prices?.length || 0
+                      });
+                      
+                      if (hasPricesArray) {
+                        return productData.prices
+                        .filter(price => !(userRole === "Level 1" && price.price_code === "CO"))
+                        .map((price, index) => (
+                          <View key={index} style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>{price.price_name}:</Text>
+                            <Text style={styles.detailValue}>₹{parseFloat(price.value).toFixed(2)}</Text>
+                          </View>
+                        ));
+                      } else if (hasIndividualPrices) {
+                        // Display from individual fields
+                        return (
+                          <>
+                          {userRole !== "Level 1" && CO > 0 && (
+                            <View style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>COST (CO):</Text>
+                              <Text style={styles.detailValue}>₹{CO.toFixed(2)}</Text>
+                            </View>
+                          )}
+                            {MR > 0 && (
+                              <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>MRP (MR):</Text>
+                                <Text style={styles.detailValue}>₹{MR.toFixed(2)}</Text>
+                              </View>
+                            )}
+                            {S1 > 0 && (
+                              <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>RETAIL (S1):</Text>
+                                <Text style={styles.detailValue}>₹{S1.toFixed(2)}</Text>
+                              </View>
+                            )}
+                            {S2 > 0 && (
+                              <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>D.P (S2):</Text>
+                                <Text style={styles.detailValue}>₹{S2.toFixed(2)}</Text>
+                              </View>
+                            )}
+                          </>
+                        );
+                      } else {
+                        // No prices available anywhere
+                        return (
+                          <View style={styles.noPriceContainer}>
+                            <Ionicons name="warning" size={32} color="#F57C00" style={{marginBottom: 12}} />
+                            <Text style={styles.noPriceText}>No price data available</Text>
+                            <Text style={styles.noPriceHint}>Click the refresh button (↻) at the top to sync prices from server</Text>
+                            <TouchableOpacity onPress={syncWithAPI} style={styles.syncNowButton}>
+                              <Ionicons name="refresh" size={18} color="#FFFFFF" />
+                              <Text style={styles.syncNowButtonText}>Sync Now</Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      }
+                    })()}
+                  </View>
                 </View>
-                <View style={styles.detailsContainer}>
-                  <DetailRow label="Barcode" value={productData.barcode || 'N/A'} />
-                  <DetailRow label="Product Code" value={productData.productcode || 'N/A'} />
-                  <DetailRow label="Stock Available" value={`${Math.abs(productData.quantity)}`} />
-                  <DetailRow label="Cost" value={`₹${productData.cost.toFixed(2)}`} isHighlighted />
-                  <DetailRow label="MRP" value={`₹${productData.bmrp.toFixed(2)}`} isHighlighted />
-                  <DetailRow label="Sales Price" value={`₹${productData.salesprice.toFixed(2)}`} isHighlighted />
-                  <DetailRow label="Second Price" value={`₹${productData.secondprice.toFixed(2)}`} />
-                  <DetailRow label="Third Price" value={`₹${productData.thirdprice.toFixed(2)}`} />
-                  <DetailRow label="Supplier" value={productData.supplier || 'N/A'} />
-                  <DetailRow label="Expiry" value={productData.expirydate || 'N/A'} />
-                </View>
-              </View>
+                {/* Godown Stock Section */}
+               {(godownLoading || (productData.goddown_stock && productData.goddown_stock.length > 0)) && (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Godown Stock</Text>
+                  </View>
+                  <View style={styles.detailsContainer}>
+                    {godownLoading ? (
+                      <ActivityIndicator color="#2E7D7A" style={{ paddingVertical: 16 }} />
+                    ) : productData.goddown_stock.map((item, index) => {
+                      const godown = godownList.find(g => g.goddownid === item.goddownid);
+                      const displayName = godown?.name || item.goddownid || 'Unknown';
+                      return (
+                        <View key={index} style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>{displayName}:</Text>
+                          <Text style={styles.detailValue}>{item.quantity} {productData.unit}</Text>
+                        </View>
+                      );
+                    })}
+                    </View>
+                  </View>
+                )}
+              </>
             )}
-
-            {/* Empty State */}
             {!productData && !loading && (
               <View style={styles.emptyState}>
                 <Ionicons 
@@ -1002,15 +1071,15 @@ export default function StockTrackerScreen() {
                 />
                 <Text style={styles.emptyText}>
                   {searchMode === 'barcode' 
-                    ? 'Enter barcode for exact match' 
-                    : 'Enter item name for fuzzy search'}
+                    ? 'Scan or enter a barcode to view product details'
+                    : 'Search for a product by name to get started'
+                  }
                 </Text>
-                <Text style={styles.dataSourceNote}>
-                  {dataSource === 'api' ? '🟢 Connected to server' : '🔴 Working offline'}
-                </Text>
-                <Text style={styles.productCount}>
-                  {allProducts.length} products loaded
-                </Text>
+                {allProducts.length > 0 && (
+                  <Text style={styles.productCount}>
+                    {allProducts.length.toLocaleString()} products available
+                  </Text>
+                )}
               </View>
             )}
           </ScrollView>
@@ -1019,68 +1088,76 @@ export default function StockTrackerScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-const DetailRow = ({ label, value, isHighlighted = false }: { 
-  label: string; 
-  value: string; 
-  isHighlighted?: boolean 
-}) => (
-  <View style={styles.detailRow}>
-    <Text style={styles.detailLabel}>{label} :</Text>
-    <Text style={[styles.detailValue, isHighlighted && styles.highlightedValue]}>
-      {value}
-    </Text>
-  </View>
-);
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
+  hiddenInput: {
+    height: 1,
+    width: 1,
+    opacity: 0,
+    position: 'absolute',
+  },
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'android' ? 45 : 44,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingTop: 20,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   backButton: {
-    padding: 8,
+    padding: 12,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#2E7D7A',
-    textAlign: 'center',
-    flex: 1,
+    fontWeight: '700',
+    color: '#333333',
+    letterSpacing: 0.5,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  syncButton: {
+    padding: 12,
   },
   searchButton: {
-    padding: 8,
+    padding: 12,
   },
   scannerContainer: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: 'black',
   },
   camera: {
     flex: 1,
   },
   scannerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+    backgroundColor: 'transparent',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   closeButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
+    top: 50,
     right: 20,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 20,
     padding: 8,
   },
@@ -1130,7 +1207,6 @@ const styles = StyleSheet.create({
   instructionsText: {
     color: 'white',
     fontSize: 16,
-    textAlign: 'center',
   },
   toggleContainer: {
     flexDirection: 'row',
@@ -1161,17 +1237,14 @@ const styles = StyleSheet.create({
   toggleButtonActive: {
     backgroundColor: '#2E7D7A',
   },
-  toggleIcon: {
-    marginRight: 6,
-  },
   toggleText: {
     fontSize: 14,
     fontWeight: '500',
     color: '#666666',
+    marginLeft: 6,
   },
   toggleTextActive: {
     color: '#FFFFFF',
-    fontWeight: '600',
   },
   searchSection: {
     backgroundColor: '#FFFFFF',
@@ -1225,21 +1298,8 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  variantsHeader: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 8,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#FFF9E6',
-    paddingVertical: 8,
-  },
   suggestionsList: {
     flex: 1,
-  },
-  suggestionsContentContainer: {
-    paddingBottom: 16,
   },
   suggestionItem: {
     flexDirection: 'row',
@@ -1257,7 +1317,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#333333',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   suggestionDetailsContainer: {
     flexDirection: 'row',
@@ -1271,16 +1331,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
-  },
-  detailChipMRP: {
-    backgroundColor: '#FFF3E0',
-  },
-  detailChipPrice: {
-    backgroundColor: '#E8F5E9',
-  },
-  detailChipBarcode: {
-    backgroundColor: '#F3E5F5',
-    maxWidth: 120,
   },
   detailChipLabel: {
     fontSize: 11,
@@ -1305,8 +1355,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 4,
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
   },
   clearButton: {
     flex: 1,
@@ -1342,18 +1390,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#2E7D7A',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   sectionTitle: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  liveData: {
-    color: '#FFB74D',
-    fontSize: 14,
     fontWeight: '600',
   },
   detailsContainer: {
@@ -1361,7 +1401,7 @@ const styles = StyleSheet.create({
   },
   detailRow: {
     flexDirection: 'row',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
@@ -1378,9 +1418,46 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'right',
   },
-  highlightedValue: {
-    color: '#FF9800',
+  emptyField: {
+    color: '#999999',
+    fontStyle: 'italic',
+    fontWeight: '400',
+  },
+  noPriceContainer: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    marginVertical: 8,
+  },
+  noPriceText: {
+    fontSize: 16,
     fontWeight: '700',
+    color: '#F57C00',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noPriceHint: {
+    fontSize: 13,
+    color: '#666666',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  syncNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2E7D7A',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  syncNowButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   emptyState: {
     padding: 40,
@@ -1393,17 +1470,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
   },
-  dataSourceNote: {
-    fontSize: 14,
-    color: '#2E7D7A',
-    textAlign: 'center',
-    marginTop: 8,
-    fontWeight: '500',
-  },
   productCount: {
     fontSize: 12,
     color: '#999999',
     textAlign: 'center',
-    marginTop: 4,
   },
 });
+

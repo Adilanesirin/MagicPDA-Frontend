@@ -341,19 +341,77 @@ export default function License() {
 
       // Check AsyncStorage for license activation status
       const licenseActivated = await AsyncStorage.getItem("licenseActivated");
+      const licenseType = await AsyncStorage.getItem("licenseType");
       const storedDeviceId = await AsyncStorage.getItem("deviceId");
       const storedLicenseKey = await AsyncStorage.getItem("licenseKey");
       const storedClientId = await AsyncStorage.getItem("clientId");
+      const demoLicenseKey = await AsyncStorage.getItem("demoLicenseKey");
+
       
       console.log("📱 Local License Status:");
       console.log("  - License Activated:", licenseActivated);
+      console.log("  - License Type:", licenseType);
       console.log("  - Stored Device ID:", storedDeviceId);
       console.log("  - Current Device ID:", id);
       console.log("  - License Key:", storedLicenseKey ? "exists" : "none");
+      console.log("  - Demo License Key:", demoLicenseKey ? "exists" : "none");
       console.log("  - Client ID:", storedClientId ? "exists" : "none");
       console.log("  - Device IDs Match:", storedDeviceId === id);
 
-      // FIXED: Handle device ID mismatch by SYNCING instead of rejecting
+
+    // ✅ NEW: Check for Demo License FIRST
+    if (licenseActivated === "true" && licenseType === "DEMO" && demoLicenseKey && storedClientId) {
+      console.log("🎭 Demo license found locally");
+      console.log("   Validating demo license with server...");
+      
+      // Validate demo license is still active
+      const demoValidation = await validateDemoLicense(demoLicenseKey);
+      
+      if (demoValidation.valid) {
+        console.log("✅ Demo license still valid");
+        console.log("   Company:", demoValidation.company);
+        console.log("   Expires:", demoValidation.expiresAt);
+        console.log("   Days remaining:", demoValidation.daysRemaining);
+        
+        // Update days remaining in storage
+        await AsyncStorage.setItem("demoDaysRemaining", String(demoValidation.daysRemaining));
+        
+        Toast.show({
+          type: "success",
+          text1: "Welcome Back! 🎭",
+          text2: `${demoValidation.company} - Demo Mode`,
+          visibilityTime: 2000,
+        });
+
+        setTimeout(() => {
+          router.replace("/(auth)/pairing");
+        }, 500);
+        return;
+      } else {
+        console.log("❌ Demo license expired or invalid");
+        console.log("   Message:", demoValidation.message);
+        
+        // Clear expired demo license
+        await AsyncStorage.multiRemove([
+          "licenseActivated",
+          "licenseType",
+          "demoLicenseKey",
+          "demoCompany",
+          "clientId",
+          "customerName",
+          "demoExpiresAt",
+          "demoDaysRemaining",
+          "demoStatus",
+        ]);
+        
+        Toast.show({
+          type: "error",
+          text1: "Demo License Expired",
+          text2: demoValidation.message || "Please activate a new license",
+        });
+      }
+    }
+ // FIXED: Handle device ID mismatch by SYNCING instead of rejecting
       if (storedDeviceId && storedDeviceId !== id) {
         console.log("⚠️ DEVICE ID MISMATCH DETECTED!");
         console.log("   Stored Device ID:", storedDeviceId);
@@ -491,13 +549,68 @@ export default function License() {
       setDeviceId(id);
     }
   };
+   const handleActivate = async () => {
+  if (!licenseKey.trim()) {
+    setLicenseError(true);
+    return;
+  }
 
-  const handleActivate = async () => {
-    if (!licenseKey.trim()) {
-      setLicenseError(true);
+  // ✅ REMOVE this if it exists - only validate once we know it's not a demo
+  // if (!deviceId) { ... }
+
+  setLoading(true);
+  setLicenseError(false);
+
+  try {
+    // Check if it's a demo license (starts with DEMO-)
+    const isDemoLicense = licenseKey.trim().toUpperCase().startsWith("DEMO-");
+
+    if (isDemoLicense) {
+      console.log("🎭 Demo license detected");
+      
+      const demoValidation = await validateDemoLicense(licenseKey.trim());
+
+      if (!demoValidation.valid) {
+        Toast.show({
+          type: "error",
+          text1: "Demo License Invalid",
+          text2: demoValidation.message,
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Store demo license data
+      await AsyncStorage.multiSet([
+        ["licenseActivated", "true"],
+        ["licenseType", "DEMO"],
+        ["demoLicenseKey", licenseKey.trim()],
+        ["demoCompany", demoValidation.company],
+        ["clientId", demoValidation.clientId],
+        ["customerName", demoValidation.company],
+        ["demoExpiresAt", demoValidation.expiresAt],
+        ["demoDaysRemaining", String(demoValidation.daysRemaining)],
+        ["demoStatus", "Active"],
+      ]);
+
+      console.log("✅ Demo license stored successfully");
+
+      Toast.show({
+        type: "success",
+        text1: "Demo Activated! 🎉",
+        text2: `Welcome ${demoValidation.company}! Expires in ${demoValidation.daysRemaining} days`,
+        visibilityTime: 3000,
+      });
+
+      setTimeout(() => {
+        router.replace("/(auth)/pairing");
+      }, 500);
+      setLoading(false);
       return;
     }
 
+    // ========== PRODUCTION LICENSE FLOW ==========
+    
     if (!deviceId) {
       Alert.alert(
         "Device ID Error",
@@ -513,189 +626,246 @@ export default function License() {
           { text: "OK" }
         ]
       );
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-    setLicenseError(false);
+    const CHECK_LICENSE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/`;
 
-    try {
-      const CHECK_LICENSE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/`;
+    console.log("=== LICENSE ACTIVATION START ===");
+    console.log("License Key:", licenseKey.trim());
+    console.log("Device ID:", deviceId);
+    console.log("Device Name:", deviceName);
+    console.log("Platform:", Platform.OS);
+    console.log("Is Physical Device:", Device.isDevice);
 
-      console.log("=== LICENSE ACTIVATION START ===");
-      console.log("License Key:", licenseKey.trim());
-      console.log("Device ID:", deviceId);
-      console.log("Device Name:", deviceName);
-      console.log("Platform:", Platform.OS);
-      console.log("Is Physical Device:", Device.isDevice);
+    const checkResponse = await fetch(CHECK_LICENSE_API, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
 
-      const checkResponse = await fetch(CHECK_LICENSE_API, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+    const checkData = await checkResponse.json();
 
-      const checkData = await checkResponse.json();
-
-      if (!checkResponse.ok || !checkData.success) {
-        Toast.show({
-          type: "error",
-          text1: "Validation Failed",
-          text2: checkData.message || "Failed to validate license.",
-        });
-        setLoading(false);
-        return;
-      }
-
-      if (!checkData.customers || checkData.customers.length === 0) {
-        Toast.show({
-          type: "error",
-          text1: "Invalid License",
-          text2: "No customer found for this license",
-        });
-        setLoading(false);
-        return;
-      }
-
-      const customer = checkData.customers.find(
-        (c: any) => c.license_key === licenseKey.trim()
-      );
-
-      if (!customer) {
-        Toast.show({
-          type: "error",
-          text1: "Invalid License",
-          text2: "The license key you entered is not valid",
-        });
-        setLoading(false);
-        return;
-      }
-
-      console.log("✅ License key valid for customer:", customer.customer_name);
-      console.log("Client ID:", customer.client_id);
-
-      const isAlreadyRegistered = customer.registered_devices?.some(
-        (device: any) => device.device_id === deviceId
-      );
-
-      if (isAlreadyRegistered) {
-        console.log("✅ Device already registered");
-        
-        const storeSuccess = await storeLicenseDataSafely({
-          licenseKey: licenseKey.trim(),
-          deviceId: deviceId,
-          customerName: customer.customer_name,
-          projectName: checkData.project_name,
-          clientId: customer.client_id,
-        });
-
-        if (!storeSuccess) {
-          Toast.show({
-            type: "error",
-            text1: "Storage Error",
-            text2: "Failed to save license data. Please try again.",
-          });
-          setLoading(false);
-          return;
-        }
-
-        Toast.show({
-          type: "success",
-          text1: "Already Registered",
-          text2: `Welcome back ${customer.customer_name}!`,
-        });
-
-        setTimeout(() => {
-          router.replace("/(auth)/pairing");
-        }, 500);
-        setLoading(false);
-        return;
-      }
-
-      if (
-        customer.license_summary.registered_count >=
-        customer.license_summary.max_devices
-      ) {
-        Toast.show({
-          type: "error",
-          text1: "License Limit Reached",
-          text2: `Maximum devices (${customer.license_summary.max_devices}) already registered`,
-        });
-        setLoading(false);
-        return;
-      }
-
-      console.log("📝 Registering new device...");
-      const registrationPayload = {
-        license_key: licenseKey.trim(),
-        device_id: deviceId,
-        device_name: deviceName,
-        client_id: customer.client_id
-      };
-      console.log(JSON.stringify(registrationPayload, null, 2));
-
-      const POST_DEVICE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/license/register/`;
-
-      const deviceResponse = await fetch(POST_DEVICE_API, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(registrationPayload),
-      });
-
-      const deviceData = await deviceResponse.json();
-      console.log("Registration response:", deviceData);
-
-      if (deviceResponse.ok && deviceData.success) {
-        console.log("✅ Device registered successfully");
-        
-        const storeSuccess = await storeLicenseDataSafely({
-          licenseKey: licenseKey.trim(),
-          deviceId: deviceId,
-          customerName: customer.customer_name,
-          projectName: checkData.project_name,
-          clientId: customer.client_id,
-        });
-
-        if (!storeSuccess) {
-          Toast.show({
-            type: "error",
-            text1: "Storage Error",
-            text2: "Registration succeeded but failed to save. Please activate again.",
-          });
-          setLoading(false);
-          return;
-        }
-
-        Toast.show({
-          type: "success",
-          text1: "Success! 🎉",
-          text2: `Welcome ${customer.customer_name}!`,
-        });
-
-        setTimeout(() => {
-          router.replace("/(auth)/pairing");
-        }, 500);
-      } else {
-        Toast.show({
-          type: "error",
-          text1: "Registration Failed",
-          text2: deviceData.message || "Failed to register device.",
-        });
-      }
-    } catch (error: any) {
-      console.error("Activation error:", error);
+    if (!checkResponse.ok || !checkData.success) {
       Toast.show({
         type: "error",
-        text1: "Connection Error",
-        text2: "Network error. Please check your connection.",
+        text1: "Validation Failed",
+        text2: checkData.message || "Failed to validate license.",
       });
-    } finally {
       setLoading(false);
+      return;
     }
-  };
+
+    if (!checkData.customers || checkData.customers.length === 0) {
+      Toast.show({
+        type: "error",
+        text1: "Invalid License",
+        text2: "No customer found for this license",
+      });
+      setLoading(false);
+      return;
+    }
+
+    const customer = checkData.customers.find(
+      (c: any) => c.license_key === licenseKey.trim()
+    );
+
+    if (!customer) {
+      Toast.show({
+        type: "error",
+        text1: "Invalid License",
+        text2: "The license key you entered is not valid",
+      });
+      setLoading(false);
+      return;
+    }
+
+    console.log("✅ License key valid for customer:", customer.customer_name);
+    console.log("Client ID:", customer.client_id);
+
+    const isAlreadyRegistered = customer.registered_devices?.some(
+      (device: any) => device.device_id === deviceId
+    );
+
+    if (isAlreadyRegistered) {
+      console.log("✅ Device already registered");
+      
+      const storeSuccess = await storeLicenseDataSafely({
+        licenseKey: licenseKey.trim(),
+        deviceId: deviceId,
+        customerName: customer.customer_name,
+        projectName: checkData.project_name,
+        clientId: customer.client_id,
+      });
+
+      if (!storeSuccess) {
+        Toast.show({
+          type: "error",
+          text1: "Storage Error",
+          text2: "Failed to save license data. Please try again.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      Toast.show({
+        type: "success",
+        text1: "Already Registered",
+        text2: `Welcome back ${customer.customer_name}!`,
+      });
+
+      setTimeout(() => {
+        router.replace("/(auth)/pairing");
+      }, 500);
+      setLoading(false);
+      return;
+    }
+
+    if (
+      customer.license_summary.registered_count >=
+      customer.license_summary.max_devices
+    ) {
+      Toast.show({
+        type: "error",
+        text1: "License Limit Reached",
+        text2: `Maximum devices (${customer.license_summary.max_devices}) already registered`,
+      });
+      setLoading(false);
+      return;
+    }
+
+    console.log("📝 Registering new device...");
+    const registrationPayload = {
+      license_key: licenseKey.trim(),
+      device_id: deviceId,
+      device_name: deviceName,
+      client_id: customer.client_id
+    };
+    console.log(JSON.stringify(registrationPayload, null, 2));
+
+    const POST_DEVICE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/license/register/`;
+
+    const deviceResponse = await fetch(POST_DEVICE_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(registrationPayload),
+    });
+
+    const deviceData = await deviceResponse.json();
+    console.log("Registration response:", deviceData);
+
+    if (deviceResponse.ok && deviceData.success) {
+      console.log("✅ Device registered successfully");
+      
+      const storeSuccess = await storeLicenseDataSafely({
+        licenseKey: licenseKey.trim(),
+        deviceId: deviceId,
+        customerName: customer.customer_name,
+        projectName: checkData.project_name,
+        clientId: customer.client_id,
+      });
+
+      if (!storeSuccess) {
+        Toast.show({
+          type: "error",
+          text1: "Storage Error",
+          text2: "Registration succeeded but failed to save. Please activate again.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      Toast.show({
+        type: "success",
+        text1: "Success! 🎉",
+        text2: `Welcome ${customer.customer_name}!`,
+      });
+
+      setTimeout(() => {
+        router.replace("/(auth)/pairing");
+      }, 500);
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Registration Failed",
+        text2: deviceData.message || "Failed to register device.",
+      });
+    }
+  } catch (error: any) {
+    console.error("Activation error:", error);
+    Toast.show({
+      type: "error",
+      text1: "Connection Error",
+      text2: "Network error. Please check your connection.",
+    });
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  const validateDemoLicense = async (demoKey: string) => {
+  try {
+    const CHECK_LICENSE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/`;
+    
+    console.log("🎭 Validating demo license:", demoKey);
+    
+    const response = await fetch(CHECK_LICENSE_API, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      return { valid: false, message: "Failed to validate demo license" };
+    }
+
+    if (!data.demo_licenses || data.demo_licenses.length === 0) {
+      return { valid: false, message: "No demo licenses available" };
+    }
+
+    const demoLicense = data.demo_licenses.find(
+      (d: any) => d.demo_license === demoKey.trim()
+    );
+
+    if (!demoLicense) {
+      return { valid: false, message: "Invalid demo license key" };
+    }
+
+    // Check if demo is active
+    if (demoLicense.status.toLowerCase() !== "active") {
+      return { valid: false, message: `Demo license is ${demoLicense.status}` };
+    }
+
+    // Check if expired
+    const expiryDate = new Date(demoLicense.expires_at);
+    const today = new Date();
+    if (expiryDate < today) {
+      return { valid: false, message: "Demo license has expired" };
+    }
+
+    // Calculate days remaining
+    const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    console.log("✅ Demo license valid:", demoLicense.company);
+    return {
+      valid: true,
+      company: demoLicense.company,
+      clientId: demoLicense.client_id,
+      demoLicense: demoLicense.demo_license,
+      expiresAt: demoLicense.expires_at,
+      daysRemaining: daysRemaining,
+    };
+  } catch (error) {
+    console.error("Demo validation error:", error);
+    return { valid: false, message: "Network error during demo validation" };
+  }
+};
 
   const handleSocialLink = async (url: string) => {
     try {

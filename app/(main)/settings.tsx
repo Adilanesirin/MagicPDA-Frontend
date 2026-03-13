@@ -283,6 +283,78 @@ export default function Settings() {
     }
   };
 
+
+  const handleClearLicense = () => {
+  Alert.alert(
+    "Clear License",
+    "This will clear your current license and log you out. You'll need to activate a new license.\n\nAre you sure?",
+    [
+      {
+        text: "Cancel",
+        style: "cancel"
+      },
+      {
+        text: "Clear License",
+        style: "destructive",
+        onPress: confirmClearLicense
+      }
+    ]
+  );
+};
+
+const confirmClearLicense = async () => {
+  try {
+    console.log("🔄 Clearing license data...");
+
+    // Clear all license data (both demo and production)
+    await AsyncStorage.multiRemove([
+      "licenseActivated",
+      "licenseType",
+      "licenseKey",
+      "demoLicenseKey",
+      "demoCompany",
+      "deviceId",
+      "license_device_id",
+      "customerName",
+      "projectName",
+      "clientId",
+      "demoExpiresAt",
+      "demoDaysRemaining",
+      "demoStatus",
+      "pairing_ip",
+      "server_ip",
+      "base_url",
+    ]);
+
+    // Clear auth tokens
+    await SecureStore.deleteItemAsync("authToken");
+    await SecureStore.deleteItemAsync("userId");
+    await SecureStore.deleteItemAsync("paired_ip");
+    await AsyncStorage.removeItem("userLoggedIn");
+
+    console.log("✅ License cleared successfully");
+
+    Toast.show({
+      type: "success",
+      text1: "License Cleared",
+      text2: "Please activate a new license",
+      visibilityTime: 3000,
+    });
+
+    // Navigate to license screen
+    setTimeout(() => {
+      router.replace("/(auth)/license");
+    }, 1500);
+  } catch (error) {
+    console.error("Error clearing license:", error);
+    Toast.show({
+      type: "error",
+      text1: "Error",
+      text2: "Failed to clear license data",
+    });
+  }
+};
+
   return (
     <View style={styles.container}>
       {/* Back Button */}
@@ -517,7 +589,30 @@ export default function Settings() {
               ⚠️ Removing license will deactivate this device and log you out
             </Text>
           </View>
-        )}
+        )} 
+
+        {/* Clear License Section */}
+<View style={styles.card}>
+  <Text style={styles.cardTitle}>Clear License</Text>
+  <Text style={styles.cardSubtitle}>
+    Remove current license and return to activation screen
+  </Text>
+
+  <TouchableOpacity
+    style={styles.clearLicenseButton}
+    onPress={handleClearLicense}
+  >
+    <Ionicons name="key-outline" size={20} color="#DC2626" />
+    <Text style={styles.clearLicenseButtonText}>Clear License</Text>
+  </TouchableOpacity>
+
+  <View style={styles.clearLicenseWarning}>
+    <Ionicons name="warning-outline" size={16} color="#F59E0B" />
+    <Text style={styles.clearLicenseWarningText}>
+      This will remove your license and log you out. Use this to switch between demo and production licenses.
+    </Text>
+  </View>
+</View>
 
         {/* Footer */}
         <View style={styles.footer}>
@@ -777,4 +872,37 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     textAlign: "center",
   },
+  clearLicenseButton: {
+  padding: 16,
+  borderRadius: 12,
+  borderWidth: 2,
+  borderColor: "#FECACA",
+  backgroundColor: "#FEF2F2",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  marginBottom: 12,
+},
+clearLicenseButtonText: {
+  marginLeft: 8,
+  fontWeight: "600",
+  color: "#DC2626",
+  fontSize: 16,
+},
+clearLicenseWarning: {
+  flexDirection: "row",
+  alignItems: "flex-start",
+  backgroundColor: "#FEF3C7",
+  padding: 12,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: "#FDE68A",
+  gap: 8,
+},
+clearLicenseWarningText: {
+  fontSize: 12,
+  color: "#92400E",
+  flex: 1,
+  lineHeight: 16,
+},
 });

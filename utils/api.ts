@@ -1,4 +1,5 @@
 // utils/api.ts
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
@@ -91,7 +92,9 @@ export async function testConnectionEnhanced(ip: string): Promise<boolean> {
 // Enhanced API creation with SELECTIVE cache-busting for downloads only
 export async function createEnhancedAPI() {
   try {
-    const ip = await SecureStore.getItemAsync("paired_ip");
+    const ip = await SecureStore.getItemAsync("paired_ip")||
+               await AsyncStorage.getItem("pairing_ip") ||
+               await AsyncStorage.getItem("server_ip");
     const token = await SecureStore.getItemAsync("token");
 
     if (!ip) {
@@ -227,7 +230,9 @@ export async function createEnhancedAPI() {
 // Special API creator for downloads
 export async function createDownloadAPI() {
   try {
-    const ip = await SecureStore.getItemAsync("paired_ip");
+    const ip = await SecureStore.getItemAsync("paired_ip")||
+               await AsyncStorage.getItem("pairing_ip") ||
+               await AsyncStorage.getItem("server_ip");
     const token = await SecureStore.getItemAsync("token");
 
     if (!ip) {

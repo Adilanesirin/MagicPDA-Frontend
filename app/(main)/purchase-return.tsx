@@ -1,4 +1,4 @@
-import { getPendingGRNOrders } from "@/utils/sync";
+import { getPendingReturns } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,63 +16,57 @@ import {
   View,
 } from "react-native";
 
-const grnRoutes = [
+const returnRoutes = [
   {
-    name: "GRN Entry",
-    icon: "clipboard-outline",
-    path: "/(main)/grn-entry",
-    subtitle: "Add GRN items",
-    gradient: ["#f6b749", "#f6b749"],
+    name: "Entry",
+    icon: "return-up-back-outline",
+    path: "/(main)/purchase-return-entry",
+    subtitle: "Add return items",
+    gradient: ["#7f3232", "#7f3232"],
     requiresNoUpload: true,
   },
   {
-    name: "GRN Upload",
+    name: "Upload",
     icon: "cloud-upload-outline",
-    path: "/(main)/grn-upload",
-    subtitle: "Sync GRN data",
-    gradient: ["#8fa956", "#8fa956"],
+    path: "/(main)/purchase-return-upload",
+    subtitle: "Sync return data",
+    gradient: ["#17789b", "#17789b"],
     showPending: true,
-  },
-  {
-    name: "GRN Report",
-    icon: "analytics-outline",
-    path: "/(main)/grn-report",
-    subtitle: "View GRN history",
-    gradient: ["#5bab8f", "#5bab8f"],
-    showPending: false,
   },
 ];
 
-export default function GRNScreen() {
+export default function PurchaseReturnScreen() {
   const router = useRouter();
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingItems, setPendingItems] = useState(0);
 
   const loadPendingCount = async () => {
     try {
-      const orders = await getPendingGRNOrders();
-      const ordersArray = Array.isArray(orders) ? orders : [];
+      const returns = await getPendingReturns();
+      const returnsArray = Array.isArray(returns) ? returns : [];
       
-      console.log("📊 Pending GRN orders:", ordersArray.length);
-      console.log("📦 Sample GRN order:", ordersArray[0]);
+      console.log("📊 Pending returns:", returnsArray.length);
+      console.log("📦 Sample return:", returnsArray[0]);
       
-      setPendingCount(ordersArray.length);
+      setPendingCount(returnsArray.length);
       
-      const totalItems = ordersArray.reduce((acc, order) => {
-        const qty = parseInt(order.quantity) || 0;
-        console.log(`GRN Order ${order.id}: quantity = ${qty}`);
+      // Calculate total items - sum up all quantities
+      const totalItems = returnsArray.reduce((acc, returnItem) => {
+        const qty = parseInt(returnItem.quantity) || 0;
+        console.log(`Return ${returnItem.id}: quantity = ${qty}`);
         return acc + qty;
       }, 0);
       
-      console.log("📊 Total pending GRN items:", totalItems);
+      console.log("📊 Total pending return items:", totalItems);
       setPendingItems(totalItems);
     } catch (error) {
-      console.error("Error loading pending GRN count:", error);
+      console.error("Error loading pending return count:", error);
       setPendingCount(0);
       setPendingItems(0);
     }
   };
 
+  // Refresh pending count when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadPendingCount();
@@ -83,14 +77,15 @@ export default function GRNScreen() {
     router.back();
   };
 
-  const handleRoutePress = (route: typeof grnRoutes[0]) => {
+  const handleRoutePress = (route: typeof returnRoutes[0]) => {
+    // Check if this route requires no pending uploads
     if (route.requiresNoUpload && (pendingCount > 0 || pendingItems > 0)) {
       Alert.alert(
         "Upload Pending",
         `You have ${pendingCount > 0 
-          ? `${pendingCount} pending ${pendingCount === 1 ? 'GRN' : 'GRNs'}` 
+          ? `${pendingCount} pending ${pendingCount === 1 ? 'return' : 'returns'}` 
           : `${pendingItems} pending ${pendingItems === 1 ? 'item' : 'items'}`
-        } waiting to be uploaded.\n\nPlease upload your pending data before adding new entries.`,
+        } waiting to be uploaded.\n\nPlease upload your pending data before adding new return entries.`,
         [
           {
             text: "Cancel",
@@ -98,13 +93,14 @@ export default function GRNScreen() {
           },
           {
             text: "Go to Upload",
-            onPress: () => router.push("/(main)/grn-upload")
+            onPress: () => router.push("/(main)/purchase-return-upload")
           }
         ]
       );
       return;
     }
 
+    // Navigate to the route
     router.push(route.path);
   };
 
@@ -112,11 +108,12 @@ export default function GRNScreen() {
     <View style={styles.container}>
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color="#3B82F6" />
+          <Ionicons name="arrow-back" size={22} color="#DC2626" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>GRN (Goods Receipt Note)</Text>
+        <Text style={styles.headerTitle}>Purchase Return</Text>
       </View>
 
       <ScrollView
@@ -124,15 +121,17 @@ export default function GRNScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Section Title */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Actions</Text>
+          <Text style={styles.sectionTitle}>Return Actions</Text>
           <Text style={styles.sectionSubtitle}>
-            Manage your GRN workflow
+            Manage your purchase return workflow
           </Text>
         </View>
 
+        {/* Vertical Card List */}
         <View style={styles.columnContainer}>
-          {grnRoutes.map((route) => {
+          {returnRoutes.map((route) => {
             const isBlocked = route.requiresNoUpload && (pendingCount > 0 || pendingItems > 0);
             
             return (
@@ -160,7 +159,7 @@ export default function GRNScreen() {
                     <Ionicons
                       name={route.icon}
                       size={34}
-                      color={isBlocked ? "#9CA3AF" : "#2563EB"}
+                      color={isBlocked ? "#9CA3AF" : "#EF4444"}
                       style={styles.iconGlow}
                     />
                   </View>
@@ -170,7 +169,7 @@ export default function GRNScreen() {
                     {isBlocked && (
                       <View style={styles.blockedBadgeContainer}>
                         <View style={styles.blockedBadge}>
-                          <Ionicons name="alert-circle" size={14} color="#EF4444" style={{ marginRight: 4 }} />
+                          <Ionicons name="alert-circle" size={14} color="#DC2626" style={{ marginRight: 4 }} />
                           <Text style={styles.blockedText}>
                             Upload required first
                           </Text>
@@ -182,7 +181,7 @@ export default function GRNScreen() {
                         <View style={styles.pendingBadge}>
                           <Text style={styles.pendingText}>
                             {pendingCount > 0 
-                              ? `Upload pending: ${pendingCount} ${pendingCount === 1 ? 'GRN' : 'GRNs'}`
+                              ? `Upload pending: ${pendingCount} ${pendingCount === 1 ? 'return' : 'returns'}`
                               : `Upload pending: ${pendingItems} ${pendingItems === 1 ? 'item' : 'items'}`
                             }
                           </Text>
@@ -196,28 +195,29 @@ export default function GRNScreen() {
           })}
         </View>
 
+        {/* Info Banner - Updated text */}
         <View style={styles.infoCard}>
           <Ionicons
             name="information-circle-outline"
             size={20}
-            color="#EC4899"
+            color="#DC2626"
           />
           <Text style={styles.infoText}>
             {(pendingCount > 0 || pendingItems > 0) ? (
               <>
-                <Text style={styles.bold}>Upload pending GRN data</Text> before adding new entries. 
-                Use <Text style={styles.bold}>GRN Upload</Text> to sync with server first.
+                <Text style={styles.bold}>Upload pending return data</Text> before adding new entries. 
+                Use <Text style={styles.bold}>Upload</Text> to sync with server first.
               </>
             ) : (
               <>
-                Use <Text style={styles.bold}>GRN Entry</Text> to add goods receipt items,{" "}
-                <Text style={styles.bold}>GRN Upload</Text> to sync with server, and{" "}
-                <Text style={styles.bold}>GRN Report</Text> to view history.
+                Use <Text style={styles.bold}>Entry</Text> to add return items and{" "}
+                <Text style={styles.bold}>Upload</Text> to sync with server.
               </>
             )}
           </Text>
         </View>
 
+        {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>Powered by IMC Business Solutions</Text>
         </View>
@@ -227,34 +227,39 @@ export default function GRNScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB" },
+  container: { flex: 1, backgroundColor: "#fffefe" },
+
   header: {
     backgroundColor: "white",
     paddingTop: Platform.OS === "android" ? 55 : 50,
     paddingBottom: 15,
     paddingHorizontal: 16,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: "#FECACA",
     flexDirection: "row",
     alignItems: "center",
   },
   backButton: {
     padding: 6,
     borderRadius: 20,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#FEE2E2",
     marginRight: 12,
   },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: "#111827" },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: "#7F1D1D" },
+
   scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 50, paddingHorizontal: 20 },
+
   sectionHeader: { marginTop: 20, marginBottom: 20 },
-  sectionTitle: { fontSize: 22, fontWeight: "700", color: "#111827" },
-  sectionSubtitle: { fontSize: 14, color: "#6B7280", marginTop: 4 },
+  sectionTitle: { fontSize: 22, fontWeight: "700", color: "#7F1D1D" },
+  sectionSubtitle: { fontSize: 14, color: "#991B1B", marginTop: 4 },
+
   columnContainer: {
     flexDirection: "column",
     gap: 20,
     marginBottom: 30,
   },
+
   vCard: {
     borderRadius: 20,
     overflow: "hidden",
@@ -274,14 +279,16 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     position: 'relative',
   },
+
   blockedOverlay: {
     position: 'absolute',
     top: 12,
     right: 12,
     zIndex: 1,
   },
+
   iconWrapper: {
-    backgroundColor: "rgba(255,255,255,0.9)",
+    backgroundColor: "rgb(255, 255, 255)",
     padding: 16,
     borderRadius: 40,
     alignItems: "center",
@@ -306,6 +313,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "rgba(255,255,255,0.95)",
   },
+
   blockedBadgeContainer: {
     marginTop: 8,
   },
@@ -325,8 +333,9 @@ const styles = StyleSheet.create({
   blockedText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#EF4444",
+    color: "#DC2626",
   },
+
   pendingBadgeContainer: {
     marginTop: 8,
   },
@@ -344,21 +353,23 @@ const styles = StyleSheet.create({
   pendingText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#DC2626",
+    color: "#B91C1C",
   },
+
   infoCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FDF2F8",
+    backgroundColor: "#FEE2E2",
     borderRadius: 19,
     padding: 19,
     gap: 10,
     borderWidth: 1,
-    borderColor: "#FBCFE8",
+    borderColor: "#FCA5A5",
     marginBottom: 20,
   },
-  infoText: { fontSize: 13, color: "#374151", flex: 1, lineHeight: 18 },
-  bold: { fontWeight: "600", color: "#111827" },
+  infoText: { fontSize: 13, color: "#991B1B", flex: 1, lineHeight: 18 },
+  bold: { fontWeight: "600", color: "#7F1D1D" },
+
   footer: {
     alignItems: "center",
     paddingVertical: 16,
@@ -366,7 +377,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#8c8484",
     letterSpacing: 0.5,
   },
 });

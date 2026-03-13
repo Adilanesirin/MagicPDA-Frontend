@@ -1,6 +1,7 @@
-// Enhanced download functions with better authentication handling
+// utils/download.ts - COMPLETE VERSION WITH BOTH ENDPOINTS
 import { createDownloadAPI } from "@/utils/api";
 import {
+  getLocalDataStats,
   saveMasterData,
   saveProductData
 } from "@/utils/sync";
@@ -59,7 +60,7 @@ export const clearDownloadArtifacts = async () => {
 // Check authentication status
 export const checkAuthenticationStatus = async () => {
   try {
-    console.log("🔐 Checking authentication status...");
+    console.log("🔍 Checking authentication status...");
     
     const tokenChecks = {
       access_token: await SecureStore.getItemAsync('access_token'),
@@ -77,7 +78,7 @@ export const checkAuthenticationStatus = async () => {
     
     let accessToken = tokenChecks.token || tokenChecks.access_token;
     
-    console.log("🔐 Final Auth Status:", {
+    console.log("🔍 Final Auth Status:", {
       hasAccessToken: !!accessToken,
       hasRefreshToken: !!tokenChecks.refresh_token,
       accessTokenLength: accessToken?.length || 0,
@@ -95,10 +96,10 @@ export const checkAuthenticationStatus = async () => {
   }
 };
 
-// Enhanced download function with better auth handling
+// Download from any endpoint with authentication
 export async function downloadFromEndpointWithAuth(path: string) {
   try {
-    console.log("🌐 Downloading from endpoint with auth:", path);
+    console.log("🌐 Downloading from endpoint:", path);
     
     // Check authentication first
     await checkAuthenticationStatus();
@@ -106,34 +107,27 @@ export async function downloadFromEndpointWithAuth(path: string) {
     const api = await createDownloadAPI();
     const url = `${path}?cb=${Date.now()}`;
     
-    console.log("📤 API Request Details:", {
-      url: api.defaults?.baseURL + url,
-      hasAuth: !!(api.defaults?.headers?.common?.Authorization || api.defaults?.headers?.Authorization)
-    });
+    console.log("📤 Request:", api.defaults?.baseURL + url);
     
     const res = await api.get(url, { 
       headers: { "Cache-Control": "no-cache" }, 
       timeout: 120000 
     });
     
-    if (!res || !res.data) throw new Error("Empty response from server");
+    if (!res || !res.data) {
+      throw new Error("Empty response from server");
+    }
     
-    console.log("📥 API Response Details:", {
-      status: res.status,
-      hasData: !!res.data,
-      dataKeys: res.data ? Object.keys(res.data) : 'no data'
-    });
+    console.log("📥 Response status:", res.status);
     
-    // Check for authentication errors in response
     if (res.status === 401 || (res.data && res.data.detail === "Token missing")) {
       throw new Error("Authentication failed. Please login again.");
     }
     
     return res.data;
   } catch (error: any) {
-    console.error("downloadFromEndpointWithAuth failed:", error?.message ?? error);
+    console.error(`❌ Download failed from ${path}:`, error?.message);
     
-    // Handle specific auth errors
     if (error?.response?.status === 401 || error?.message?.includes("Token missing")) {
       throw new Error("Authentication failed. Please login again.");
     }
@@ -142,34 +136,21 @@ export async function downloadFromEndpointWithAuth(path: string) {
   }
 }
 
-// Enhanced process function with better data structure handling
-export async function processDownloadedDataEnhanced(data: any) {
+// Process master data from /data-download endpoint
+function processMasterData(data: any): any[] {
   try {
-    if (!data) throw new Error("No data to process");
-
-    console.log("🔍 Raw API Response Structure:", {
-      hasData: !!data,
-      dataKeys: data ? Object.keys(data) : 'no data',
-      dataType: typeof data,
-      isArray: Array.isArray(data)
-    });
-
-    // Handle different possible response structures
+    console.log("🔍 Processing master data...");
+    
     let actualData = data;
     
-    // If the response is wrapped in a 'data' property
+    // Unwrap nested data
     if (data.data && typeof data.data === 'object') {
       actualData = data.data;
-      console.log("🔍 Found nested data property, using that instead");
-    }
-    
-    // If the response has a 'result' property
-    if (data.result && typeof data.result === 'object') {
+    } else if (data.result && typeof data.result === 'object') {
       actualData = data.result;
-      console.log("🔍 Found result property, using that instead");
     }
 
-    // Check all possible variations for master data
+    // Find master data in various possible formats
     const masterVariations = [
       actualData.masterData,
       actualData.master,
@@ -181,114 +162,370 @@ export async function processDownloadedDataEnhanced(data: any) {
       actualData.supplier_data
     ].filter(Boolean);
 
-    // Check all possible variations for product data
-    const productVariations = [
-      actualData.productData,
-      actualData.products,
-      actualData.product,
-      actualData.product_data,
-      actualData.items,
-      actualData.inventory,
-      actualData.item_data,
-      actualData.stock_data
-    ].filter(Boolean);
-
-    console.log("🔍 Data variations found:", {
-      masterVariations: masterVariations.length,
-      productVariations: productVariations.length
-    });
-
-    // Find the first valid array for master data
     const master = masterVariations.find(variation => 
       Array.isArray(variation) && variation.length > 0
     ) || [];
-    
-    // Find the first valid array for product data
-    const product = productVariations.find(variation => 
-      Array.isArray(variation) && variation.length > 0
-    ) || [];
 
-    console.log("🔍 Final selected data:", {
-      masterCount: master.length,
-      productCount: product.length,
-      masterSample: master.length > 0 ? master[0] : 'no data',
-      productSample: product.length > 0 ? product[0] : 'no data'
-    });
-
-    if (master.length === 0 && product.length === 0) {
-      console.warn("⚠️ No data found in any expected format.");
-      
-      // Try to find any array in the response
-      const allArrays = Object.values(actualData).filter(item => Array.isArray(item));
-      if (allArrays.length > 0) {
-        console.log("🔍 Found arrays in response:", allArrays.map(arr => ({
-          key: Object.keys(actualData).find(key => actualData[key] === arr),
-          length: arr.length,
-          sample: arr[0]
-        })));
-      }
-    }
-
-    if (master.length > 0) {
-      console.log("💾 Saving master data...");
-      await saveMasterData(master);
-    }
-    
-    if (product.length > 0) {
-      console.log("💾 Saving product data...");
-      await saveProductData(product);
-    }
-
-    const total = master.length + product.length;
-    return { masterData: master, productData: product, totalRecords: total };
+    console.log(`✅ Found ${master.length} master records`);
+    return master;
   } catch (error) {
-    console.error("processDownloadedDataEnhanced error:", error?.message ?? error);
-    throw error;
+    console.error("❌ Error processing master data:", error);
+    return [];
   }
 }
 
-// Main download function with retry logic
+// Process product data from /product-details endpoint
+function processProductDetails(data: any): any[] {
+  try {
+    console.log("🔍 Processing product details...");
+    
+    let products: any[] = [];
+
+    // Handle different response structures
+    if (Array.isArray(data)) {
+      products = data;
+    } else if (data.data && Array.isArray(data.data)) {
+      products = data.data;
+    } else if (typeof data === 'string') {
+      products = JSON.parse(data);
+    } else if (data && typeof data === 'object') {
+      if (Array.isArray(data.products)) {
+        products = data.products;
+      } else if (Array.isArray(data.product_data)) {
+        products = data.product_data;
+      }
+    }
+
+    console.log(`✅ Found ${products.length} product records`);
+    return products;
+  } catch (error) {
+    console.error("❌ Error processing product details:", error);
+    return [];
+  }
+}
+
+// Transform product data to match database schema
+function transformProductData(products: any[]): any[] {
+  return products.map(product => {
+    // Extract prices from prices array if present
+    const prices = product.prices || [];
+    const costPrice = prices.find((p: any) => p.price_code === 'CO')?.value || product.cost || '0';
+    const mrpPrice = prices.find((p: any) => p.price_code === 'MR')?.value || product.bmrp || product.mrp || '0';
+    const retailPrice = prices.find((p: any) => p.price_code === 'S1')?.value || product.salesprice || '0';
+    const secondPrice = prices.find((p: any) => p.price_code === 'S2')?.value || product.secondprice || '0';
+    const thirdPrice = prices.find((p: any) => p.price_code === 'S3')?.value || product.thirdprice || '0';
+
+    return {
+      code: String(product.code || product.productcode || product.item_code || '').trim(),
+      name: String(product.name || product.item_name || 'Unknown').trim(),
+      barcode: String(product.barcode || product.code || '').trim(),
+      quantity: Number(product.quantity || product.stock || 0),
+      salesprice: parseFloat(retailPrice),
+      bmrp: parseFloat(mrpPrice),
+      cost: parseFloat(costPrice),
+      secondprice: parseFloat(secondPrice),
+      thirdprice: parseFloat(thirdPrice),
+      batch_supplier: product.supplier || product.batch_supplier || null,
+      category: String(product.category || product.catagory || '').trim(),
+      product: String(product.product || product.product_type || '').trim(),
+      brand: String(product.brand || product.brand_name || '').trim(),
+      unit: String(product.unit || product.unit_type || '').trim(),
+      taxcode: String(product.taxcode || product.gst || product.tax || '0').trim(),
+      productcode: String(product.productcode || product.product_code || '').trim(),
+      expirydate: product.expirydate || product.expiry_date || null,
+      prices: product.prices || []
+    };
+  });
+}
+
+// Main download function - Downloads from BOTH endpoints in parallel
 export const downloadWithRetry = async (maxRetries = 3) => {
   let lastError = null as any;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🚀 Download attempt ${attempt}/${maxRetries}`);
+      console.log(`\n🚀 ========================================`);
+      console.log(`🚀 Download Attempt ${attempt}/${maxRetries}`);
+      console.log(`🚀 ========================================\n`);
       
-      // Set download in progress
       downloadState.isInProgress = true;
       downloadState.startTime = Date.now();
       downloadState.lastError = null;
       
-      // Perform the actual download
-      const data = await downloadFromEndpointWithAuth('/data-download');
-      const result = await processDownloadedDataEnhanced(data);
+      // ==============================================
+      // STEP 1: DOWNLOAD FROM BOTH ENDPOINTS IN PARALLEL
+      // ==============================================
+      console.log("📦 STEP 1: Downloading from BOTH endpoints in parallel...\n");
       
-      // Mark as completed
+      const [dataDownloadResponse, productDetailsResponse] = await Promise.all([
+        downloadFromEndpointWithAuth('/data-download').catch(err => {
+          console.warn("⚠️ /data-download failed:", err.message);
+          return null;
+        }),
+        downloadFromEndpointWithAuth('/product-details').catch(err => {
+          console.warn("⚠️ /product-details failed:", err.message);
+          return null;
+        })
+      ]);
+      
+      console.log("\n📊 Download Results:");
+      console.log(`   /data-download: ${dataDownloadResponse ? '✅ Success' : '❌ Failed'}`);
+      console.log(`   /product-details: ${productDetailsResponse ? '✅ Success' : '❌ Failed'}`);
+      
+      // Check if at least one endpoint succeeded
+      if (!dataDownloadResponse && !productDetailsResponse) {
+        throw new Error("Both endpoints failed. Check your connection and try again.");
+      }
+      
+      // ==============================================
+      // STEP 2: PROCESS MASTER DATA
+      // ==============================================
+      console.log("\n📦 STEP 2: Processing master data...");
+      
+      let masterData: any[] = [];
+      
+      if (dataDownloadResponse) {
+        masterData = processMasterData(dataDownloadResponse);
+      }
+      
+      console.log(`✅ Master data: ${masterData.length} records`);
+      
+      // ==============================================
+      // STEP 3: PROCESS PRODUCT DATA & BUILD SUPPLIER MAP
+      // ==============================================
+      console.log("\n📦 STEP 3: Processing product data and building supplier map...");
+      
+      // Get products from /data-download (has supplier info)
+      let productsFromDataDownload: any[] = [];
+      if (dataDownloadResponse) {
+        const actualData = dataDownloadResponse.data || dataDownloadResponse.result || dataDownloadResponse;
+        const productVariations = [
+          actualData.productData,
+          actualData.products,
+          actualData.product,
+          actualData.product_data
+        ].filter(Boolean);
+        
+        productsFromDataDownload = productVariations.find(variation => 
+          Array.isArray(variation) && variation.length > 0
+        ) || [];
+        
+        console.log(`📦 Products from /data-download: ${productsFromDataDownload.length}`);
+      }
+      
+      // Build supplier mapping from /data-download products
+      const supplierMap = new Map<string, string>();
+      for (const product of productsFromDataDownload) {
+        const code = String(product.code || product.productcode || '').trim();
+        const supplier = product.supplier || product.batch_supplier || null;
+        if (code && supplier) {
+          supplierMap.set(code, supplier);
+        }
+      }
+      console.log(`📋 Built supplier map with ${supplierMap.size} entries`);
+      
+      // Get detailed products from /product-details
+      let productData: any[] = [];
+      
+      if (productDetailsResponse) {
+        productData = processProductDetails(productDetailsResponse);
+        console.log("✅ Using product data from /product-details");
+      } else if (productsFromDataDownload.length > 0) {
+        productData = productsFromDataDownload;
+        console.log("✅ Using product data from /data-download (fallback)");
+      }
+      
+      console.log(`✅ Product data: ${productData.length} records`);
+      
+      // ==============================================
+      // STEP 4: TRANSFORM PRODUCT DATA WITH SUPPLIER MAPPING
+      // ==============================================
+      console.log("\n📦 STEP 4: Transforming product data with supplier mapping...");
+      
+      const transformedProducts = productData.map(product => {
+        const code = String(product.code || product.productcode || '').trim();
+        
+        // Extract prices from prices array if present
+        const prices = product.prices || [];
+        const costPrice = prices.find((p: any) => p.price_code === 'CO')?.value || product.cost || '0';
+        const mrpPrice = prices.find((p: any) => p.price_code === 'MR')?.value || product.bmrp || product.mrp || '0';
+        const retailPrice = prices.find((p: any) => p.price_code === 'S1')?.value || product.salesprice || '0';
+        const secondPrice = prices.find((p: any) => p.price_code === 'S2')?.value || product.secondprice || '0';
+        const thirdPrice = prices.find((p: any) => p.price_code === 'S3')?.value || product.thirdprice || '0';
+
+        // Get supplier from map (priority) or from product itself
+        const supplier = supplierMap.get(code) || product.supplier || product.batch_supplier || null;
+
+        return {
+          code: code,
+          name: String(product.name || product.item_name || 'Unknown').trim(),
+          barcode: String(product.barcode || product.code || '').trim(),
+          quantity: Number(product.quantity || product.stock || 0),
+          salesprice: parseFloat(retailPrice),
+          bmrp: parseFloat(mrpPrice),
+          cost: parseFloat(costPrice),
+          secondprice: parseFloat(secondPrice),
+          thirdprice: parseFloat(thirdPrice),
+          batch_supplier: supplier,
+          category: String(product.category || product.catagory || '').trim(),
+          product: String(product.product || product.product_type || '').trim(),
+          brand: String(product.brand || product.brand_name || '').trim(),
+          unit: String(product.unit || product.unit_type || '').trim(),
+          taxcode: String(product.taxcode || product.gst || product.tax || '0').trim(),
+          productcode: String(product.productcode || product.product_code || '').trim(),
+          expirydate: product.expirydate || product.expiry_date || null,
+          prices: product.prices || []
+
+        };
+      });
+      
+      // Count products with suppliers
+      const productsWithSuppliers = transformedProducts.filter(p => p.batch_supplier).length;
+      console.log(`✅ Transformed ${transformedProducts.length} products`);
+      console.log(`📊 Products with suppliers: ${productsWithSuppliers}/${transformedProducts.length}`);
+      
+      if (transformedProducts.length > 0) {
+        console.log("\n📋 Sample products (first 3):");
+        transformedProducts.slice(0, 3).forEach((p, i) => {
+          console.log(`  ${i + 1}. ${p.code} - ${p.name}`);
+          console.log(`     Price: ₹${p.salesprice}, MRP: ₹${p.bmrp}, Stock: ${p.quantity}`);
+          console.log(`     Supplier: ${p.batch_supplier || 'N/A'}`);
+        });
+      }
+      
+      // ==============================================
+      // STEP 5: SAVE TO DATABASE
+      // ==============================================
+      console.log("\n💾 STEP 5: Saving to database...");
+      
+      if (masterData.length > 0) {
+        console.log(`💾 Saving ${masterData.length} master records...`);
+        await saveMasterData(masterData);
+        console.log("✅ Master data saved");
+      } else {
+        console.warn("⚠️ No master data to save");
+      }
+      
+      if (transformedProducts.length > 0) {
+        console.log(`💾 Saving ${transformedProducts.length} products...`);
+        await saveProductData(transformedProducts);
+        console.log("✅ Product data saved");
+      } else {
+        console.warn("⚠️ No product data to save");
+      }
+      
+      // ==============================================
+      // STEP 6: VERIFY DATABASE
+      // ==============================================
+      console.log("\n🔍 STEP 6: Verifying database...");
+      const stats = await getLocalDataStats();
+      
+      console.log("\n📊 Database Status:");
+      console.log(`   Master records: ${stats.masterCount}`);
+      console.log(`   Product records: ${stats.productCount}`);
+      console.log(`   Last synced: ${stats.lastSynced || 'Never'}`);
+      
       downloadState.isInProgress = false;
       downloadState.endTime = Date.now();
       
-      console.log(`✅ Download completed successfully on attempt ${attempt}`);
-      console.log(`📊 Download stats: ${result.totalRecords} records processed in ${downloadState.endTime - downloadState.startTime}ms`);
+      const result = {
+        masterData: masterData,
+        productData: transformedProducts,
+        totalRecords: masterData.length + transformedProducts.length
+      };
+      
+      console.log(`\n✅ ========================================`);
+      console.log(`✅ DOWNLOAD COMPLETED - Attempt ${attempt}`);
+      console.log(`✅ Master: ${masterData.length} records`);
+      console.log(`✅ Products: ${transformedProducts.length} records`);
+      console.log(`✅ Products with suppliers: ${productsWithSuppliers}`);
+      console.log(`✅ Total: ${result.totalRecords} records`);
+      console.log(`✅ Duration: ${downloadState.endTime - downloadState.startTime}ms`);
+      console.log(`✅ ========================================\n`);
       
       return result;
-    } catch (error) {
-      console.error(`❌ Download attempt ${attempt} failed:`, error?.message ?? error);
+      
+    } catch (error: any) {
+      console.error(`\n❌ Attempt ${attempt} failed:`, error?.message);
       lastError = error;
       downloadState.lastError = error?.message || 'Unknown error';
       
-      // Wait before retry (exponential backoff)
       if (attempt < maxRetries) {
         const delay = Math.pow(2, attempt) * 1000;
-        console.log(`⏳ Waiting ${delay}ms before next retry...`);
+        console.log(`⏳ Retrying in ${delay}ms...\n`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
   
-  // All retries failed
   downloadState.isInProgress = false;
   downloadState.endTime = Date.now();
-  
   throw lastError || new Error("All download attempts failed");
+};
+// Fast download - memory optimized, frees arrays immediately after save
+export const downloadWithRetryFast = async (maxRetries = 3) => {
+  let lastError = null as any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`⚡ Fast download attempt ${attempt}/${maxRetries}`);
+
+      downloadState.isInProgress = true;
+      downloadState.startTime = Date.now();
+      downloadState.lastError = null;
+
+      const data = await downloadFromEndpointWithAuth('/data-download');
+
+      // Process master and product separately, free each after save
+      const { saveMasterDataFast, saveProductDataFast } = await import("@/utils/sync");
+
+      let masterCount = 0;
+      let productCount = 0;
+
+      // Extract master
+      let master = data?.masterData || data?.master || data?.masters || 
+                   data?.master_data || data?.suppliers || [];
+      if (!Array.isArray(master)) master = [];
+
+      // Save master then free it
+      if (master.length > 0) {
+        masterCount = master.length;
+        await saveMasterDataFast(master);
+        master = null; // free immediately
+      }
+
+      // Extract product
+      let product = data?.productData || data?.products || data?.product || 
+                    data?.product_data || data?.items || [];
+      if (!Array.isArray(product)) product = [];
+
+      // Save product then free it
+      if (product.length > 0) {
+        productCount = product.length;
+        await saveProductDataFast(product);
+        product = null; // free immediately
+      }
+
+      downloadState.isInProgress = false;
+      downloadState.endTime = Date.now();
+
+      console.log(`⚡ Fast download done: master=${masterCount} product=${productCount}`);
+
+      return { masterCount, productCount, totalRecords: masterCount + productCount };
+
+    } catch (error: any) {
+      console.error(`❌ Fast download attempt ${attempt} failed:`, error?.message);
+      lastError = error;
+      downloadState.lastError = error?.message || 'Unknown error';
+
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  downloadState.isInProgress = false;
+  downloadState.endTime = Date.now();
+  throw lastError || new Error("All fast download attempts failed");
 };

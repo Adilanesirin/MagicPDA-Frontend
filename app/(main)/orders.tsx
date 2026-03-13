@@ -22,7 +22,7 @@ const orderRoutes = [
     icon: "document-text-outline",
     path: "/(main)/entry",
     subtitle: "Add products",
-    gradient: ["#6EE7B7", "#3B82F6"],
+    gradient: ["#22519c", "#22519c"],
     requiresNoUpload: true,
   },
   {
@@ -30,7 +30,7 @@ const orderRoutes = [
     icon: "cloud-upload-outline",
     path: "/(main)/upload",
     subtitle: "Sync data",
-    gradient: ["#FCD34D", "#F97316"],
+    gradient: ["#d77f40", "#d77f40"],
     showPending: true,
   },
 ];

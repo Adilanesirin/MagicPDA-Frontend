@@ -32,6 +32,7 @@ export default function Pairing() {
 
   const router = useRouter();
 
+
   const testPairing = async (
     ipAddress: string,
     pairPassword: string
@@ -103,7 +104,7 @@ export default function Pairing() {
         .replace(":8000", "")
         .trim();
 
-      console.log("🔐 Testing connection to:", cleanIP);
+      console.log("🔍 Testing connection to:", cleanIP);
 
       // First test if we can reach the server
       const canConnect = await testConnectionEnhanced(cleanIP);
@@ -222,136 +223,133 @@ export default function Pairing() {
                   marginBottom: 12,
                 }}
               />
-              <Text className="text-2xl font-bold mb-2 text-gray-800">
+               <Text className="text-2xl font-bold mb-2 text-gray-800">
                 TaskPMS
               </Text>
               <Text className="text-gray-600 mb-8 text-center">
                 Connect to your server
               </Text>
 
-              {/* Main Form Card */}
               <View className="w-full max-w-[360px] bg-white rounded-2xl p-6 shadow-lg">
-                <Text className="text-center text-blue-600 text-xl font-semibold mb-6">
-                  Server Connection
-                </Text>
 
-                {/* Connection Icon */}
-                <View className="items-center mb-6">
-                  <Ionicons name="server" size={48} color="#FB923C" />
-                  <Text className="text-gray-600 text-center mt-3">
-                    Enter your server details below
-                  </Text>
-                </View>
-
-                {/* Form Fields */}
-                <View className="gap-y-5">
-                  {/* IP Address Field */}
-                  <View>
-                    <Text className="text-gray-700 font-semibold mb-2">
-                      Server IP Address
-                    </Text>
-                    <TextInput
-                      value={ip}
-                      onChangeText={(text) => {
-                        setIp(text);
-                        setIpError(false);
-                      }}
-                      placeholder="192.168.1.37"
-                      keyboardType="decimal-pad"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      className={`border rounded-lg px-4 py-4 text-base bg-white ${
-                        ipError ? "border-red-400" : "border-orange-300"
-                      }`}
-                    />
-                    {ipError && (
-                      <Text className="text-red-500 text-sm mt-1">
-                        Please enter a valid IP address
-                      </Text>
-                    )}
-                    <Text className="text-gray-500 text-xs mt-1">
-                      Example: 192.168.1.100 (no http:// or :8000)
+                  {/* Connection Icon */}
+                  <View className="items-center mb-6">
+                    <Ionicons name="server" size={48} color="#FB923C" />
+                    <Text className="text-gray-600 text-center mt-3">
+                      Enter your server details below
                     </Text>
                   </View>
 
-                  {/* Password Field */}
-                  <View>
-                    <Text className="text-gray-700 font-semibold mb-2">
-                      Pairing Password
-                    </Text>
-                    <View className="relative">
+                  {/* Form Fields */}
+                  <View className="gap-y-5">
+                    {/* IP Address Field */}
+                    <View>
+                      <Text className="text-gray-700 font-semibold mb-2">
+                        Server IP Address
+                      </Text>
                       <TextInput
-                        value={password}
+                        value={ip}
                         onChangeText={(text) => {
-                          setPassword(text);
-                          setPasswordError(false);
+                          setIp(text);
+                          setIpError(false);
                         }}
-                        placeholder="Enter pairing password"
-                        secureTextEntry={!showPassword}
+                        placeholder="192.168.1.37"
+                        keyboardType="decimal-pad"
                         autoCapitalize="none"
                         autoCorrect={false}
-                        className={`border rounded-lg px-4 py-4 pr-12 text-base bg-white ${
-                          passwordError ? "border-red-400" : "border-orange-300"
+                        className={`border rounded-lg px-4 py-4 text-base bg-white ${
+                          ipError ? "border-red-400" : "border-orange-300"
                         }`}
                       />
-                      <TouchableOpacity
-                        className="absolute right-4 top-4"
-                        onPress={() => setShowPassword((prev) => !prev)}
-                      >
-                        <Ionicons
-                          name={showPassword ? "eye-off" : "eye"}
-                          size={22}
-                          color="#666"
-                        />
-                      </TouchableOpacity>
+                      {ipError && (
+                        <Text className="text-red-500 text-sm mt-1">
+                          Please enter a valid IP address
+                        </Text>
+                      )}
+                      <Text className="text-gray-500 text-xs mt-1">
+                        Example: 192.168.1.100 (no http:// or :8000)
+                      </Text>
                     </View>
-                    {passwordError && (
-                      <Text className="text-red-500 text-sm mt-1">
-                        Password is required
+
+                    {/* Password Field */}
+                    <View>
+                      <Text className="text-gray-700 font-semibold mb-2">
+                        Pairing Password
+                      </Text>
+                      <View className="relative">
+                        <TextInput
+                          value={password}
+                          onChangeText={(text) => {
+                            setPassword(text);
+                            setPasswordError(false);
+                          }}
+                          placeholder="Enter pairing password"
+                          secureTextEntry={!showPassword}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          className={`border rounded-lg px-4 py-4 pr-12 text-base bg-white ${
+                            passwordError ? "border-red-400" : "border-orange-300"
+                          }`}
+                        />
+                        <TouchableOpacity
+                          className="absolute right-4 top-4"
+                          onPress={() => setShowPassword((prev) => !prev)}
+                        >
+                          <Ionicons
+                            name={showPassword ? "eye-off" : "eye"}
+                            size={22}
+                            color="#666"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                      {passwordError && (
+                        <Text className="text-red-500 text-sm mt-1">
+                          Password is required
+                        </Text>
+                      )}
+                      <Text className="text-gray-500 text-xs mt-1">
+                        Default password: IMC-MOBILE
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Connect Button */}
+                  <Pressable
+                    onPress={handleConnect}
+                    className={`rounded-lg py-4 mt-8 shadow-lg ${
+                      loading ? "bg-orange-300" : "bg-orange-500"
+                    }`}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <View className="flex-row justify-center items-center">
+                        <ActivityIndicator color="white" size="small" />
+                        <Text className="text-white font-bold text-lg ml-2">
+                          Connecting...
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text className="text-center text-white font-bold text-lg">
+                        🔗 Connect to Server
                       </Text>
                     )}
-                    <Text className="text-gray-500 text-xs mt-1">
-                      Default password: IMC-MOBILE
+                  </Pressable>
+
+                  {/* Help Section */}
+                  <View className="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <Text className="text-gray-700 font-semibold mb-2">
+                      💡 Connection Help
+                    </Text>
+                    <Text className="text-gray-600 text-sm leading-5">
+                      • Both phone and computer must be on the same WiFi network
+                      {"\n"}• Make sure the server is running on your computer
+                      {"\n"}• Check the server console for the correct IP address
+                      {"\n"}• The server should show something like: "📱 Use IP:
+                      192.168.1.37"
                     </Text>
                   </View>
                 </View>
-
-                {/* Connect Button */}
-                <Pressable
-                  onPress={handleConnect}
-                  className={`rounded-lg py-4 mt-8 shadow-lg ${
-                    loading ? "bg-orange-300" : "bg-orange-500"
-                  }`}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <View className="flex-row justify-center items-center">
-                      <ActivityIndicator color="white" size="small" />
-                      <Text className="text-white font-bold text-lg ml-2">
-                        Connecting...
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text className="text-center text-white font-bold text-lg">
-                      🔗 Connect to Server
-                    </Text>
-                  )}
-                </Pressable>
-
-                {/* Help Section */}
-                <View className="mt-6 p-4 bg-gray-50 rounded-lg">
-                  <Text className="text-gray-700 font-semibold mb-2">
-                    💡 Connection Help
-                  </Text>
-                  <Text className="text-gray-600 text-sm leading-5">
-                    • Both phone and computer must be on the same WiFi network
-                    {"\n"}• Make sure the server is running on your computer
-                    {"\n"}• Check the server console for the correct IP address
-                    {"\n"}• The server should show something like: "📱 Use IP:
-                    192.168.1.37"
-                  </Text>
-                </View>
-              </View>
+              
             </View>
 
             {/* Footer */}

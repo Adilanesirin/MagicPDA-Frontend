@@ -1,3 +1,4 @@
+// app/index.tsx
 import { initDatabase } from "@/utils/database";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Redirect } from "expo-router";
@@ -11,38 +12,36 @@ export default function Index() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        console.log("=== APP INITIALIZATION START ===");
+        
         // ✅ Initialize DB
         await initDatabase();
 
-        // ✅ STEP 1: Check if user is logged in (most frequent check)
-        const isLoggedIn = await SecureStore.getItemAsync("userLoggedIn");
+        // ✅ FIRST: Check if user is logged in
+        const userLoggedIn = await SecureStore.getItemAsync("userLoggedIn");
+        const token = await SecureStore.getItemAsync("token");
         
-        if (isLoggedIn === "true") {
-          console.log("✅ User already logged in - Redirecting to Main");
+        console.log("📱 Login Status Check:");
+        console.log("  - userLoggedIn:", userLoggedIn);
+        console.log("  - token:", token ? "exists" : "none");
+
+        // If user is logged in and has token, go directly to home
+        if (userLoggedIn === "true" && token) {
+          console.log("✅ User already logged in - Redirecting to Home");
           setTimeout(() => {
             setRedirectTo("/(main)/");
-          }, 2000);
+          }, 1000);
           return;
         }
 
-        // ✅ STEP 2: Check pairing status
+        // ✅ SECOND: Check pairing status
         const ip = await SecureStore.getItemAsync("paired_ip");
-        const token = await SecureStore.getItemAsync("token");
-
-        console.log("📱 App Initialization:");
+        
+        console.log("📱 Device Status Check:");
         console.log("  - Paired IP:", ip ? "exists" : "none");
-        console.log("  - Token:", token ? "exists" : "none");
 
-        if (ip && token) {
-          // Paired but not logged in - go to login
-          console.log("✅ Device paired - Redirecting to Login");
-          setTimeout(() => {
-            setRedirectTo("/(auth)/login");
-          }, 2000);
-          return;
-        }
-
-        // ✅ STEP 3: Check if license is activated
+        // ✅ THIRD: Check license status
+        console.log("📱 License Status Check:");
         const licenseActivated = await AsyncStorage.getItem("licenseActivated");
         const storedDeviceId = await AsyncStorage.getItem("deviceId");
         const clientId = await AsyncStorage.getItem("clientId");
@@ -58,12 +57,12 @@ export default function Index() {
           console.log("❌ No valid license - Redirecting to License page");
           setTimeout(() => {
             setRedirectTo("/(auth)/license");
-          }, 2000);
+          }, 1000);
           return;
         }
 
-        // ✅ License data exists, verify with server
-        console.log("✅ License data found locally, verifying with server...");
+        // ✅ License data exists, try to verify with server
+        console.log("✅ License data found locally");
         
         try {
           const CHECK_LICENSE_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/`;
@@ -72,21 +71,58 @@ export default function Index() {
             headers: { "Content-Type": "application/json" },
           });
 
-          const data = await response.json();
-
-          if (response.ok && data.success && data.customers) {
-            const customer = data.customers.find(
-              (c: any) => c.client_id === clientId
-            );
-
-            if (customer) {
-              // Check if device is still registered
-              const deviceStillRegistered = customer.registered_devices?.some(
-                (device: any) => device.device_id === storedDeviceId
+          if (response.ok) {
+            const data = await response.json();
+            
+            if (data.success && data.customers) {
+              const customer = data.customers.find(
+                (c: any) => c.client_id === clientId
               );
 
-              if (!deviceStillRegistered) {
-                console.log("⚠️ Device no longer registered - Clearing license");
+              if (customer) {
+                // Check if device is still registered
+                const deviceStillRegistered = customer.registered_devices?.some(
+                  (device: any) => device.device_id === storedDeviceId
+                );
+
+                if (!deviceStillRegistered) {
+                  console.log("⚠️ Device no longer registered - Clearing license");
+                  await AsyncStorage.multiRemove([
+                    "licenseActivated",
+                    "licenseKey",
+                    "deviceId",
+                    "customerName",
+                    "projectName",
+                    "clientId",
+                  ]);
+                  setTimeout(() => {
+                    setRedirectTo("/(auth)/license");
+                  }, 1000);
+                  return;
+                }
+
+                // Check if license is still active
+                if (customer.status?.toLowerCase() !== "active") {
+                  console.log("⚠️ License not active - Status:", customer.status);
+                  await AsyncStorage.multiRemove([
+                    "licenseActivated",
+                    "licenseKey",
+                    "deviceId",
+                    "customerName",
+                    "projectName",
+                    "clientId",
+                  ]);
+                  setTimeout(() => {
+                    setRedirectTo("/(auth)/license");
+                  }, 1000);
+                  return;
+                }
+
+                console.log("✅ License verified successfully");
+                console.log("  - Customer:", customer.customer_name);
+                console.log("  - Status:", customer.status);
+              } else {
+                console.log("⚠️ Customer not found - Clearing license");
                 await AsyncStorage.multiRemove([
                   "licenseActivated",
                   "licenseKey",
@@ -97,64 +133,38 @@ export default function Index() {
                 ]);
                 setTimeout(() => {
                   setRedirectTo("/(auth)/license");
-                }, 2000);
+                }, 1000);
                 return;
               }
-
-              // Check if license is still active
-              if (customer.status?.toLowerCase() !== "active") {
-                console.log("⚠️ License not active - Status:", customer.status);
-                await AsyncStorage.multiRemove([
-                  "licenseActivated",
-                  "licenseKey",
-                  "deviceId",
-                  "customerName",
-                  "projectName",
-                  "clientId",
-                ]);
-                setTimeout(() => {
-                  setRedirectTo("/(auth)/license");
-                }, 2000);
-                return;
-              }
-
-              console.log("✅ License verified successfully");
-              console.log("  - Customer:", customer.customer_name);
-              console.log("  - Status:", customer.status);
-            } else {
-              console.log("⚠️ Customer not found - Clearing license");
-              await AsyncStorage.multiRemove([
-                "licenseActivated",
-                "licenseKey",
-                "deviceId",
-                "customerName",
-                "projectName",
-                "clientId",
-              ]);
-              setTimeout(() => {
-                setRedirectTo("/(auth)/license");
-              }, 2000);
-              return;
             }
           }
         } catch (error) {
-          console.log("⚠️ Could not verify license with server:", error);
-          // ✅ Continue anyway - offline scenario, user was previously authenticated
+          console.log("⚠️ Could not verify license with server (offline):", error);
+          // Continue with cached license in offline mode
           console.log("✅ Using cached license data (offline mode)");
         }
 
         // ✅ Licensed but not paired - go to pairing
-        console.log("✅ Licensed but not paired - Redirecting to Pairing");
+        if (!ip) {
+          console.log("✅ Licensed but not paired - Redirecting to Pairing");
+          setTimeout(() => {
+            setRedirectTo("/(auth)/pairing");
+          }, 1000);
+          return;
+        }
+
+        // ✅ Licensed, paired, but not logged in - go to login
+        console.log("✅ Licensed and paired - Redirecting to Login");
         setTimeout(() => {
-          setRedirectTo("/(auth)/pairing");
-        }, 2000);
+          setRedirectTo("/(auth)/login");
+        }, 1000);
 
       } catch (error) {
         console.error("❌ App Init Error:", error);
         // On error, safe fallback to license page
         setTimeout(() => {
           setRedirectTo("/(auth)/license");
-        }, 2000);
+        }, 1000);
       }
     };
 

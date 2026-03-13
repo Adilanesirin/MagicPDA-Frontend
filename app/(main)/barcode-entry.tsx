@@ -3,6 +3,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
+
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -30,20 +31,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Platform.OS === 'ios' ? 50 : 40,
     left: 16,
-    zIndex: 50,
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  scanButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
-    right: 16,
     zIndex: 50,
     backgroundColor: 'white',
     borderRadius: 20,
@@ -234,8 +221,8 @@ const styles = StyleSheet.create({
   productHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: -50,
   },
   productInfo: {
     flex: 1,
@@ -252,17 +239,19 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
+    flexDirection: 'column',
+    gap: 12,
+    alignItems: 'flex-end',
+    
   },
   editButton: {
     backgroundColor: '#3b82f6',
-    padding: 8,
+    padding: 10,
     borderRadius: 4,
   },
   deleteButton: {
     backgroundColor: '#ef4444',
-    padding: 8,
+    padding: 10,
     borderRadius: 4,
   },
   productDetails: {
@@ -280,66 +269,164 @@ const styles = StyleSheet.create({
   },
   supplierText: {
     fontWeight: '600',
-    color: '#9333ea',
+    color: '#6366f1',
   },
   mrpText: {
     fontWeight: '600',
-    color: '#16a34a',
+    color: '#059669',
   },
   costText: {
     fontWeight: '600',
-    color: '#ea580c',
+    color: '#dc2626',
   },
   stockText: {
     fontWeight: '600',
-    color: '#374151',
+    color: '#7c3aed',
   },
   eQtyText: {
     fontWeight: '600',
-    color: '#2563eb',
+    color: '#ea580c',
   },
   eCostText: {
     fontWeight: '600',
-    color: '#dc2626',
-  },
-  saveButton: {
-    marginTop: 24,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  saveButtonActive: {
-    backgroundColor: '#fb923c',
-  },
-  saveButtonInactive: {
-    backgroundColor: '#d1d5db',
-  },
-  saveButtonText: {
-    color: '#ffffff',
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#0891b2',
   },
   footer: {
-    marginTop: 32,
-    marginBottom: 24,
+    marginTop: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
   },
   footerText: {
-    fontSize: 14,
-    color: '#9ca3af',
     textAlign: 'center',
+    color: '#6b7280',
+    fontSize: 12,
   },
-  variantsHeader: {
+  bottomButtonContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#ffffff',
+    gap: 12,
+    marginBottom: 35,
+  },
+  bottomButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  scannerButton: {
+    backgroundColor: '#3b82f6',
+  },
+  scannerButtonInactive: {
+    backgroundColor: '#93c5fd',
+  },
+  updateButton: {
+    backgroundColor: '#10b981',
+  },
+  updateButtonInactive: {
+    backgroundColor: '#d1d5db',
+  },
+  bottomButtonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
-    marginTop: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    width: '90%',
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
     marginBottom: 8,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
     paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    marginBottom: 16,
+    backgroundColor: '#ffffff',
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#f3f4f6',
+  },
+  modalButtonSave: {
+    backgroundColor: '#3b82f6',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalButtonTextCancel: {
+    color: '#374151',
+  },
+  modalButtonTextSave: {
+    color: '#ffffff',
+  },
+  manualEntryBadge: {
+    backgroundColor: '#38bdf8',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  manualEntryBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  variantsHeader: {
+    padding: 12,
+    backgroundColor: '#fef3c7',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fbbf24',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400e',
   },
   scannerContainer: {
     flex: 1,
@@ -372,7 +459,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 40,
     height: 40,
-    borderColor: '#3b82f6',
+    borderColor: '#dc2626',
   },
   topLeft: {
     top: 0,
@@ -411,148 +498,132 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  modalHeader: {
-    backgroundColor: '#3b82f6',
-    paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  modalCloseButton: {
-    padding: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 20,
-  },
-  modalContent: {
-    padding: 20,
-    paddingBottom: 200,
-  },
-  formGroup: {
-    marginBottom: 24,
-  },
-  formLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-  formInput: {
+  nameSuggestionsContainer: {
+    maxHeight: 150,
     borderWidth: 1,
     borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    backgroundColor: '#ffffff',
-    color: '#1f2937',
+    borderRadius: 8,
+    backgroundColor: 'white',
+    marginBottom: 16,
   },
-  formInputDisabled: {
-    backgroundColor: '#f3f4f6',
-    color: '#6b7280',
-  },
-  modalButtonContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  modalButtonCancel: {
-    backgroundColor: '#e5e7eb',
-  },
-  modalButtonSave: {
-    backgroundColor: '#3b82f6',
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalButtonTextCancel: {
-    color: '#374151',
-  },
-  modalButtonTextSave: {
-    color: '#ffffff',
-  },
-  manualEntryBadge: {
-    backgroundColor: '#0ea5e9',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    marginBottom: 6,
-  },
-  manualEntryBadgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  autocompleteContainer: {
-    position: 'relative',
-    zIndex: 1000,
-  },
-  autocompleteSuggestionsWrapper: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    maxHeight: 200,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 5,
-    zIndex: 1001,
-  },
-  autocompleteSuggestionItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  nameSuggestionItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
-  autocompleteSuggestionText: {
-    fontSize: 15,
+  nameSuggestionText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  // New styles for quantity selection modal
+  quantityModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityModalContent: {
+    backgroundColor: 'white',
+    width: '85%',
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  quantityModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  quantityModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#1f2937',
+    flex: 1,
+  },
+  quantityModalCloseButton: {
+    padding: 4,
+  },
+  quantityProductName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  quantityPriceText: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  quantityControlContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    gap: 20,
+  },
+  quantityButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#e0e7ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    minWidth: 60,
+    textAlign: 'center',
+  },
+  quantityTotalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  quantityTotalLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  quantityTotalValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#3b82f6',
+  },
+  quantityAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3b82f6',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+  },
+  quantityAddButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
 const initOrdersTable = async () => {
   try {
-    console.log("🔄 Initializing orders_to_sync table...");
-    
-    await db.execAsync(`DROP TABLE IF EXISTS orders_to_sync`);
-    
     await db.execAsync(`
-      CREATE TABLE orders_to_sync (
+      CREATE TABLE IF NOT EXISTS orders_to_sync (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_code TEXT NOT NULL,
         userid TEXT NOT NULL,
@@ -563,138 +634,56 @@ const initOrdersTable = async () => {
         mrp REAL NOT NULL,
         order_date TEXT NOT NULL,
         sync_status TEXT DEFAULT 'pending',
-        created_at TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         product_name TEXT,
         is_manual_entry INTEGER DEFAULT 0
       );
     `);
-    
-    console.log("✅ orders_to_sync table created successfully");
-    
+    console.log("✅ orders_to_sync table ready");
   } catch (error) {
-    console.error("❌ Error initializing orders table:", error);
+    console.error("Error initializing orders_to_sync table:", error);
   }
 };
 
 const initPendingItemsTable = async () => {
   try {
-    console.log("🔄 Initializing pending_items table...");
-    
-    // First, check if table exists
-    const tableExists = await db.getFirstAsync(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='pending_items'"
-    ) as any;
-    
-    if (!tableExists) {
-      // Create new table with complete schema
-      await db.execAsync(`
-        CREATE TABLE pending_items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          supplier_code TEXT NOT NULL DEFAULT '',
-          barcode TEXT NOT NULL,
-          name TEXT,
-          bmrp REAL DEFAULT 0,
-          cost REAL DEFAULT 0,
-          quantity INTEGER DEFAULT 0,
-          eCost REAL DEFAULT 0,
-          currentStock INTEGER DEFAULT 0,
-          batchSupplier TEXT,
-          scannedAt INTEGER,
-          batch_supplier TEXT,
-          product TEXT,
-          brand TEXT,
-          isManualEntry INTEGER DEFAULT 0
-        );
-      `);
-      console.log("✅ Created pending_items table with complete schema");
-      return;
-    }
-    
-    // Table exists, get its column information
-    const tableInfo = await db.getAllAsync(`PRAGMA table_info(pending_items)`) as Array<{name: string}>;
-    const existingColumns = tableInfo.map((col: any) => col.name);
-    
-    console.log("📋 Existing columns in pending_items:", existingColumns.join(", "));
-    
-    // Define required columns
-    const requiredColumns = [
-      'id', 'supplier_code', 'barcode', 'name', 'bmrp', 'cost', 
-      'quantity', 'eCost', 'currentStock', 'batchSupplier', 
-      'scannedAt', 'batch_supplier', 'product', 'brand', 'isManualEntry'
-    ];
-    
-    const missingColumns = requiredColumns.filter(col => !existingColumns.includes(col));
-    
-    if (missingColumns.length > 0) {
-      console.log("🔄 Migrating pending_items table - missing columns:", missingColumns.join(", "));
-      
-      // Create new table with complete schema
-      await db.execAsync(`
-        CREATE TABLE pending_items_new (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          supplier_code TEXT NOT NULL DEFAULT '',
-          barcode TEXT NOT NULL,
-          name TEXT,
-          bmrp REAL DEFAULT 0,
-          cost REAL DEFAULT 0,
-          quantity INTEGER DEFAULT 0,
-          eCost REAL DEFAULT 0,
-          currentStock INTEGER DEFAULT 0,
-          batchSupplier TEXT,
-          scannedAt INTEGER,
-          batch_supplier TEXT,
-          product TEXT,
-          brand TEXT,
-          isManualEntry INTEGER DEFAULT 0
-        );
-      `);
-      
-      // Build INSERT statement using only columns that exist in both tables
-      const commonColumns = existingColumns.filter(col => 
-        requiredColumns.includes(col) && col !== 'id'
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS pending_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_code TEXT,
+        barcode TEXT NOT NULL,
+        name TEXT NOT NULL,
+        bmrp REAL,
+        cost REAL,
+        quantity INTEGER,
+        eCost REAL,
+        currentStock INTEGER,
+        batchSupplier TEXT,
+        scannedAt INTEGER,
+        batch_supplier TEXT,
+        product TEXT,
+        brand TEXT,
+        isManualEntry INTEGER DEFAULT 0
       );
-      
-      if (commonColumns.length > 0) {
-        const columnsList = commonColumns.join(', ');
-        
-        try {
-          await db.execAsync(`
-            INSERT INTO pending_items_new (${columnsList})
-            SELECT ${columnsList}
-            FROM pending_items
-          `);
-          console.log(`✅ Migrated ${commonColumns.length} columns of data`);
-        } catch (copyError) {
-          console.log("⚠️ Could not copy old data (table might be empty):", copyError);
-        }
-      }
-      
-      // Drop old table and rename new one
-      await db.execAsync(`DROP TABLE pending_items`);
-      await db.execAsync(`ALTER TABLE pending_items_new RENAME TO pending_items`);
-      
-      console.log("✅ Successfully migrated pending_items table");
-    } else {
-      console.log("✅ pending_items table already has all required columns");
-    }
+    `);
+
+    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(pending_items)`);
+    const hasIsManualEntry = tableInfo.some((col: any) => col.name === 'isManualEntry');
     
-  } catch (error) {
-    console.error("❌ Error initializing pending_items table:", error);
-    // If all else fails, try to recreate the table from scratch
-    try {
-      console.log("🔄 Attempting to recreate table from scratch...");
-      await db.execAsync(`DROP TABLE IF EXISTS pending_items`);
+    if (!hasIsManualEntry) {
+      console.log("⚠️ Adding isManualEntry column...");
+      await db.execAsync(`ALTER TABLE pending_items RENAME TO pending_items_old;`);
       await db.execAsync(`
         CREATE TABLE pending_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          supplier_code TEXT NOT NULL DEFAULT '',
+          supplier_code TEXT,
           barcode TEXT NOT NULL,
-          name TEXT,
-          bmrp REAL DEFAULT 0,
-          cost REAL DEFAULT 0,
-          quantity INTEGER DEFAULT 0,
-          eCost REAL DEFAULT 0,
-          currentStock INTEGER DEFAULT 0,
+          name TEXT NOT NULL,
+          bmrp REAL,
+          cost REAL,
+          quantity INTEGER,
+          eCost REAL,
+          currentStock INTEGER,
           batchSupplier TEXT,
           scannedAt INTEGER,
           batch_supplier TEXT,
@@ -703,9 +692,48 @@ const initPendingItemsTable = async () => {
           isManualEntry INTEGER DEFAULT 0
         );
       `);
-      console.log("✅ Successfully recreated pending_items table");
-    } catch (recreateError) {
-      console.error("❌ Failed to recreate table:", recreateError);
+      await db.execAsync(`
+        INSERT INTO pending_items 
+        (id, supplier_code, barcode, name, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, isManualEntry)
+        SELECT 
+          id, supplier_code, barcode, name, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, 0
+        FROM pending_items_old;
+      `);
+      await db.execAsync(`DROP TABLE IF EXISTS pending_items_old;`);
+      console.log("✅ Successfully added isManualEntry column");
+    } else {
+      console.log("✅ pending_items table already has isManualEntry column");
+    }
+  } catch (error: any) {
+    console.error("❌ Error in initPendingItemsTable:", error);
+    
+    if (error.message?.includes('no such table') || error.message?.includes('no such column')) {
+      console.log("🔧 Creating fresh pending_items table...");
+      try {
+        await db.execAsync(`DROP TABLE IF EXISTS pending_items;`);
+        await db.execAsync(`
+          CREATE TABLE pending_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            supplier_code TEXT,
+            barcode TEXT NOT NULL,
+            name TEXT NOT NULL,
+            bmrp REAL,
+            cost REAL,
+            quantity INTEGER,
+            eCost REAL,
+            currentStock INTEGER,
+            batchSupplier TEXT,
+            scannedAt INTEGER,
+            batch_supplier TEXT,
+            product TEXT,
+            brand TEXT,
+            isManualEntry INTEGER DEFAULT 0
+          );
+        `);
+        console.log("✅ Successfully recreated pending_items table");
+      } catch (recreateError) {
+        console.error("❌ Failed to recreate table:", recreateError);
+      }
     }
   }
 };
@@ -818,12 +846,30 @@ export default function BarcodeEntry() {
 
   const [showScanner, setShowScanner] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanMode, setScanMode] = useState<"hardware" | "camera">("hardware");
   const [scanned, setScanned] = useState(false);
   const scanLockRef = useRef(false);
   const processingAlertRef = useRef(false);
 
+  // New state for quantity selection modal
+  const [showQuantityModal, setShowQuantityModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
+  
   const inputRef = useRef<TextInput>(null);
+
+  // Add auto-reset for stuck scanner
+  useEffect(() => {
+    const resetTimer = setTimeout(() => {
+      if (scanned && scanLockRef.current && showScanner) {
+        console.log("⚠️ Auto-resetting stuck scanner...");
+        setScanned(false);
+        scanLockRef.current = false;
+        processingAlertRef.current = false;
+      }
+    }, 5000); // Reset after 5 seconds if stuck
+
+    return () => clearTimeout(resetTimer);
+  }, [scanned, showScanner]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -964,16 +1010,6 @@ export default function BarcodeEntry() {
   };
 
   useEffect(() => {
-    const loadScanMode = async () => {
-      const saved = await SecureStore.getItemAsync("scanMode");
-      if (saved === "camera" || saved === "hardware") {
-        setScanMode(saved);
-      }
-    };
-    loadScanMode();
-  }, []);
-
-  useEffect(() => {
     loadAllProducts();
   }, []);
 
@@ -1016,28 +1052,28 @@ export default function BarcodeEntry() {
   }, [updatedItem, itemIndex]);
 
   useEffect(() => {
-    if (showManualEntryModal) {
+    if (showManualEntryModal || showQuantityModal) {
       return;
     }
     
     const interval = setInterval(() => {
-      if (!isEditing && searchMode === 'barcode' && scanMode === 'hardware') {
+      if (!isEditing && searchMode === 'barcode') {
         inputRef.current?.focus();
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [isEditing, searchMode, scanMode, showManualEntryModal]);
+  }, [isEditing, searchMode, showManualEntryModal, showQuantityModal]);
 
   useEffect(() => {
-    if (showManualEntryModal) {
+    if (showManualEntryModal || showQuantityModal) {
       return;
     }
     
-    if (searchMode === 'barcode' && scanMode === 'hardware' && hardwareScanValue.length > 0 && hardwareScanValue.trim() !== "") {
-      handleBarCodeScanned({ data: hardwareScanValue.trim() });
+    if (searchMode === 'barcode' && hardwareScanValue.length > 0 && hardwareScanValue.trim() !== "") {
+      handleBarCodeScanned({ data: hardwareScanValue.trim() }, 'scanner');
       setHardwareScanValue("");
     }
-  }, [hardwareScanValue, searchMode, scanMode, showManualEntryModal]);
+  }, [hardwareScanValue, searchMode, showManualEntryModal, showQuantityModal]);
 
   useEffect(() => {
     if (!showScanner) {
@@ -1114,10 +1150,76 @@ export default function BarcodeEntry() {
     setManualBarcode(product.name);
     setShowSuggestions(false);
     Keyboard.dismiss();
-    addProductToList(product);
+    
+    // Directly add product without quantity modal for item search
+    addProductDirectly(product);
   };
 
-  const addProductToList = async (product: any) => {
+  // New function to open quantity modal (only for scanner)
+  const openQuantityModal = (product: any) => {
+    console.log("📦 Opening quantity modal for:", product.name);
+    setSelectedProduct(product);
+    setSelectedQuantity(1);
+    setShowQuantityModal(true);
+  };
+
+  // New function to close quantity modal
+  const closeQuantityModal = () => {
+    console.log("🔒 Closing quantity modal");
+    setShowQuantityModal(false);
+    setSelectedProduct(null);
+    setSelectedQuantity(1);
+    
+    // Reset scanner state if it was from scanner
+    setTimeout(() => {
+      setScanned(false);
+      scanLockRef.current = false;
+      processingAlertRef.current = false;
+      console.log("🔄 Scanner state reset from quantity modal");
+    }, 300);
+  };
+
+  // New function to handle quantity increase
+  const increaseQuantity = () => {
+    setSelectedQuantity(prev => prev + 1);
+  };
+
+  // New function to handle quantity decrease
+  const decreaseQuantity = () => {
+    setSelectedQuantity(prev => prev > 1 ? prev - 1 : 1);
+  };
+
+  // New function to add product from quantity modal
+  const addProductFromQuantityModal = async () => {
+    if (!selectedProduct) return;
+
+    const existing = scannedItems.find((item) => item.barcode === selectedProduct.barcode);
+    if (existing) {
+      Alert.alert("Info", `Product already scanned: ${existing.name}`);
+      closeQuantityModal();
+      return;
+    }
+
+    const newItem = {
+      ...selectedProduct,
+      quantity: selectedQuantity,
+      cost: selectedProduct.cost ?? selectedProduct.bmrp ?? 0,
+      eCost: (selectedProduct.cost ?? selectedProduct.bmrp ?? 0) * selectedQuantity,
+      currentStock: selectedProduct.quantity ?? 0,
+      batchSupplier: selectedProduct.batch_supplier ?? supplier,
+      scannedAt: new Date().getTime(),
+      isManualEntry: 0,
+    };
+    
+    await savePendingItem(newItem);
+    await loadPendingItems();
+    
+    closeQuantityModal();
+    setManualBarcode("");
+  };
+
+  // New function to add product directly without quantity modal (for manual search and item search)
+  const addProductDirectly = async (product: any) => {
     const existing = scannedItems.find((item) => item.barcode === product.barcode);
     if (existing) {
       Alert.alert("Info", `Product already scanned: ${existing.name}`);
@@ -1126,9 +1228,9 @@ export default function BarcodeEntry() {
 
     const newItem = {
       ...product,
-      quantity: 0,
+      quantity: 1, // Default quantity is 1
       cost: product.cost ?? product.bmrp ?? 0,
-      eCost: 0,
+      eCost: (product.cost ?? product.bmrp ?? 0) * 1,
       currentStock: product.quantity ?? 0,
       batchSupplier: product.batch_supplier ?? supplier,
       scannedAt: new Date().getTime(),
@@ -1138,6 +1240,11 @@ export default function BarcodeEntry() {
     await savePendingItem(newItem);
     await loadPendingItems();
     setManualBarcode("");
+  };
+
+  const addProductToList = async (product: any) => {
+    // This function now directly adds product without quantity modal
+    addProductDirectly(product);
   };
 
   const searchBarcodeWithVariants = async (barcode: string) => {
@@ -1235,7 +1342,7 @@ export default function BarcodeEntry() {
       bmrp: mrp,
       cost: cost,
       quantity: quantity,
-      eCost: 0,
+      eCost: cost * quantity,
       currentStock: quantity,
       batchSupplier: supplier,
       scannedAt: new Date().getTime(),
@@ -1256,20 +1363,30 @@ export default function BarcodeEntry() {
     Alert.alert("Success", "Product added successfully!");
   };
 
-  const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    if (showScanner) {
-      if (scanLockRef.current || scanned || processingAlertRef.current) {
+  const handleBarCodeScanned = async ({ data }: { data: string }, source: 'scanner' | 'manual' = 'scanner') => {
+    console.log(`🔍 Scanning barcode: ${data}, source: ${source}`);
+    
+    // If from scanner and already processing, skip
+    if (source === 'scanner') {
+      if (scanLockRef.current) {
+        console.log("⏸️ Scan locked, skipping...");
         return;
       }
       scanLockRef.current = true;
       setScanned(true);
-      setShowScanner(false);
+      
+      // Close scanner immediately for better UX
+      if (showScanner) {
+        setShowScanner(false);
+      }
     }
 
     try {
+      console.log(`🔎 Searching for barcode: ${data}`);
       const allMatches = await searchBarcodeWithVariants(data);
 
       if (allMatches.length === 0) {
+        console.log("❌ No matches found, showing manual entry option");
         Alert.alert(
           "Product not found", 
           `Barcode: ${data}\n\nWould you like to add this product manually?`,
@@ -1278,7 +1395,8 @@ export default function BarcodeEntry() {
               text: 'Cancel',
               style: 'cancel',
               onPress: () => {
-                if (showScanner) {
+                // RESET SCANNER STATE - THIS IS CRITICAL!
+                if (source === 'scanner') {
                   setScanned(false);
                   scanLockRef.current = false;
                   processingAlertRef.current = false;
@@ -1289,7 +1407,8 @@ export default function BarcodeEntry() {
               text: 'Add Manually',
               onPress: () => {
                 openManualEntryModal(data);
-                if (showScanner) {
+                // RESET SCANNER STATE
+                if (source === 'scanner') {
                   setScanned(false);
                   scanLockRef.current = false;
                   processingAlertRef.current = false;
@@ -1306,11 +1425,13 @@ export default function BarcodeEntry() {
         const existing = scannedItems.find((item) => item.barcode === product.barcode);
         
         if (existing) {
+          console.log("⚠️ Product already exists:", existing.name);
           Alert.alert("Info", `Product already scanned: ${existing.name}`, [
             {
               text: 'OK',
               onPress: () => {
-                if (showScanner) {
+                // RESET SCANNER STATE
+                if (source === 'scanner') {
                   setScanned(false);
                   scanLockRef.current = false;
                   processingAlertRef.current = false;
@@ -1321,31 +1442,30 @@ export default function BarcodeEntry() {
           return;
         }
 
-        const newItem = {
-          ...product,
-          quantity: 0,
-          cost: product.cost ?? product.bmrp ?? 0,
-          eCost: 0,
-          currentStock: product.quantity ?? 0,
-          batchSupplier: product.batch_supplier ?? supplier,
-          scannedAt: new Date().getTime(),
-          isManualEntry: 0,
-        };
+        console.log("✅ Found product:", product.name);
         
-        await savePendingItem(newItem);
-        await loadPendingItems();
-        
-        if (showScanner) {
-          setTimeout(() => {
-            setScanned(false);
-            scanLockRef.current = false;
-          }, 500);
+        // Only open quantity modal if from scanner (camera)
+        if (source === 'scanner') {
+          openQuantityModal(product);
+        } else {
+          // For manual barcode entry, add directly without modal
+          addProductDirectly(product);
+          
+          // Reset state if from scanner
+          if (source === 'scanner') {
+            setTimeout(() => {
+              setScanned(false);
+              scanLockRef.current = false;
+            }, 500);
+          }
         }
       } else {
+        console.log(`📋 Found ${allMatches.length} variants`);
         setSuggestions(allMatches);
         setShowSuggestions(true);
         
-        if (showScanner) {
+        // Reset scanner state
+        if (source === 'scanner') {
           setTimeout(() => {
             setScanned(false);
             scanLockRef.current = false;
@@ -1353,12 +1473,13 @@ export default function BarcodeEntry() {
         }
       }
     } catch (err) {
-      console.error("Error fetching product:", err);
+      console.error("❌ Error fetching product:", err);
       Alert.alert("Error", "Failed to scan product.", [
         {
           text: 'OK',
           onPress: () => {
-            if (showScanner) {
+            // RESET SCANNER STATE ON ERROR
+            if (source === 'scanner') {
               setScanned(false);
               scanLockRef.current = false;
               processingAlertRef.current = false;
@@ -1396,77 +1517,85 @@ export default function BarcodeEntry() {
         }
 
         if (allMatches.length === 1) {
-          const product = allMatches[0] as { [key: string]: any; quantity?: number };
+          const product = allMatches[0];
           const existing = scannedItems.find((item) => item.barcode === product.barcode);
           
           if (existing) {
             Alert.alert("Info", `Product already scanned: ${existing.name}`);
             return;
           }
-
-          const newItem = {
-            ...product,
-            quantity: 0,
-            cost: product.cost ?? product.bmrp ?? 0,
-            eCost: 0,
-            currentStock: product.quantity ?? 0,
-            batchSupplier: product.batch_supplier ?? supplier,
-            scannedAt: new Date().getTime(),
-            isManualEntry: 0,
-          };
-
-          await savePendingItem(newItem);
-          await loadPendingItems();
           
-          setManualBarcode("");
+          // Manual barcode search - add directly without quantity modal
+          addProductDirectly(product);
         } else {
           setSuggestions(allMatches);
           setShowSuggestions(true);
         }
       } catch (err) {
-        console.error("Error fetching product:", err);
-        Alert.alert("Error", "Failed to fetch product.");
+        console.error("Error searching barcode:", err);
+        Alert.alert("Error", "Failed to search barcode");
       }
     } else {
       const searchLower = trimmed.toLowerCase();
-      const matches = allProducts.filter((product: any) => 
+      const filtered = allProducts.filter((product: any) => 
         product.name?.toLowerCase().includes(searchLower) ||
         product.brand?.toLowerCase().includes(searchLower) ||
         product.product?.toLowerCase().includes(searchLower)
       );
 
-      if (matches.length === 1) {
-        await addProductToList(matches[0]);
-      } else if (matches.length > 1) {
-        setSuggestions(matches);
-        setShowSuggestions(true);
-      } else {
-        Alert.alert("Not Found", `No products found matching: "${trimmed}"`);
+      if (filtered.length === 0) {
+        Alert.alert("No results", `No products found matching "${trimmed}"`);
+        return;
       }
+
+      setSuggestions(filtered);
+      setShowSuggestions(true);
     }
   };
 
-  const handleEditItem = (item: any, index: number) => {
-    router.push({
-      pathname: "/edit-product",
-      params: {
-        itemData: JSON.stringify(item),
-        itemIndex: index.toString(),
-        supplier: supplier || "",
-        supplier_code: supplier_code || "",
-      },
-    } as any);
+  const handleToggleScanner = async () => {
+    console.log("📷 Opening scanner...");
+    
+    // Reset scanner state before opening
+    setScanned(false);
+    scanLockRef.current = false;
+    processingAlertRef.current = false;
+    
+    if (!permission?.granted) {
+      console.log("🔐 Requesting camera permission...");
+      const { granted } = await requestPermission();
+      if (!granted) {
+        Alert.alert(
+          "Camera Permission",
+          "Camera access is required to scan barcodes."
+        );
+        return;
+      }
+    }
+    
+    console.log("✅ Opening camera scanner");
+    setShowScanner(true);
+  };
+
+  const handleCloseScanner = () => {
+    console.log("🔒 Closing scanner");
+    setShowScanner(false);
+    
+    // Reset ALL scanner states after a delay
+    setTimeout(() => {
+      setScanned(false);
+      scanLockRef.current = false;
+      processingAlertRef.current = false;
+      console.log("🔄 Scanner state reset");
+    }, 300);
   };
 
   const handleDeleteItem = async (index: number) => {
     Alert.alert(
       "Delete Item",
-      "Are you sure you want to delete this item?",
+      "Are you sure you want to remove this item?",
       [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
@@ -1476,190 +1605,96 @@ export default function BarcodeEntry() {
               await deletePendingItem(item.id);
             }
             await loadPendingItems();
-          }
-        }
+          },
+        },
       ]
     );
   };
 
-  const handleBack = () => {
-    router.back();
-  };
-
-  const handleOpenScanner = async () => {
-    if (scanMode === "camera") {
-      if (!permission) {
-        return;
-      }
-
-      if (!permission.granted) {
-        const { granted } = await requestPermission();
-        if (!granted) {
-          Alert.alert(
-            "Camera Permission",
-            "Camera permission is required to scan barcodes. Please enable it in settings."
-          );
-          return;
-        }
-      }
-
-      setScanned(false);
-      scanLockRef.current = false;
-      processingAlertRef.current = false;
-      setShowScanner(true);
-    } else {
-      Alert.alert('Scanner Mode', 'Hardware scanner is active. The device will automatically scan barcodes.');
-    }
-  };
-
-  const handleCloseScanner = () => {
-    setShowScanner(false);
-    setTimeout(() => {
-      setScanned(false);
-      scanLockRef.current = false;
-      processingAlertRef.current = false;
-    }, 300);
+  const handleEditItem = (item: any, index: number) => {
+    router.push({
+      pathname: "/edit-product",
+      params: {
+        supplier: supplier || "",
+        supplier_code: supplier_code || "",
+        item: JSON.stringify(item),
+        itemIndex: index.toString(),
+      },
+    });
   };
 
   const updateQuantities = async () => {
-    const itemsWithMissingData = scannedItems.filter(item => {
-      const hasInvalidMrp = !item.bmrp || item.bmrp === 0 || isNaN(item.bmrp);
-      const hasInvalidCost = !item.cost || item.cost === 0 || isNaN(item.cost);
-      const hasInvalidQty = !item.quantity || item.quantity === 0 || isNaN(item.quantity);
-      return hasInvalidMrp || hasInvalidCost || hasInvalidQty;
-    });
-
-    if (itemsWithMissingData.length > 0) {
-      const itemNames = itemsWithMissingData.map(item => `• ${item.name}`).join('\n');
-      
-      Alert.alert(
-        "⚠️ Incomplete Data Warning",
-        `The following ${itemsWithMissingData.length} item(s) have missing or zero values:\n\n${itemNames}\n\nDo you want to proceed?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Proceed Anyway", style: "destructive", onPress: () => showFinalConfirmation() }
-        ]
-      );
-    } else {
-      showFinalConfirmation();
+    if (scannedItems.length === 0) {
+      Alert.alert("No items", "Please scan items before updating quantities.");
+      return;
     }
-  };
 
-  const showFinalConfirmation = () => {
     Alert.alert(
       "Confirm Update",
-      `Are you sure you want to update quantities for ${scannedItems.length} item(s)?`,
+      `Update quantities for ${scannedItems.length} item(s)?`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Update",
-          style: "default",
           onPress: async () => {
-            try {
-              const userId = await SecureStore.getItemAsync("user_id");
-              const today = new Date().toISOString().split("T")[0];
+  try {
+    const userid = await SecureStore.getItemAsync("user_id");
+    if (!userid) {
+      Alert.alert("Error", "User not logged in. Please login again.");
+      return;
+    }
 
-              let successCount = 0;
-              let errorCount = 0;
+    const today = new Date().toISOString().split("T")[0];
 
-              console.log(`\n📄 === STARTING UPDATE QUANTITIES ===`);
-              console.log(`Processing ${scannedItems.length} items...`);
+    for (const item of scannedItems) {
+      console.log("\n🔄 === PROCESSING ITEM FOR UPDATE ===");
+      console.log("Item barcode:", item.barcode);
+      console.log("Item name:", item.name);
+      console.log("isManualEntry:", item.isManualEntry);
+      
+      const itemcode = item.isManualEntry === 1 
+        ? `MANUAL-${item.barcode}`
+        : item.barcode;
+      
+      const orderData = {
+        supplier_code: supplier_code || "",
+        userid: userid,
+        itemcode: itemcode,
+        barcode: item.barcode,
+        quantity: item.quantity,
+        rate: item.cost || 0,
+        mrp: item.bmrp || 0,
+        order_date: today,
+        product_name: item.name,
+        is_manual_entry: item.isManualEntry || 0,
+      };
 
-              for (const item of scannedItems) {
-                try {
-                  const finalCost = item.eCost !== 0 ? item.eCost : item.cost;
-                  let itemCode = item.barcode;
-                  
-                  const isManualEntry = item.isManualEntry === 1;
-                  
-                  if (!isManualEntry) {
-                    const productData = await db.getFirstAsync(
-                      "SELECT code FROM product_data WHERE barcode = ?",
-                      [item.barcode]
-                    ) as { code?: string } | null;
-                    itemCode = productData?.code || item.barcode;
-                  }
-                  
-                  console.log(`\n📋 Processing item:`, {
-                    barcode: item.barcode,
-                    name: item.name,
-                    isManualEntry: isManualEntry,
-                    itemCode: itemCode,
-                    product_name: item.name
-                  });
-                  
-                  await saveOrderToSync({
-                    supplier_code: supplier_code || "",
-                    userid: userId ?? "unknown",
-                    itemcode: itemCode,
-                    barcode: item.barcode,
-                    quantity: item.quantity,
-                    rate: finalCost ?? 0,
-                    mrp: item.bmrp ?? 0,
-                    order_date: today,
-                    product_name: item.name,
-                    is_manual_entry: isManualEntry ? 1 : 0,
-                  });
+      console.log("📤 Saving order with data:", JSON.stringify(orderData, null, 2));
+      await saveOrderToSync(orderData);
 
-                  if (!isManualEntry) {
-                    const productExists = await db.getFirstAsync(
-                      "SELECT 1 FROM product_data WHERE barcode = ?",
-                      [item.barcode]
-                    );
-                    
-                    if (productExists) {
-                      await db.runAsync(
-                        "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
-                        [item.quantity, finalCost, item.barcode]
-                      );
-                      console.log(`✅ Updated product_data for: ${item.barcode}`);
-                    }
-                  } else {
-                    console.log(`⭐ Skipping product_data update for manual entry: ${item.barcode}`);
-                  }
-                  
-                  successCount++;
-                  
-                } catch (itemError) {
-                  console.error(`❌ Error processing item ${item.barcode}:`, itemError);
-                  errorCount++;
-                }
-              }
-              
-              console.log(`\n📊 Results: ${successCount} success, ${errorCount} errors`);
-              console.log(`📄 === END UPDATE QUANTITIES ===\n`);
-              
-              if (successCount > 0) {
-                try {
-                  await db.runAsync(
-                    "DELETE FROM pending_items WHERE supplier_code = ?",
-                    [supplier_code || ""]
-                  );
-                  console.log(`🧹 Cleared ${successCount} pending items`);
-                } catch (deleteError) {
-                  console.error("❌ Could not delete pending items:", deleteError);
-                }
-              }
+      if (item.id) {
+        await deletePendingItem(item.id);
+      }
+    }
 
-              if (errorCount === 0) {
-                Alert.alert("✅ Success", `All ${successCount} entries saved for sync!`);
-                setScannedItems([]);
-                router.push("/(main)/");
-              } else if (successCount > 0) {
-                Alert.alert("⚠️ Partial Success", 
-                  `${successCount} entries saved, ${errorCount} failed.`);
-                await loadPendingItems();
-              } else {
-                Alert.alert("❌ Error", "Failed to save any entries.");
-              }
-            } catch (err) {
-              console.error("💥 Save failed:", err);
-              Alert.alert("Error", "Failed to save entries.");
-            }
-          }
-        }
+    await loadPendingItems();
+    Alert.alert("Success", "Quantities updated!");
+    router.back();
+  } catch (error) {
+    console.error("Error updating quantities:", error);
+    Alert.alert("Error", "Failed to update quantities");
+  }
+},
+        },
       ]
     );
+  };
+
+  const getCardStyle = (item: any, index: number) => {
+    if (item.isManualEntry === 1) {
+      return styles.manualEntryCard;
+    }
+    return index === 0 ? styles.latestProductCard : styles.regularProductCard;
   };
 
   const renderSuggestionItem = ({ item }: { item: any }) => (
@@ -1673,195 +1708,217 @@ export default function BarcodeEntry() {
         </Text>
         <View style={styles.suggestionDetailsContainer}>
           <View style={styles.detailChip}>
-            <Text style={styles.detailChipLabel}>Stock:</Text>
-            <Text style={styles.detailChipValue}>{Math.abs(item.quantity || 0)}</Text>
+            <Text style={styles.detailChipLabel}>Barcode:</Text>
+            <Text style={styles.detailChipValue}>{item.barcode}</Text>
           </View>
+          {item.brand && (
+            <View style={styles.detailChip}>
+              <Text style={styles.detailChipLabel}>Brand:</Text>
+              <Text style={styles.detailChipValue}>{item.brand}</Text>
+            </View>
+          )}
           <View style={styles.detailChip}>
             <Text style={styles.detailChipLabel}>MRP:</Text>
             <Text style={styles.detailChipValue}>₹{item.bmrp || 0}</Text>
           </View>
-          {item.barcode && (
-            <View style={styles.detailChip}>
-              <Text style={styles.detailChipValue} numberOfLines={1}>{item.barcode}</Text>
-            </View>
-          )}
+          <View style={styles.detailChip}>
+            <Text style={styles.detailChipLabel}>Cost:</Text>
+            <Text style={styles.detailChipValue}>₹{item.cost || 0}</Text>
+          </View>
+          <View style={styles.detailChip}>
+            <Text style={styles.detailChipLabel}>Stock:</Text>
+            <Text style={styles.detailChipValue}>{item.quantity || 0}</Text>
+          </View>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={20} color="#999999" />
     </TouchableOpacity>
   );
 
-  const getCardStyle = (item: any, index: number) => {
-    if (item.isManualEntry === 1) {
-      return styles.manualEntryCard;
-    }
-    return index === 0 ? styles.latestProductCard : styles.regularProductCard;
-  };
-
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.backButton}>
-        <TouchableOpacity onPress={handleBack}>
-          <Ionicons name="arrow-back" size={24} color="#374151" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.scanButton}>
-        <TouchableOpacity onPress={handleOpenScanner}>
-          <Ionicons name="barcode-outline" size={24} color="#007AFF" />
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Ionicons name="arrow-back" size={24} color="#3b82f6" />
+      </TouchableOpacity>
 
       <Modal
         visible={showManualEntryModal}
-        animationType="slide"
-        transparent={false}
+        transparent
+        animationType="fade"
         onRequestClose={closeManualEntryModal}
-        statusBarTranslucent
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        <TouchableOpacity
           style={styles.modalOverlay}
-          keyboardVerticalOffset={0}
+          activeOpacity={1}
+          onPress={closeManualEntryModal}
         >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Add Product Manually</Text>
-              <TouchableOpacity 
-                onPress={closeManualEntryModal}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView 
-              style={{ flex: 1 }}
-              contentContainerStyle={styles.modalContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              bounces={true}
-            >
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Barcode *</Text>
-                <TextInput
-                  style={[styles.formInput, styles.formInputDisabled]}
-                  value={manualEntryData.barcode}
-                  editable={false}
-                />
-              </View>
+              <Text style={styles.modalLabel}>Barcode:</Text>
+              <TextInput
+                style={[styles.modalInput, { backgroundColor: '#f3f4f6' }]}
+                value={manualEntryData.barcode}
+                editable={false}
+              />
 
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Item Name *</Text>
-                <View style={styles.autocompleteContainer}>
-                  <TextInput
-                    style={styles.formInput}
-                    value={manualEntryData.name}
-                    onChangeText={handleNameInputChange}
-                    placeholder="Enter or select product name"
-                    placeholderTextColor="#9ca3af"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                    autoFocus={true}
-                    onFocus={() => setIsEditing(true)}
-                    onBlur={() => {
-                      setIsEditing(false);
-                      setTimeout(() => setShowNameSuggestions(false), 200);
-                    }}
-                  />
-                  {showNameSuggestions && nameSuggestions.length > 0 && (
-                    <ScrollView 
-                      style={styles.autocompleteSuggestionsWrapper}
-                      keyboardShouldPersistTaps="handled"
-                      nestedScrollEnabled={true}
+              <Text style={styles.modalLabel}>Item Name:</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={manualEntryData.name}
+                onChangeText={handleNameInputChange}
+                placeholder="Enter item name"
+                autoFocus
+              />
+
+              {showNameSuggestions && nameSuggestions.length > 0 && (
+                <ScrollView style={styles.nameSuggestionsContainer}>
+                  {nameSuggestions.map((name, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.nameSuggestionItem}
+                      onPress={() => handleSelectNameSuggestion(name)}
                     >
-                      {nameSuggestions.map((name, index) => (
-                        <TouchableOpacity
-                          key={`${name}-${index}`}
-                          style={styles.autocompleteSuggestionItem}
-                          onPress={() => handleSelectNameSuggestion(name)}
-                        >
-                          <Text style={styles.autocompleteSuggestionText} numberOfLines={1}>
-                            {name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
-                </View>
+                      <Text style={styles.nameSuggestionText}>{name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              <Text style={styles.modalLabel}>MRP:</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={manualEntryData.mrp}
+                onChangeText={(text) => setManualEntryData({...manualEntryData, mrp: text})}
+                placeholder="Enter MRP"
+                keyboardType="decimal-pad"
+              />
+
+              <Text style={styles.modalLabel}>Cost:</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={manualEntryData.cost}
+                onChangeText={(text) => setManualEntryData({...manualEntryData, cost: text})}
+                placeholder="Enter cost"
+                keyboardType="decimal-pad"
+              />
+
+              <Text style={styles.modalLabel}>Quantity:</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={manualEntryData.quantity}
+                onChangeText={(text) => setManualEntryData({...manualEntryData, quantity: text})}
+                placeholder="Enter quantity"
+                keyboardType="number-pad"
+              />
+
+              <View style={styles.modalButtonContainer}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={closeManualEntryModal}
+                >
+                  <Text style={[styles.modalButtonText, styles.modalButtonTextCancel]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonSave]}
+                  onPress={handleSaveManualEntry}
+                >
+                  <Text style={[styles.modalButtonText, styles.modalButtonTextSave]}>
+                    Save
+                  </Text>
+                </TouchableOpacity>
               </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>MRP (₹) *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={manualEntryData.mrp}
-                  onChangeText={(text) => setManualEntryData({...manualEntryData, mrp: text})}
-                  placeholder="0.00"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="decimal-pad"
-                  returnKeyType="next"
-                  onFocus={() => setIsEditing(true)}
-                  onBlur={() => setIsEditing(false)}
-                />
-              </View>
-
-              // This is the continuation of the JSX return statement
-// Add this after the last formGroup in the modal
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Cost (₹) *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={manualEntryData.cost}
-                  onChangeText={(text) => setManualEntryData({...manualEntryData, cost: text})}
-                  placeholder="0.00"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="decimal-pad"
-                  returnKeyType="next"
-                  onFocus={() => setIsEditing(true)}
-                  onBlur={() => setIsEditing(false)}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Quantity *</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={manualEntryData.quantity}
-                  onChangeText={(text) => setManualEntryData({...manualEntryData, quantity: text})}
-                  placeholder="0"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="number-pad"
-                  returnKeyType="done"
-                  onFocus={() => setIsEditing(true)}
-                  onBlur={() => setIsEditing(false)}
-                />
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={closeManualEntryModal}
-              >
-                <Text style={[styles.modalButtonText, styles.modalButtonTextCancel]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSave]}
-                onPress={handleSaveManualEntry}
-              >
-                <Text style={[styles.modalButtonText, styles.modalButtonTextSave]}>
-                  Save
-                </Text>
-              </TouchableOpacity>
             </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={showQuantityModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeQuantityModal}
+      >
+
+       <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
+        <View style={styles.quantityModalOverlay}>
+          <View style={styles.quantityModalContent}>
+            {selectedProduct && (
+              <>
+                <View style={styles.quantityModalHeader}>
+                  <Text style={styles.quantityModalTitle}>Select Quantity</Text>
+                  <TouchableOpacity 
+                    onPress={closeQuantityModal}
+                    style={styles.quantityModalCloseButton}
+                  >
+                    <Ionicons name="close-circle" size={28} color="#9ca3af" />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.quantityProductName} numberOfLines={2}>
+                  {selectedProduct.name}
+                </Text>
+                <Text style={styles.quantityPriceText}>
+                  Price: ₹{selectedProduct.cost ?? selectedProduct.bmrp ?? 0} per unit
+                </Text>
+
+                <View style={styles.quantityControlContainer}>
+                  <TouchableOpacity 
+                    style={styles.quantityButton}
+                    onPress={decreaseQuantity}
+                  >
+                    <Ionicons name="remove" size={24} color="#3b82f6" />
+                  </TouchableOpacity>
+                  
+                  <TextInput
+                    value={selectedQuantity.toString()}
+                    onChangeText={(text) => {
+                      const num = parseInt(text) || 0;
+                      if (num >= 0) setSelectedQuantity(num);
+                    }}
+                    keyboardType="numeric"
+                    style={styles.quantityValue}
+                    selectTextOnFocus={true}
+                  />
+
+                  
+                  <TouchableOpacity 
+                    style={styles.quantityButton}
+                    onPress={increaseQuantity}
+                  >
+                    <Ionicons name="add" size={24} color="#3b82f6" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.quantityTotalContainer}>
+                  <Text style={styles.quantityTotalLabel}>Total:</Text>
+                  <Text style={styles.quantityTotalValue}>
+                    {((selectedProduct.cost ?? selectedProduct.bmrp ?? 0) * selectedQuantity).toFixed(2)}
+                  </Text>
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.quantityAddButton}
+                  onPress={addProductFromQuantityModal}
+                >
+                  <Ionicons name="checkmark-circle" size={24} color="white" />
+                  <Text style={styles.quantityAddButtonText}>Add to Cart</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
+        </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -1874,7 +1931,10 @@ export default function BarcodeEntry() {
           <CameraView
             style={styles.camera}
             facing="back"
-            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            onBarcodeScanned={scanned ? undefined : (data) => {
+              console.log("📸 Camera captured barcode");
+              handleBarCodeScanned(data, 'scanner');
+            }}
             barcodeScannerSettings={{
               barcodeTypes: [
                 "qr",
@@ -1914,7 +1974,7 @@ export default function BarcodeEntry() {
         </View>
       </Modal>
 
-      {searchMode === 'barcode' && scanMode === 'hardware' && !showManualEntryModal && (
+      {searchMode === 'barcode' && !showManualEntryModal && !showQuantityModal && (
         <TextInput
           ref={inputRef}
           autoFocus
@@ -2012,105 +2072,128 @@ export default function BarcodeEntry() {
           />
         </View>
       ) : (
-        <ScrollView style={styles.scrollView}>
-          <View style={styles.content}>
-            <Text style={styles.sectionTitle}>
-              Scanned Products ({scannedItems.length})
-            </Text>
-
-            {scannedItems.length === 0 && (
-              <Text style={styles.emptyText}>
-                No products scanned yet. Start scanning or enter a {searchMode === 'barcode' ? 'barcode' : 'product name'} manually.
+        <>
+          <ScrollView style={styles.scrollView}>
+            <View style={styles.content}>
+              <Text style={styles.sectionTitle}>
+                Scanned Products ({scannedItems.length})
               </Text>
-            )}
 
-            {scannedItems.map((item, index) => (
-              <View
-                key={`${item.barcode}-${index}-${item.scannedAt}`}
-                style={[
-                  styles.productCard,
-                  getCardStyle(item, index)
-                ]}
-              >
-                <View style={styles.productHeader}>
-                  <View style={styles.productInfo}>
-                    {item.isManualEntry === 1 && (
-                      <View style={styles.manualEntryBadge}>
-                        <Text style={styles.manualEntryBadgeText}>MANUAL ENTRY</Text>
-                      </View>
-                    )}
-                    <Text style={styles.productName} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.productBarcode}>{item.barcode}</Text>
+              {scannedItems.length === 0 && (
+                <Text style={styles.emptyText}>
+                  No products scanned yet. Start scanning or enter a {searchMode === 'barcode' ? 'barcode' : 'product name'} manually.
+                </Text>
+              )}
+
+              {scannedItems.map((item, index) => (
+                <View
+                  key={`${item.barcode}-${index}-${item.scannedAt}`}
+                  style={[
+                    styles.productCard,
+                    getCardStyle(item, index)
+                  ]}
+                >
+                  <View style={styles.productHeader}>
+                    <View style={styles.productInfo}>
+                      {item.isManualEntry === 1 && (
+                        <View style={styles.manualEntryBadge}>
+                          <Text style={styles.manualEntryBadgeText}>MANUAL ENTRY</Text>
+                        </View>
+                      )}
+                      <Text style={styles.productName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.productBarcode}>{item.barcode}</Text>
+                    </View>
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteItem(index)}
+                        style={styles.deleteButton}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="white" />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        onPress={() => handleEditItem(item, index)}
+                        style={styles.editButton}
+                      >
+                        <Ionicons name="create-outline" size={20} color="white" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      onPress={() => handleEditItem(item, index)}
-                      style={styles.editButton}
-                    >
-                      <Ionicons name="create-outline" size={14} color="white" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteItem(index)}
-                      style={styles.deleteButton}
-                    >
-                      <Ionicons name="trash-outline" size={14} color="white" />
-                    </TouchableOpacity>
+
+                  <View style={styles.productDetails}>
+                    <View>
+                      <Text style={styles.detailText}>
+                        Supplier: <Text style={styles.supplierText}>{item.batchSupplier || 'N/A'}</Text>
+                      </Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailText}>
+                        MRP: <Text style={styles.mrpText}>₹{item.bmrp || 0}</Text>
+                      </Text>
+                      <Text style={styles.detailText}>
+                        Cost: <Text style={styles.costText}>₹{item.cost || 0}</Text>
+                      </Text>
+                      <Text style={styles.detailText}>
+                        Stock: <Text style={styles.stockText}>{item.currentStock}</Text>
+                      </Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailText}>
+                        E.Qty: <Text style={styles.eQtyText}>{item.quantity}</Text>
+                      </Text>
+                      <Text style={styles.detailText}>
+                        E.Cost: <Text style={styles.eCostText}>₹{item.eCost || 0}</Text>
+                      </Text>
+                    </View>
                   </View>
                 </View>
+              ))}
 
-                <View style={styles.productDetails}>
-                  <View>
-                    <Text style={styles.detailText}>
-                      Supplier: <Text style={styles.supplierText}>{item.batchSupplier || 'N/A'}</Text>
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailText}>
-                      MRP: <Text style={styles.mrpText}>₹{item.bmrp || 0}</Text>
-                    </Text>
-                    <Text style={styles.detailText}>
-                      Cost: <Text style={styles.costText}>₹{item.cost || 0}</Text>
-                    </Text>
-                    <Text style={styles.detailText}>
-                      Stock: <Text style={styles.stockText}>{item.currentStock}</Text>
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailText}>
-                      E.Qty: <Text style={styles.eQtyText}>{item.quantity}</Text>
-                    </Text>
-                    <Text style={styles.detailText}>
-                      E.Cost: <Text style={styles.eCostText}>₹{item.eCost || 0}</Text>
-                    </Text>
-                  </View>
-                </View>
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>
+                  Powered by IMC Business Solutions
+                </Text>
               </View>
-            ))}
+            </View>
+          </ScrollView>
 
+          <View style={styles.bottomButtonContainer}>
             <TouchableOpacity
               style={[
-                styles.saveButton,
-                scannedItems.length > 0 ? styles.saveButtonActive : styles.saveButtonInactive
+                styles.bottomButton,
+                scannedItems.length > 0 ? styles.updateButton : styles.updateButtonInactive
               ]}
               disabled={scannedItems.length === 0}
               onPress={updateQuantities}
             >
-              <Text style={styles.saveButtonText}>
-                Update Quantities ({scannedItems.length} items)
+              <Ionicons name="checkmark-done" size={24} color="white" />
+              <Text style={styles.bottomButtonText}>
+                Upload ({scannedItems.length})
               </Text>
             </TouchableOpacity>
 
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                Powered by IMC Business Solutions
+            <TouchableOpacity
+              style={[
+                styles.bottomButton,
+                styles.scannerButton
+              ]}
+              onPress={handleToggleScanner}
+            >
+              <Ionicons
+                name="camera"
+                size={24}
+                color="white"
+              />
+              <Text style={styles.bottomButtonText}>
+                Camera
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
+        </>
       )}
     </KeyboardAvoidingView>
   );
