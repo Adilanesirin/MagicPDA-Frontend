@@ -64,10 +64,13 @@ export const saveProductData = async (data: any[]) => {
     let duplicateSkipped = 0;
     const errors: any[] = [];
 
+  try {
+      await db.runAsync(`ALTER TABLE product_data ADD COLUMN text1 TEXT DEFAULT ''`);
+    } catch (e) { /* column already exists, ignore */ }
+
     await db.withTransactionAsync(async () => {
       console.log('🗑️ Clearing existing product data...');
       await db.runAsync('DELETE FROM product_data');
-      console.log('✅ Existing product data cleared');
       
       const seenBarcodes = new Set<string>();
       const uniqueProducts: any[] = [];
@@ -104,8 +107,8 @@ export const saveProductData = async (data: any[]) => {
       const CHUNK_SIZE = 500;
       for (let i = 0; i < uniqueProducts.length; i += CHUNK_SIZE) {
         const chunk = uniqueProducts.slice(i, i + CHUNK_SIZE);
-        const placeholders = chunk.map(() =>
-          '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+       const placeholders = chunk.map(() =>
+          '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         ).join(',');
         const values = chunk.flatMap(item => {
           const code = String(item.code || item.product_code || '').trim();
@@ -137,7 +140,8 @@ export const saveProductData = async (data: any[]) => {
             Number(item.mrp || bmrp || 0),
             Number(item.purchaseprice || item.purchase_price || cost || 0),
             Number(item.purchase_rate || cost || 0),
-            categoryValue
+            categoryValue,
+             item.text1 || ''
           ];
         });
         await db.runAsync(
@@ -145,7 +149,7 @@ export const saveProductData = async (data: any[]) => {
            (code, name, catagory, product, brand, unit, taxcode, productcode,
             barcode, quantity, supplier, expirydate, prices_json,
             cost, bmrp, CO, MR, S1, S2, batch_supplier,
-            salesprice, salesrate, mrp, purchaseprice, purchase_rate, category)
+            salesprice, salesrate, mrp, purchaseprice, purchase_rate, category, text1)
            VALUES ${placeholders}`,
           values
         );
@@ -332,15 +336,15 @@ export const getPendingOrders = async () => {
   const db = getDatabase();
   try {
     const orders = await db.getAllAsync(
-      `SELECT 
-         o.*,
-         p.name as product_name
-       FROM orders_to_sync o 
-       LEFT JOIN product_data p ON o.barcode = p.barcode 
-       WHERE o.sync_status = ? 
-       ORDER BY o.created_at ASC, o.id ASC`,
-      ['pending']
-    );
+  `SELECT 
+     o.*,
+     COALESCE(o.product_name, p.name, '') as product_name
+   FROM orders_to_sync o 
+   LEFT JOIN product_data p ON o.barcode = p.barcode 
+   WHERE o.sync_status = ? 
+   ORDER BY o.created_at ASC, o.id ASC`,
+  ['pending']
+);
     return orders;
   } catch (error) {
     console.error("❌ Error getting pending orders:", error);
@@ -348,21 +352,54 @@ export const getPendingOrders = async () => {
   }
 };
 
+export const getPendingStockCounts = async () => {
+  const db = getDatabase();
+  try {
+    const counts = await db.getAllAsync(
+      `SELECT sc.id, sc.userid, sc.itemcode, sc.barcode,
+              sc.quantity, sc.count_date, sc.sync_status, sc.created_at,
+              sc.product_name, sc.rate, sc.mrp
+       FROM stock_count_to_sync sc
+       WHERE sc.sync_status = 'pending'
+       ORDER BY sc.created_at ASC, sc.id ASC`
+    ) as any[];
+    console.log(`📊 Pending stock counts: ${counts.length}`);
+    return counts;
+  } catch (error) {
+    console.error("❌ Error getting pending stock counts:", error);
+    return [];
+  }
+};
+
+export const markStockCountsAsSynced = async () => {
+  const db = getDatabase();
+  try {
+    await db.runAsync(
+      'UPDATE stock_count_to_sync SET sync_status = ? WHERE sync_status = ?',
+      ['synced', 'pending']
+    );
+    console.log("✅ Stock counts marked as synced");
+  } catch (error) {
+    console.error("❌ Error marking stock counts as synced:", error);
+    throw error;
+  }
+};
+
 export const getPendingOrdersByDateRange = async (startDate: string, endDate: string) => {
   const db = getDatabase();
   try {
-    const orders = await db.getAllAsync(
-      `SELECT 
-         o.*,
-         p.name as product_name
-       FROM orders_to_sync o 
-       LEFT JOIN product_data p ON o.barcode = p.barcode 
-       WHERE o.sync_status = ? 
-         AND o.order_date >= ? 
-         AND o.order_date <= ?
-       ORDER BY o.created_at ASC, o.id ASC`,
-      ['pending', startDate, endDate]
-    );
+   const orders = await db.getAllAsync(
+  `SELECT 
+     o.*,
+     COALESCE(o.product_name, p.name, '') as product_name
+   FROM orders_to_sync o 
+   LEFT JOIN product_data p ON o.barcode = p.barcode 
+   WHERE o.sync_status = ? 
+     AND o.order_date >= ? 
+     AND o.order_date <= ?
+   ORDER BY o.created_at ASC, o.id ASC`,
+  ['pending', startDate, endDate]
+);
     return orders;
   } catch (error) {
     console.error("❌ Error getting pending orders by date:", error);
@@ -411,6 +448,7 @@ export const saveOrderToSync = async (order: {
   order_date: string;
   product_name?: string;
   is_manual_entry?: number;
+  text1?: string;
 }) => {
   const db = getDatabase();
   try {
@@ -432,10 +470,10 @@ export const saveOrderToSync = async (order: {
         [newQuantity, order.rate, order.mrp, existingOrder.created_at || now, existingOrder.id]
       );
     } else {
-      await db.runAsync(
+     await db.runAsync(
         `INSERT INTO orders_to_sync 
-         (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date, product_name, is_manual_entry, sync_status, created_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+         (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date, product_name, is_manual_entry, text1, sync_status, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
         [
           order.supplier_code, 
           order.userid, 
@@ -447,6 +485,7 @@ export const saveOrderToSync = async (order: {
           order.order_date,
           order.product_name || '',
           order.is_manual_entry || 0,
+          order.text1 || '',
           now
         ]
       );
@@ -553,6 +592,7 @@ export const saveGRNToSync = async (order: {
   grn_date: string;
   product_name?: string;
   is_manual_entry?: number;
+    text1?: string;   
 }) => {
   const db = getDatabase();
   try {
@@ -574,10 +614,10 @@ export const saveGRNToSync = async (order: {
         [newQuantity, order.rate, order.mrp, existingGRN.created_at || now, existingGRN.id]
       );
     } else {
-      await db.runAsync(
+     await db.runAsync(
         `INSERT INTO grn_to_sync 
-         (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, grn_date, product_name, is_manual_entry, sync_status, created_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+         (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, grn_date, product_name, is_manual_entry, text1, sync_status, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
         [
           order.supplier_code, 
           order.userid, 
@@ -589,6 +629,7 @@ export const saveGRNToSync = async (order: {
           order.grn_date,
           order.product_name || '',
           order.is_manual_entry || 0,
+          order.text1 || '',   // ✅ ADD this value
           now
         ]
       );
@@ -639,7 +680,8 @@ export const getPendingReturns = async () => {
     const returns = await db.getAllAsync(
       `SELECT 
          r.*,
-         p.name as product_name
+         COALESCE(r.product_name, p.name, '') as product_name,
+         COALESCE(r.text1, '') as text1
        FROM returns_to_sync r 
        LEFT JOIN product_data p ON r.barcode = p.barcode 
        WHERE r.sync_status = ? 
@@ -717,6 +759,7 @@ export const saveReturnToSync = async (returnData: {
   product_name?: string;
   is_manual_entry?: number;
   return_reason?: string;
+  text1?: string; 
 }) => {
   const db = getDatabase();
   try {
@@ -738,10 +781,10 @@ export const saveReturnToSync = async (returnData: {
         [newQuantity, returnData.rate, returnData.mrp, existingReturn.created_at || now, existingReturn.id]
       );
     } else {
-      await db.runAsync(
+     await db.runAsync(
         `INSERT INTO returns_to_sync 
-         (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, return_date, product_name, is_manual_entry, return_reason, sync_status, created_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+         (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, return_date, product_name, is_manual_entry, return_reason, text1, sync_status, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
         [
           returnData.supplier_code, 
           returnData.userid, 
@@ -754,6 +797,7 @@ export const saveReturnToSync = async (returnData: {
           returnData.product_name || '',
           returnData.is_manual_entry || 0,
           returnData.return_reason || '',
+          returnData.text1 || '',   // ✅ ADD this value
           now
         ]
       );
@@ -887,6 +931,68 @@ export const saveSaleToSync = async (sale: {
   }
 };
 
+export const saveSaleReturnToSync = async (sale: {
+  userid: string;
+  itemcode: string;
+  barcode: string;
+  quantity: number;
+  rate: number;
+  mrp: number;
+  sale_date: string;
+  sales_date?: string;
+  product_name?: string;
+  is_manual_entry?: number;
+}) => {
+  const db = getDatabase();
+  try {
+    const now = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO sales_return_to_sync
+       (userid, itemcode, barcode, quantity, rate, mrp, sales_date, product_name, is_manual_entry, sync_status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+      [sale.userid, sale.itemcode, sale.barcode,
+       sale.quantity, sale.rate, sale.mrp, sale.sale_date || sale.sales_date || new Date().toISOString().split('T')[0],       sale.product_name || '', sale.is_manual_entry || 0, now]
+    );
+  } catch (error) {
+    console.error("❌ Error saving sale return to sync:", error);
+    throw error;
+  }
+};
+
+export const getPendingSalesReturnOrders = async () => {
+  const db = getDatabase();
+  try {
+    const returns = await db.getAllAsync(
+      `SELECT s.*, COALESCE(s.product_name, p.name) as product_name
+       FROM sales_return_to_sync s
+       LEFT JOIN product_data p ON s.barcode = p.barcode
+       WHERE s.sync_status = ?
+       ORDER BY s.created_at ASC, s.id ASC`,
+      ['pending']
+    );
+    return returns;
+  } catch (error) {
+    console.error("❌ Error getting pending sales returns:", error);
+    return [];
+  }
+};
+
+export const markSalesReturnsAsSynced = async () => {
+  const db = getDatabase();
+  try {
+    await db.runAsync(
+      'UPDATE sales_return_to_sync SET sync_status = ? WHERE sync_status = ?',
+      ['synced', 'pending']
+    );
+    console.log("✅ Sales returns marked as synced");
+  } catch (error) {
+    console.error("❌ Error marking sales returns as synced:", error);
+    throw error;
+  }
+};
+export const markSalesReturnAsSynced = markSalesReturnsAsSynced;
+
+
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
@@ -951,6 +1057,7 @@ export const saveProductDataFast = async (data: any[]) => {
   console.log(`⚡ Fast saving ${data.length} product records...`);
   const startTime = Date.now();
 
+
   try {
     try { await db.execAsync('ROLLBACK;'); } catch (_) { }
     await db.execAsync('DELETE FROM product_data;');
@@ -963,18 +1070,22 @@ export const saveProductDataFast = async (data: any[]) => {
         const name = escape(item.name || item.product_name || 'Unknown');
         const barcode = escape(item.barcode || `CODE_${item.code}`);
         const qty = escape(typeof item.quantity === 'number' ? item.quantity : 0);
-        const sp = escape(typeof item.salesprice === 'number' ? item.salesprice : 0);
+       const sp = escape(typeof item.salesprice === 'number' ? item.salesprice : 0);
         const bmrp = escape(typeof item.bmrp === 'number' ? item.bmrp : 0);
         const cost = escape(typeof item.cost === 'number' ? item.cost : 0);
         const batch = escape(item.batch_supplier);
-        return `(${code},${name},${barcode},${qty},${sp},${bmrp},${cost},${batch})`;
-      }).join(',');
-      await db.execAsync(
-        `INSERT OR REPLACE INTO product_data (code, name, barcode, quantity, salesprice, bmrp, cost, batch_supplier) VALUES ${valueRows};`
-      );
+        const pricesArray = item.prices || [];
+        const S1 = escape(getPriceByCode(pricesArray, 'S1'));
+        const S2 = escape(getPriceByCode(pricesArray, 'S2'));
+        return `(${code},${name},${barcode},${qty},${sp},${bmrp},${cost},${batch},${S1},${S2})`;
+        }).join(',');
+        await db.execAsync(
+          `INSERT OR REPLACE INTO product_data (code, name, barcode, quantity, salesprice, bmrp, cost, batch_supplier, S1, S2) VALUES ${valueRows};`
+        );
       valueRows = ''; // free string immediately after insert
-      console.log(`⚡ Product fast progress: ${Math.min(i + CHUNK_SIZE, data.length)}/${data.length}`);
+      console.log(`📊 Product fast progress: ${Math.min(i + CHUNK_SIZE, data.length)}/${data.length}`);
     }
+
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`⚡ Product fast saved: ${data.length} records in ${duration}s`);

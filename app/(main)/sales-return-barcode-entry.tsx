@@ -20,23 +20,22 @@ import {
   View
 } from "react-native";
 import Toast from "react-native-toast-message";
-import SalesCartDrawer from "./SalesCartDrawer";
+import SalesReturnCartDrawer from "./sales-return-cart";
 const db = SQLite.openDatabaseSync("magicpedia.db");
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#f9f6f3',
   },
  backButton: {
-  backgroundColor: '#1E293B',
+  backgroundColor: '#C2410C',
   borderRadius: 20,
   padding: 8,
 },
   header: {
     paddingTop: Platform.OS === 'ios' ? 100 : 80,
     paddingHorizontal: 16,
-    backgroundColor: '#f2f4f8',
+    backgroundColor: '#f9f6f3',
     paddingBottom: 6,
     paddingTop: Platform.OS === 'android' ? 55 : 60,
     borderBottomLeftRadius: 2,
@@ -51,18 +50,18 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#131f3d',
-    marginBottom: 16,
+    color: '#EA580C',
+    marginBottom: -1,
     textAlign: 'center',
     letterSpacing: 0.3,
   },
   toggleContainer: {
     flexDirection: 'row',
     marginBottom: 12,
-    backgroundColor: '#f6ffff',
+    backgroundColor: '#ffffff',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#cbcfd4',
+    borderColor: '#e5ddda',
     overflow: 'hidden',
   },
   toggleButton: {
@@ -72,14 +71,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#f3f4f5',
+    backgroundColor: '#f5f4f3',
   },
   toggleButtonLeft: {
     borderRightWidth: 1,
-    borderRightColor: '#b7c1ce',
+    borderRightColor: '#fdfcfc',
   },
   toggleButtonActive: {
-    backgroundColor: '#131f3d',
+    backgroundColor: '#EA580C',
   },
   toggleIcon: {
     marginRight: 6,
@@ -87,10 +86,10 @@ const styles = StyleSheet.create({
   toggleText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#94A3B8',
+    color: '#8e949b',
   },
   toggleTextActive: {
-    color: '#FFFFFF',
+    color: '#fffdfd',
     fontWeight: '600',
   },
   inputRow: {
@@ -102,16 +101,16 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#d3d6db',
+    borderColor: '#dbcdcd',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 5,
-    backgroundColor: '#f1f2f4',
+    backgroundColor: '#ffffff',
     fontSize: 16,
-    color: '#393b3d',
+    color: '#3c3434',
   },
   getButton: {
-    backgroundColor: '#131f3d',
+    backgroundColor: '#EA580C',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
@@ -136,7 +135,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#FFF7ED',
   },
   suggestionContent: {
     flex: 1,
@@ -182,7 +181,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
-    color: '#131f3d',
+    color: '#EA580C',
   },
   emptyText: {
     textAlign: 'center',
@@ -199,30 +198,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 1.5,
     elevation: 1.5,
-    padding: 18,
+    padding: 16,
   },
   latestProductCard: {
-    backgroundColor: '#d6f3f5',
+    backgroundColor: '#fddbd9',
     borderWidth: 1,
-    borderColor: '#d7d7da',
+    borderColor: '#fad5d5',
   },
   regularProductCard: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#f0e2e4',
   },
   manualEntryCard: {
-    backgroundColor: '#f0f9ff',
+    backgroundColor: '#fff0f1',
     borderWidth: 1,
-    borderColor: '#38bdf8',
+    borderColor: '#f86538',
   },
   manualEntryBadge: {
-    backgroundColor: '#0ea5e9',
+    backgroundColor: '#e95e0e',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
     alignSelf: 'flex-start',
     marginBottom: 6,
+    marginTop: -10,
   },
   manualEntryBadgeText: {
     color: '#ffffff',
@@ -249,22 +249,26 @@ const styles = StyleSheet.create({
   productBarcode: {
     fontSize: 14,
     color: '#64748B',
-    marginBottom: 0,
+    marginBottom: 10,
   },
   actionButtons: {
     flexDirection: 'column',
     gap: 12,
     alignItems: 'flex-end',
+     width: 54,
   },
   editButton: {
-    backgroundColor: '#131f3d',
-    padding: 10,
+    //backgroundColor: '#EA580C',
+    padding: 12,
     borderRadius: 4,
+   marginTop: -13,
+    
   },
   deleteButton: {
-    backgroundColor: '#ef4466',
-    padding: 10,
+    //backgroundColor: '#ef4466',
+    padding: 12,
     borderRadius: 4,
+    marginTop: -14,
   },
   productDetails: {
     gap: 6,
@@ -293,7 +297,7 @@ const styles = StyleSheet.create({
   },
   eQtyText: {
     fontWeight: '600',
-    color: '#10B981',
+    color: '#EA580C',
   },
   eCostText: {
     fontWeight: '600',
@@ -330,13 +334,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   scannerButton: {
-    backgroundColor: '#131f3d',
+    backgroundColor: '#EA580C',
   },
   scannerButtonInactive: {
     backgroundColor: '#94A3B8',
   },
   updateButton: {
-    backgroundColor: '#43b1d6',
+    backgroundColor: '#F97316',
   },
   updateButtonInactive: {
     backgroundColor: '#d1d5db',
@@ -377,7 +381,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 40,
     height: 40,
-    borderColor: '#10B981',
+    borderColor: '#EA580C',
   },
   topLeft: {
     top: 0,
@@ -430,7 +434,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingBottom: 20,
-    backgroundColor: '#131f3d',
+    backgroundColor: '#EA580C',
   },
   modalTitle: {
     fontSize: 24,
@@ -513,7 +517,7 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca',
   },
   modalButtonSave: {
-    backgroundColor: '#131f3d',
+    backgroundColor: '#EA580C',
   },
   modalButtonText: {
     fontSize: 16,
@@ -528,7 +532,7 @@ const styles = StyleSheet.create({
   variantsHeader: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#131f3d',
+    color: '#EA580C',
     padding: 12,
     backgroundColor: '#EFF6FF',
     borderBottomWidth: 1,
@@ -590,7 +594,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -605,7 +609,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#FFF7ED',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
@@ -618,13 +622,13 @@ const styles = StyleSheet.create({
   quantityTotalValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#10B981',
+    color: '#EA580C',
   },
   quantityAddButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#131f3d',
+    backgroundColor: '#EA580C',
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 12,
@@ -649,7 +653,7 @@ headerIconBtn: {
   width: 48,
   height: 40,
   borderRadius: 10,
-  backgroundColor: '#cfd5e5',
+  backgroundColor: '#FDDCBB',
   alignItems: 'center',
   justifyContent: 'center',
 },
@@ -660,7 +664,7 @@ headerIconDot: {
   width: 8,
   height: 8,
   borderRadius: 4,
-  backgroundColor: '#10B981',
+  backgroundColor: '#EA580C',
 },
 cartBadge: {
   position: 'absolute',
@@ -713,7 +717,7 @@ customerModalTitle: {
 },
 customerInput: {
   borderWidth: 1.5,
-  borderColor: '#131f3d',
+  borderColor: '#EA580C',
   borderRadius: 12,
   paddingHorizontal: 16,
   paddingVertical: 14,
@@ -722,7 +726,7 @@ customerInput: {
   marginBottom: 16,
 },
 customerSaveBtn: {
-  backgroundColor: '#131f3d',
+  backgroundColor: '#EA580C',
   borderRadius: 12,
   paddingVertical: 14,
   alignItems: 'center',
@@ -736,7 +740,7 @@ cartCustomerRow: {
   flexDirection: 'row',
   alignItems: 'center',
   gap: 6,
-  backgroundColor: '#ECFDF5',
+  backgroundColor: '#FFF7ED',
   padding: 10,
   borderRadius: 10,
   marginBottom: 14,
@@ -766,7 +770,7 @@ cartItemDetail: {
 cartItemTotal: {
   fontSize: 15,
   fontWeight: '700',
-  color: '#131f3d',
+  color: '#EA580C',
 },
 cartTotalRow: {
   flexDirection: 'row',
@@ -775,7 +779,7 @@ cartTotalRow: {
   marginTop: 16,
   paddingTop: 14,
   borderTopWidth: 2,
-  borderTopColor: '#131f3d',
+  borderTopColor: '#EA580C',
 },
 cartTotalLabel: {
   fontSize: 16,
@@ -785,7 +789,7 @@ cartTotalLabel: {
 cartTotalValue: {
   fontSize: 20,
   fontWeight: '800',
-  color: '#131f3d',
+  color: '#EA580C',
 },
 cartEmptyText: {
   textAlign: 'center',
@@ -802,7 +806,7 @@ cartEmptyText: {
 const initPendingSalesItemsTable = async () => {
   try {
     await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS pending_sales_items (
+      CREATE TABLE IF NOT EXISTS pending_sales_return_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         barcode TEXT NOT NULL,
         name TEXT NOT NULL,
@@ -820,13 +824,13 @@ const initPendingSalesItemsTable = async () => {
       );
     `);
 
-    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(pending_sales_items)`);
+    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(pending_sales_return_items)`);
     const hasIsManualEntry = tableInfo.some((col: any) => col.name === 'isManualEntry');
 
     if (!hasIsManualEntry) {
-      await db.execAsync(`ALTER TABLE pending_sales_items RENAME TO pending_sales_items_old;`);
+      await db.execAsync(`ALTER TABLE pending_sales_return_items RENAME TO pending_sales_return_items_old;`);
       await db.execAsync(`
-        CREATE TABLE pending_sales_items (
+        CREATE TABLE pending_sales_return_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           barcode TEXT NOT NULL,
           name TEXT NOT NULL,
@@ -844,31 +848,31 @@ const initPendingSalesItemsTable = async () => {
         );
       `);
       await db.execAsync(`
-        INSERT INTO pending_sales_items
+        INSERT INTO pending_sales_return_items
         (id, barcode, name, bmrp, cost, quantity, eCost, currentStock, scannedAt, product, brand, isManualEntry, S1)
         SELECT id, barcode, name, bmrp, cost, quantity, eCost, currentStock, scannedAt, product, brand, 0
-        FROM pending_sales_items_old;
+        FROM pending_sales_return_items_old;
       `);
-      await db.execAsync(`DROP TABLE IF EXISTS pending_sales_items_old;`);
+      await db.execAsync(`DROP TABLE IF EXISTS pending_sales_return_items_old;`);
     }
 
    const hasCodeColumn = tableInfo.some((col: any) => col.name === 'code');
 if (!hasCodeColumn) {
-  await db.execAsync(`ALTER TABLE pending_sales_items ADD COLUMN code TEXT;`);
+  await db.execAsync(`ALTER TABLE pending_sales_return_items ADD COLUMN code TEXT;`);
 }
 
 const hasS1Column = tableInfo.some((col: any) => col.name === 'S1');
 if (!hasS1Column) {
-  await db.execAsync(`ALTER TABLE pending_sales_items ADD COLUMN S1 NUMERIC DEFAULT 0;`);
+  await db.execAsync(`ALTER TABLE pending_sales_return_items ADD COLUMN S1 NUMERIC DEFAULT 0;`);
 }
 
   } catch (error: any) {
     console.error("❌ Error in initPendingSalesItemsTable:", error);
     if (error.message?.includes('no such table') || error.message?.includes('no such column')) {
       try {
-        await db.execAsync(`DROP TABLE IF EXISTS pending_sales_items;`);
+        await db.execAsync(`DROP TABLE IF EXISTS pending_sales_return_items;`);
         await db.execAsync(`
-          CREATE TABLE pending_sales_items (
+          CREATE TABLE pending_sales_return_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             barcode TEXT NOT NULL,
             name TEXT NOT NULL,
@@ -904,7 +908,7 @@ const saveSalesOrderToSync = async (orderData: {
 }) => {
   try {
     await db.runAsync(
-      `INSERT INTO sales_to_sync
+      `INSERT INTO sales_return_to_sync
       (userid, itemcode, barcode, quantity, rate, mrp, sales_date, sync_status, created_at, product_name, is_manual_entry)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?, ?)`,
       [
@@ -920,7 +924,7 @@ const saveSalesOrderToSync = async (orderData: {
       ]
     );
   } catch (error) {
-    console.error("❌ Error saving to sales_to_sync:", error);
+    console.error("❌ Error saving to sales_return_to_sync:", error);
     throw error;
   }
 };
@@ -928,7 +932,7 @@ const saveSalesOrderToSync = async (orderData: {
 const savePendingSalesItem = async (item: any) => {
   try {
 await db.runAsync(
-  `INSERT INTO pending_sales_items
+  `INSERT INTO pending_sales_return_items
 (barcode, name, code, bmrp, cost, quantity, eCost, currentStock, scannedAt, product, brand, isManualEntry, S1)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   [
@@ -955,7 +959,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
 const deletePendingSalesItem = async (id: number) => {
   try {
-    await db.runAsync(`DELETE FROM pending_sales_items WHERE id = ?`, [id]);
+    await db.runAsync(`DELETE FROM pending_sales_return_items WHERE id = ?`, [id]);
   } catch (error) {
     console.error("Error deleting pending sales item:", error);
     throw error;
@@ -965,7 +969,7 @@ const deletePendingSalesItem = async (id: number) => {
 const debugSalesSave = async (barcode: string) => {
   try {
     const saved = await db.getFirstAsync(
-      "SELECT * FROM pending_sales_items WHERE barcode = ? ORDER BY scannedAt DESC LIMIT 1",
+      "SELECT * FROM pending_sales_return_items WHERE barcode = ? ORDER BY scannedAt DESC LIMIT 1",
       [barcode]
     ) as any;
     console.log("🔍 DEBUG - Saved sales item:", {
@@ -980,7 +984,7 @@ const debugSalesSave = async (barcode: string) => {
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
-export default function SalesBarcodeEntry() {
+export default function SalesReturnBarcodeEntry() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
@@ -1042,7 +1046,7 @@ export default function SalesBarcodeEntry() {
     const userId = await SecureStore.getItemAsync("user_id") || "";
     const today = new Date().toISOString().split("T")[0];
     const saved: any[] = await db.getAllAsync(
-      `SELECT * FROM pending_sales_items ORDER BY scannedAt DESC`
+      `SELECT * FROM pending_sales_return_items ORDER BY scannedAt DESC`
     );
     const enriched = saved.map(item => ({
       ...item,
@@ -1079,7 +1083,7 @@ export default function SalesBarcodeEntry() {
       const item = scannedItems[parseInt(params.itemIndex as string)];
       if (item?.id) {
         db.runAsync(
-          `UPDATE pending_sales_items
+          `UPDATE pending_sales_return_items
            SET quantity = ?, eCost = ?, cost = ?, bmrp = ?
            WHERE id = ?`,
           [updatedItem.quantity, updatedItem.eCost, updatedItem.cost, updatedItem.bmrp, item.id]
@@ -1106,7 +1110,7 @@ export default function SalesBarcodeEntry() {
 const loadPendingSalesItems = async () => {
   try {
     const items: any[] = await db.getAllAsync(
-      `SELECT * FROM pending_sales_items ORDER BY scannedAt DESC`
+      `SELECT * FROM pending_sales_return_items ORDER BY scannedAt DESC`
     );
     if (items.length > 0) {
       console.log("🛒 First scanned item fields:", JSON.stringify(items[0], null, 2));
@@ -1448,7 +1452,7 @@ const loadPendingSalesItems = async () => {
 
   const handleEditItem = (item: any, index: number) => {
     router.push({
-      pathname: "/sales-editproduct",
+      pathname: "/sales-return-editproduct",
       params: {
         itemData: JSON.stringify(item),
         itemIndex: index.toString(),
@@ -1602,7 +1606,7 @@ const handleAddAllToCart = async () => {
                 }
               }
 
-              await db.runAsync(`DELETE FROM pending_sales_items`);
+              await db.runAsync(`DELETE FROM pending_sales_return_items`);
               await loadPendingSalesItems();
               Alert.alert(
                 "Success",
@@ -1684,7 +1688,7 @@ const handleAddAllToCart = async () => {
                   </Text>
                   <View style={styles.quantityControlContainer}>
                     <TouchableOpacity style={styles.quantityButton} onPress={decreaseQuantity}>
-                      <Ionicons name="remove" size={24} color="#10B981" />
+                      <Ionicons name="remove" size={24} color="#EA580C" />
                     </TouchableOpacity>
                     <TextInput
                       value={selectedQuantity.toString()}
@@ -1694,7 +1698,7 @@ const handleAddAllToCart = async () => {
                       selectTextOnFocus={true}
                     />
                     <TouchableOpacity style={styles.quantityButton} onPress={increaseQuantity}>
-                      <Ionicons name="add" size={24} color="#10B981" />
+                      <Ionicons name="add" size={24} color="#EA580C" />
                     </TouchableOpacity>
                   </View>
                   <View style={styles.quantityTotalContainer}>
@@ -1892,16 +1896,16 @@ const handleAddAllToCart = async () => {
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={22} color="#94A3B8" />
+            <Ionicons name="arrow-back" size={20} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>SALES ENTRY</Text>
+          <Text style={styles.pageTitle}>SALES RETURN</Text>
           <View style={styles.headerIcons}>
             <TouchableOpacity onPress={() => setShowCustomerModal(true)} style={styles.headerIconBtn}>
-              <Ionicons name="person-add-outline" size={20} color="#131f3d" />
+              <Ionicons name="person-add-outline" size={20} color="#EA580C" />
               {customerName ? <View style={styles.headerIconDot} /> : null}
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowCartModal(true)} style={styles.headerIconBtn}>
-              <Ionicons name="cart-outline" size={22} color="#131f3d" />
+              <Ionicons name="cart-outline" size={22} color="#EA580C" />
              {cartItems.length > 0 && (
                 <View style={styles.cartBadge}>
                     <Text style={styles.cartBadgeText}>{cartItems.length}</Text>
@@ -1988,10 +1992,10 @@ const handleAddAllToCart = async () => {
                     </View>
                     <View style={styles.actionButtons}>
                       <TouchableOpacity onPress={() => handleDeleteItem(index)} style={styles.deleteButton}>
-                        <Ionicons name="trash-outline" size={20} color="white" />
+                        <Ionicons name="trash" size={30}color="#ea0c0c" />
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => handleEditItem(item, index)} style={styles.editButton}>
-                        <Ionicons name="create-outline" size={22} color="white" />
+                        <Ionicons name="create" size={30} color="#088235" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2031,7 +2035,7 @@ const handleAddAllToCart = async () => {
           </View>
         </>
       )}
-     <SalesCartDrawer
+     <SalesReturnCartDrawer
       visible={showCartModal}
       items={cartItems}
       customerName={customerName}
@@ -2040,14 +2044,10 @@ const handleAddAllToCart = async () => {
       onRemoveItem={(index) => setCartItems(prev => prev.filter((_, i) => i !== index))}
       onUploadSuccess={async () => {
         setCartItems([]);
-        await db.runAsync(`DELETE FROM pending_sales_items`);
+        await db.runAsync(`DELETE FROM pending_sales_return_items`);
         await loadPendingSalesItems();
       }}  
         />  
     </KeyboardAvoidingView>
     );
 };
-
-
-
-   

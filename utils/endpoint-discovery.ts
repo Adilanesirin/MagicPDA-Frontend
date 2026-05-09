@@ -13,6 +13,10 @@ export async function discoverDownloadEndpoints(): Promise<ServerEndpoint[]> {
     
     // Common download endpoint patterns based on typical server setups
     const commonEndpoints = [
+      // Actual working endpoints from this app
+      { url: '/misel', method: 'GET', description: 'Main data download' },
+      { url: '/product-details', method: 'GET', description: 'Product details endpoint' },
+      
       // Single endpoint patterns (returns all data)
       { url: '/api/data', method: 'GET', description: 'Complete data download' },
       { url: '/data-download', method: 'GET', description: 'Data download endpoint' },

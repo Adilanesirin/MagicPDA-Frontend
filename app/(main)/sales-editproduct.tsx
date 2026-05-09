@@ -3,14 +3,14 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useState } from "react";
 import {
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 
 export default function EditSalesProduct() {
@@ -111,15 +111,7 @@ export default function EditSalesProduct() {
                 Stock: <Text style={styles.stockValue}>{product.currentStock || 0}</Text>
               </Text>
             </View>
-            <View style={styles.productMetaRow}>
-              <Text style={styles.metaText}>
-                Original Cost: <Text style={styles.originalCostValue}>₹{product.cost || 0}</Text>
-              </Text>
-              <Text style={styles.metaDot}>•</Text>
-              <Text style={styles.metaText}>
-                E.Cost: <Text style={styles.eCostValue}>₹{currentDisplayCost || 0}</Text>
-              </Text>
-            </View>
+            
           </View>
 
           {/* Edit Form Card */}
@@ -165,18 +157,7 @@ export default function EditSalesProduct() {
                 {!mrpEditable && <Text style={styles.lockedHint}>Enable in Settings</Text>}
                 </View>
 
-                {/* E.Cost */}
-                <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>E.Cost (₹)</Text>
-                <TextInput
-                    value={editedCost}
-                    onChangeText={setEditedCost}
-                    keyboardType="decimal-pad"
-                    placeholder="0.00"
-                    style={[styles.priceInput, styles.priceInputCost]}
-                />
-                </View>
-
+               
             </View>
           </View>
 
@@ -331,16 +312,16 @@ const styles = StyleSheet.create({
   },
   qtyDecrBtn: {
     backgroundColor: '#EF4444',
-    width: 42,
-    height: 42,
+    width: 35,
+    height: 35,
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyIncrBtn: {
     backgroundColor: '#3B82F6',
-    width: 42,
-    height: 42,
+    width: 35,
+    height: 35,
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',

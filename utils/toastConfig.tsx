@@ -1,7 +1,6 @@
 // utils/toastConfig.tsx
-import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
+import { Animated, Text, View } from "react-native";
 
 const ToastBase = ({
   iconName,
@@ -19,8 +18,6 @@ const ToastBase = ({
   textColor?: string;
 }) => (
   <Animated.View
-    entering={FadeInDown}
-    exiting={FadeOutUp}
     className="flex-row items-start gap-3 px-5 py-4 rounded-2xl mx-4 mt-1"
     style={{
       backgroundColor,

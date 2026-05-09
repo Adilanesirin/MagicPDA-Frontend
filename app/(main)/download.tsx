@@ -129,6 +129,7 @@ export default function DownloadPage() {
   });
 }, 800);
 
+await (await import("@/utils/download")).downloadFirmInfo();
 const result = await downloadWithRetry();
 clearInterval(progressInterval);
       
@@ -215,7 +216,8 @@ clearInterval(progressInterval);
   });
 }, 800);
 
-    const { downloadWithRetryFast } = await import("@/utils/download");
+    const { downloadWithRetryFast, downloadFirmInfo } = await import("@/utils/download");
+    await downloadFirmInfo();
     const result = await downloadWithRetryFast();
 
     clearInterval(progressInterval);

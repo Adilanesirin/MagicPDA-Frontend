@@ -140,7 +140,7 @@ export const migrateProductDataTable = async () => {
       'brand', 'unit', 'taxcode', 'productcode', 'S1', 'S2', 
       'supplier', 'expirydate', 'batch_supplier', 'catagory', 'product', 
       'prices_json', 'salesprice', 'salesrate', 'mrp', 'purchaseprice', 
-      'purchase_rate', 'category'
+      'purchase_rate', 'category', 'text1'
     ];
     
     // Find which columns exist in BOTH old and new schema
@@ -185,10 +185,12 @@ export const migrateProductDataTable = async () => {
         mrp NUMERIC DEFAULT 0,
         purchaseprice NUMERIC DEFAULT 0,
         purchase_rate NUMERIC DEFAULT 0,
-        category TEXT DEFAULT ''
+        category TEXT DEFAULT '',
+        text1 TEXT DEFAULT ''
+       
       );
     `);
-    
+    await addColumnIfMissing(db, 'product_data', 'text1', "TEXT DEFAULT ''");
     // Create index
     await db.execAsync(`
       CREATE INDEX IF NOT EXISTS idx_product_barcode ON product_data(barcode);
@@ -278,7 +280,8 @@ export const initDatabase = async () => {
         mrp NUMERIC DEFAULT 0,
         purchaseprice NUMERIC DEFAULT 0,
         purchase_rate NUMERIC DEFAULT 0,
-        category TEXT DEFAULT ''
+        category TEXT DEFAULT '',
+        text1 TEXT DEFAULT ''
       );
     `);
 
@@ -305,9 +308,11 @@ export const initDatabase = async () => {
         sync_status TEXT DEFAULT 'pending',
         product_name TEXT,
         is_manual_entry INTEGER DEFAULT 0,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+         text1 TEXT DEFAULT ''
       );
     `);
+    await addColumnIfMissing(db, 'orders_to_sync', 'text1', "TEXT DEFAULT ''");
 
     // === GRN TO SYNC TABLE ===
     await db.execAsync(`
@@ -367,9 +372,15 @@ export const initDatabase = async () => {
         batch_supplier TEXT,
         product TEXT,
         brand TEXT,
-        isManualEntry INTEGER DEFAULT 0
+        isManualEntry INTEGER DEFAULT 0,
+        moreoption TEXT DEFAULT '',
+        text1 TEXT DEFAULT ''
       );
     `);
+
+    await addColumnIfMissing(db, 'pending_items', 'moreoption', "TEXT DEFAULT ''");
+    await addColumnIfMissing(db, 'pending_items', 'text1', "TEXT DEFAULT ''");
+
 
     // === PENDING GRN ITEMS TABLE ===
     await db.execAsync(`
@@ -450,6 +461,45 @@ await addColumnIfMissing(db, 'sales_to_sync', 'customer', "TEXT DEFAULT ''");
 await addColumnIfMissing(db, 'sales_to_sync', 'enclosures', "TEXT DEFAULT ''");
 await addColumnIfMissing(db, 'sales_to_sync', 'description', "TEXT DEFAULT ''");
 console.log("✅ sales_to_sync table ready");
+     
+   // === SALES RETURN TO SYNC TABLE ===
+await db.execAsync(`
+  CREATE TABLE IF NOT EXISTS sales_return_to_sync (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userid TEXT NOT NULL,
+    itemcode TEXT,
+    barcode TEXT NOT NULL,
+    quantity NUMERIC NOT NULL,
+    rate NUMERIC NOT NULL,
+    mrp NUMERIC NOT NULL,
+    sales_date TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    sync_status TEXT DEFAULT 'pending',
+    product_name TEXT,
+    is_manual_entry INTEGER DEFAULT 0,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+console.log("✅ sales_return_to_sync table ready");
+
+    // === STOCK COUNT TO SYNC TABLE ===
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS stock_count_to_sync (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userid TEXT NOT NULL,
+        itemcode TEXT,
+        barcode TEXT NOT NULL,
+        quantity NUMERIC NOT NULL,
+        rate NUMERIC DEFAULT 0,
+        mrp NUMERIC DEFAULT 0,
+        count_date TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        sync_status TEXT DEFAULT 'pending',
+        product_name TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("✅ stock_count_to_sync table ready");
 
     // === SYNC INFO TABLE ===
     await db.execAsync(`
@@ -1080,7 +1130,7 @@ export const saveProductData = async (data: any[]) => {
         const chunk = uniqueProducts.slice(i, i + CHUNK_SIZE);
         
         const placeholders = chunk.map(() =>
-          '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+          '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         ).join(',');
         
         const values = chunk.flatMap(item => {
@@ -1114,7 +1164,8 @@ export const saveProductData = async (data: any[]) => {
             Number(item.mrp || MR || 0),
             Number(item.purchaseprice || item.purchase_price || CO || 0),
             Number(item.purchase_rate || CO || 0),
-            item.catagory || item.category || ''
+            item.catagory || item.category || '',
+              item.text1 || ''
           ];
         });
         
@@ -1123,7 +1174,7 @@ export const saveProductData = async (data: any[]) => {
           (code, name, catagory, product, brand, unit, taxcode, productcode,
             barcode, quantity, supplier, expirydate, prices_json,
             cost, bmrp, CO, MR, S1, S2, batch_supplier,
-            salesprice, salesrate, mrp, purchaseprice, purchase_rate, category)
+            salesprice, salesrate, mrp, purchaseprice, purchase_rate, category, text1)
           VALUES ${placeholders}`,
           values
         );

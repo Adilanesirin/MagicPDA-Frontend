@@ -88,6 +88,8 @@ export default function StockTrackerScreen() {
   const scanLockRef = useRef(false);
   const hardwareScanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // 🔥 FIX: Copy data from category to catagory if needed
   useEffect(() => {
@@ -206,36 +208,6 @@ useEffect(() => {
 useEffect(() => {
   SecureStore.getItemAsync("user_role").then(role => setUserRole(role));
 }, []);
-
-useEffect(() => {
-    const fetchInitialData = async () => {
-      const { createEnhancedAPI } = await import('@/utils/api');
-      const api = await createEnhancedAPI();
-
-      // Fetch godown list separately
-      try {
-        const godownRes = await api.get('/acc-goddown');
-        if (Array.isArray(godownRes.data?.data)) {
-          setGodownList(godownRes.data.data);
-          console.log('✅ Godown list loaded:', godownRes.data.data.length);
-        }
-      } catch (e) {
-        console.log('⚠️ Could not fetch godown list:', e);
-      }
-
-      // Fetch product cache separately
-      try {
-        const productsRes = await api.get('/product-details', { timeout: 30000 });
-        if (Array.isArray(productsRes.data?.data)) {
-          setApiProductsCache(productsRes.data.data);
-          console.log('✅ API products cached:', productsRes.data.data.length);
-        }
-      } catch (e) {
-        console.log('⚠️ Could not fetch product cache:', e);
-      }
-    };
-    fetchInitialData();
-  }, []);
 
   const initializeDatabase = async () => {
     try {
@@ -684,7 +656,7 @@ setProductData(validatedProduct);
   );
 
   // Helper function to get price from prices array OR individual columns
-  const getPriceValue = (priceCode: string): number => {
+const getPriceValue = (priceCode: string): number => {
     if (!productData) return 0;
     
     // Try to get from prices array first
@@ -704,6 +676,76 @@ setProductData(validatedProduct);
       default: return 0;
     }
   };
+
+ const fetchLiveData = async () => {
+  if (!productData) return;
+  setLiveLoading(true);
+  try {
+    const { createEnhancedAPI } = await import('@/utils/api');
+    const api = await createEnhancedAPI();
+
+    console.log('🔴 LIVE FETCH → searching for code:', productData.code);
+
+    const response = await api.get('/product-details', {
+      timeout: 30000
+    });
+    const allLive = response.data?.data;
+
+    console.log('🔴 LIVE FETCH → total products received:', allLive?.length ?? 'N/A');
+
+    if (Array.isArray(allLive)) {
+      const live = allLive.find((p: any) =>
+        String(p.code).trim() === String(productData.code).trim()
+      );
+
+      console.log('🔴 LIVE FETCH → matched product:', live ? live.code : 'NOT FOUND');
+      console.log('🔴 LIVE FETCH → quantity:', live?.quantity);
+      console.log('🔴 LIVE FETCH → goddown_stock:', JSON.stringify(live?.goddown_stock));
+      console.log('🔴 LIVE FETCH → prices:', JSON.stringify(live?.prices));
+
+      if (live) {
+        const livePrices = Array.isArray(live.prices) ? live.prices : [];
+        const getP = (code: string) => {
+          const found = livePrices.find((p: any) => p.price_code === code);
+          return found ? parseFloat(found.value) || 0 : 0;
+        };
+        setProductData(prev => prev ? {
+          ...prev,
+          quantity:      Number(live.quantity || 0),
+          goddown_stock: Array.isArray(live.goddown_stock) ? live.goddown_stock : [],
+          expirydate:    live.expirydate || prev.expirydate,
+          supplier:      live.supplier   || prev.supplier,
+          prices:        livePrices,
+          CO: getP('CO') || prev.CO,
+          MR: getP('MR') || prev.MR,
+          S1: getP('S1') || prev.S1,
+          S2: getP('S2') || prev.S2,
+        } : prev);
+        setApiProductsCache(prev => {
+          const idx = prev.findIndex((p: any) =>
+            String(p.code).trim() === String(live.code).trim()
+          );
+          if (idx !== -1) {
+            const updated = [...prev];
+            updated[idx] = live;
+            return updated;
+          }
+          return prev;
+        });
+        setLastUpdated(new Date());
+        console.log('✅ LIVE FETCH → product state updated successfully');
+      } else {
+        console.log('❌ LIVE FETCH → product code not found in response');
+        Alert.alert('Not Found', 'Product not found in live data.');
+      }
+    }
+  } catch (e: any) {
+    Alert.alert('Error', 'Could not fetch live data. Check connection.');
+    console.error('❌ Live fetch failed:', e?.message);
+  } finally {
+    setLiveLoading(false);
+  }
+};
 
   return (
     <KeyboardAvoidingView 
@@ -872,10 +914,33 @@ setProductData(validatedProduct);
             {productData && (
               <>
                 {/* Product Details Section */}
+                {/* Product Details Section */}
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Product Details</Text>
+                    <TouchableOpacity
+                      onPress={fetchLiveData}
+                      disabled={liveLoading}
+                      style={styles.liveButton}
+                    >
+                      {liveLoading ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <Ionicons name="refresh-circle-outline" size={16} color="#FFFFFF" />
+                      )}
+                      <Text style={styles.liveButtonText}>
+                        {liveLoading ? 'Loading...' : 'Live Data'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
+                  {lastUpdated && (
+                    <View style={styles.lastUpdatedBar}>
+                      <Ionicons name="checkmark-circle" size={13} color="#2E7D7A" />
+                      <Text style={styles.lastUpdatedText}>
+                        Updated: {lastUpdated.toLocaleTimeString()}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.detailsContainer}>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Product Name:</Text>
@@ -1390,6 +1455,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#2E7D7A',
     paddingVertical: 12,
     paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sectionTitle: {
     color: '#FFFFFF',
@@ -1458,6 +1526,37 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  liveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  liveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  lastUpdatedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: '#E8F5E9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#C8E6C9',
+  },
+  lastUpdatedText: {
+    fontSize: 11,
+    color: '#2E7D7A',
+    fontWeight: '500',
   },
   emptyState: {
     padding: 40,

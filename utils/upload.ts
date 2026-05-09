@@ -66,12 +66,19 @@ if (isNewBarcodeExistingName) {
   formattedOrder.item = order.product_name || '';
   formattedOrder.ioflag = -101;
 } else if (isFullyManual) {
-  formattedOrder.code = order.barcode;
+  const hasBarcode = order.barcode && order.barcode !== '' && order.barcode !== 'NULL';
+  formattedOrder.code = hasBarcode ? order.barcode : '';
+  formattedOrder.barcode = hasBarcode ? order.barcode : '';
   formattedOrder.item = order.product_name || '';
+  formattedOrder.itemdetails = order.product_name || '';
+  formattedOrder.text1 = order.text1 || '';
   formattedOrder.ioflag = -100;
-} else {
-  formattedOrder.code = order.itemcode;
+}
+else {
+   formattedOrder.code = order.itemcode;
+  formattedOrder.barcode = order.barcode || '';
   formattedOrder.item = '';
+  formattedOrder.text1 = order.text1 || '';
   formattedOrder.ioflag = 0;
 }
 
@@ -155,6 +162,48 @@ if (isNewBarcodeExistingName) {
   }
 }
 
+
+// ============================================
+// STOCK COUNT UPLOAD - otype = 'ST'
+// ============================================
+
+export async function uploadPendingStockCounts(counts: any[]) {
+  try {
+    console.log("📤 Starting stock count upload of", counts.length, "records");
+
+    const token = await SecureStore.getItemAsync("token");
+    if (!token) throw new Error("Authentication token not found. Please login again.");
+
+  const api = await createEnhancedAPI();
+
+    const orders = counts.map((count) => ({
+      item:    count.itemcode || count.barcode,
+      barcode: count.barcode,
+      qty:     count.quantity,
+      mrp:     count.mrp || 0,
+      remark:  count.product_name || "Physical stock count",
+      date1:   count.count_date || "",
+      text1:   count.text1 || null,
+    }));
+
+    const res = await api.post("/stock-upload", { orders });
+
+    return {
+      success: true,
+      message: res.data?.message || "Stock counts uploaded successfully",
+      uploaded_count: orders.length,
+      status: "success",
+    };
+  } catch (error: any) {
+    console.error("❌ STOCK COUNT UPLOAD FAILED:", error.response?.data || error.message);
+    if (error.response?.status === 401) throw new Error("Authentication failed. Please login again.");
+    else if (error.response?.status === 400) throw new Error("Invalid data: " + (error.response.data?.message || "Check your data"));
+    else if (error.code === "NETWORK_ERROR") throw new Error("Network error. Check your connection.");
+    else throw new Error(error.message || "Upload failed");
+  }
+}
+
+
 // ============================================
 // GRN UPLOAD - otype = 'D'
 // ============================================
@@ -206,27 +255,37 @@ if (isNewBarcodeExistingName) {
   formattedOrder.item = order.product_name || '';
   formattedOrder.ioflag = -101;
 } else if (isFullyManual) {
-  formattedOrder.code = order.barcode;
+  const hasBarcode = order.barcode && order.barcode !== '' && order.barcode !== 'NULL';
+  formattedOrder.code = hasBarcode ? order.barcode : '';
+  formattedOrder.barcode = hasBarcode ? order.barcode : '';
   formattedOrder.item = order.product_name || '';
+  formattedOrder.itemdetails = order.product_name || '';
+  formattedOrder.text1 = order.text1 || '';
   formattedOrder.ioflag = -100;
-} else {
-  formattedOrder.code = order.itemcode;
+}
+else {
+   formattedOrder.code = order.itemcode;
+  formattedOrder.barcode = order.barcode || '';
   formattedOrder.item = '';
+  formattedOrder.text1 = order.text1 || '';
   formattedOrder.ioflag = 0;
 }
       return formattedOrder;
     });
 
-    const sortedOrders = sortChronologically(formattedOrders);
+     const sortedOrders = sortChronologically(formattedOrders);
 
     console.log("📋 GRN Upload order verification:");
     sortedOrders.slice(0, 5).forEach((order, idx) => {
       console.log(`  ${idx + 1}. ${order.item || order.code} (Created: ${order.created_at}, Index: ${order.original_index})`);
     });
+    if (sortedOrders.length > 5) {
+      console.log(`  ... and ${sortedOrders.length - 5} more`);
+    }
 
     console.log("🏷️ All entries have otype='D' for GRN");
 
-    const res = await api.post("/upload-orders", { 
+    const res = await api.post("/upload-orders", {
       orders: sortedOrders,
       total_orders: sortedOrders.length,
       transaction_type: 'GRN',
@@ -235,42 +294,38 @@ if (isNewBarcodeExistingName) {
 
     console.log("✅ GRN Upload response:", res.data);
 
-    if (res.data) {
-      if (res.data.success === true) {
-        return {
-          success: true,
-          message: res.data.message || "GRN orders uploaded successfully",
-          uploaded_count: res.data.uploaded_count || sortedOrders.length,
-          original_order_preserved: true
-        };
-      }
-      
-      if (res.data.status === "success") {
-        return {
-          success: true,
-          message: res.data.message || "GRN orders uploaded successfully",
-          uploaded_count: sortedOrders.length,
-          original_order_preserved: true
-        };
-      }
-      
-      if (typeof res.data === "string" && res.data.includes("success")) {
-        return {
-          success: true,
-          message: res.data,
-          uploaded_count: sortedOrders.length,
-          original_order_preserved: true
-        };
-      }
+    if (res.data?.success === true) {
+      return {
+        success: true,
+        message: res.data.message || "GRN orders uploaded successfully",
+        uploaded_count: res.data.uploaded_count || sortedOrders.length,
+        original_order_preserved: true
+      };
+    }
+    if (res.data?.status === "success") {
+      return {
+        success: true,
+        message: res.data.message || "GRN orders uploaded successfully",
+        uploaded_count: sortedOrders.length,
+        original_order_preserved: true
+      };
+    }
+    if (typeof res.data === "string" && res.data.includes("success")) {
+      return {
+        success: true,
+        message: res.data,
+        uploaded_count: sortedOrders.length,
+        original_order_preserved: true
+      };
     }
 
-    console.warn("⚠️ Unexpected GRN response format from server:", res.data);
     return {
       success: true,
       message: "GRN orders processed by server",
       uploaded_count: sortedOrders.length,
       original_order_preserved: true
     };
+
     
   } catch (error: any) {
     console.error("❌ GRN Upload error:", error.response?.data || error.message);
@@ -338,12 +393,18 @@ if (isNewBarcodeExistingName) {
   formattedReturn.item = returnItem.product_name || '';
   formattedReturn.ioflag = -101;
 } else if (isFullyManual) {
-  formattedReturn.code = returnItem.barcode;
+  const hasBarcode = returnItem.barcode && returnItem.barcode !== '' && returnItem.barcode !== 'NULL';
+  formattedReturn.code = hasBarcode ? returnItem.barcode : '';
+  formattedReturn.barcode = hasBarcode ? returnItem.barcode : '';
   formattedReturn.item = returnItem.product_name || '';
+  formattedReturn.itemdetails = returnItem.product_name || '';
+  formattedReturn.text1 = returnItem.text1 || '';
   formattedReturn.ioflag = -100;
 } else {
   formattedReturn.code = returnItem.itemcode;
+  formattedReturn.barcode = returnItem.barcode || '';
   formattedReturn.item = '';
+  formattedReturn.text1 = returnItem.text1 || '';
   formattedReturn.ioflag = 0;
 }
 
@@ -354,7 +415,6 @@ if (isNewBarcodeExistingName) {
 
     console.log("📋 Returns Upload order verification:");
     sortedReturns.slice(0, 5).forEach((ret, idx) => {
-      console.log(`  ${idx + 1}. ${ret.item || ret.code} (Created: ${ret.created_at}, Index: ${ret.original_index})`);
     });
 
     console.log("🏷️ All entries have otype='T' for Purchase Returns");
@@ -538,6 +598,114 @@ if (isNewBarcodeExistingName) {
       throw new Error(error.response.data.message);
     } else {
       throw new Error(error.message || "Sales upload failed");
+    }
+  }
+}
+
+export async function uploadPendingSalesReturnOrders(orders: any[]) {
+  try {
+    console.log("📤 Starting SALES RETURN upload of", orders.length, "orders");
+
+    const token = await SecureStore.getItemAsync("token");
+    if (!token) {
+      throw new Error("Authentication token not found. Please login again.");
+    }
+
+    const api = await createEnhancedAPI();
+
+    const formattedOrders = orders.map((order, index) => {
+      const isFullyManual = order.is_manual_entry === 1 || order.is_manual_entry === '1';
+      const isNewBarcodeExistingName = order.is_manual_entry === 2 || order.is_manual_entry === '2';
+
+      const formattedOrder: any = {
+        supplier_code: order.supplier_code || '',
+        user_id: order.userid,
+        barcode: order.is_manual_entry === 0 ? order.itemcode : order.barcode,
+        quantity: order.quantity,
+        rate: order.rate,
+        mrp: order.mrp,
+        order_date: order.sales_date || order.sale_date || new Date().toISOString().split('T')[0],
+        created_at: order.created_at,
+        original_index: index,
+        discount: 0,
+        pnfcharges: 0,
+        exceiseduty: 0,
+        salestax: 0,
+        freightcharge: 0,
+        othercharges: 0,
+        cessoned: 0,
+        cess: 0,
+        taxcode: "NT",
+        otype: "SR",
+      };
+
+      if (isNewBarcodeExistingName) {
+        formattedOrder.code = order.itemcode;
+        formattedOrder.item = order.product_name || order.name || '';
+        formattedOrder.ioflag = -101;
+      } else if (isFullyManual) {
+        formattedOrder.code = order.barcode;
+        formattedOrder.item = order.product_name || order.name || '';
+        formattedOrder.ioflag = -100;
+      } else {
+        formattedOrder.code = order.itemcode;
+        formattedOrder.item = '';
+        formattedOrder.ioflag = 0;
+      }
+
+      return formattedOrder;
+    });
+
+    const sortedOrders = sortChronologically(formattedOrders);
+
+    const res = await api.post("/upload-orders", {
+      orders: sortedOrders,
+      total_orders: sortedOrders.length,
+      transaction_type: "SALES_RETURN",
+      upload_sequence: "chronological",
+    });
+
+    console.log("✅ Sales Return Upload response:", res.data);
+
+    if (res.data) {
+      if (res.data.success === true) {
+        return {
+          success: true,
+          message: res.data.message || "Sales return orders uploaded successfully",
+          uploaded_count: res.data.uploaded_count || sortedOrders.length,
+        };
+      }
+      if (res.data.status === "success") {
+        return {
+          success: true,
+          message: res.data.message || "Sales return orders uploaded successfully",
+          uploaded_count: sortedOrders.length,
+        };
+      }
+      if (typeof res.data === "string" && res.data.includes("success")) {
+        return { success: true, message: res.data, uploaded_count: sortedOrders.length };
+      }
+    }
+
+    return {
+      success: true,
+      message: "Sales return orders processed by server",
+      uploaded_count: sortedOrders.length,
+    };
+
+  } catch (error: any) {
+    console.error("❌ Sales Return Upload error:", error.response?.data || error.message);
+
+    if (error.response?.status === 401) {
+      throw new Error("Authentication failed. Please login again.");
+    } else if (error.response?.status === 400) {
+      throw new Error("Invalid data format: " + (error.response.data?.message || "Check your data"));
+    } else if (error.code === "NETWORK_ERROR") {
+      throw new Error("Network error. Please check your connection.");
+    } else if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    } else {
+      throw new Error(error.message || "Sales return upload failed");
     }
   }
 }
@@ -805,11 +973,16 @@ if (isNewBarcodeExistingName) {
   formattedReturn.item = returnItem.product_name || '';
   formattedReturn.ioflag = -101;
 } else if (isFullyManual) {
-  formattedReturn.code = returnItem.barcode;
+  const hasBarcode = returnItem.barcode && returnItem.barcode !== '' && returnItem.barcode !== 'NULL';
+  formattedReturn.code = hasBarcode ? returnItem.barcode : '';
+  formattedReturn.barcode = hasBarcode ? returnItem.barcode : '';
   formattedReturn.item = returnItem.product_name || '';
+  formattedReturn.itemdetails = returnItem.product_name || '';
+  formattedReturn.text1 = returnItem.text1 || '';
   formattedReturn.ioflag = -100;
 } else {
   formattedReturn.code = returnItem.itemcode;
+  formattedReturn.barcode = returnItem.barcode || '';
   formattedReturn.item = '';
   formattedReturn.ioflag = 0;
 }
@@ -917,11 +1090,16 @@ if (isNewBarcodeExistingName) {
   formattedOrder.item = order.product_name || '';
   formattedOrder.ioflag = -101;
 } else if (isFullyManual) {
-  formattedOrder.code = order.barcode;
+  const hasBarcode = order.barcode && order.barcode !== '' && order.barcode !== 'NULL';
+  formattedOrder.code = hasBarcode ? order.barcode : '';
+  formattedOrder.barcode = hasBarcode ? order.barcode : '';
   formattedOrder.item = order.product_name || '';
+  formattedOrder.itemdetails = order.product_name || '';
+  formattedOrder.text1 = order.text1 || '';
   formattedOrder.ioflag = -100;
 } else {
-  formattedOrder.code = order.itemcode;
+   formattedOrder.code = order.itemcode;
+  formattedOrder.barcode = order.barcode || '';
   formattedOrder.item = '';
   formattedOrder.ioflag = 0;
 }

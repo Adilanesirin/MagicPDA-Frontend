@@ -249,6 +249,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: -50,
   },
+   productHeaderManual: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: -30,
+  },
   productInfo: {
     flex: 1,
     marginRight: 12,
@@ -679,30 +685,55 @@ const styles = StyleSheet.create({
 const initReturnsTable = async () => {
   try {
     console.log("🔄 Initializing returns_to_sync table...");
-    
-    await db.execAsync(`DROP TABLE IF EXISTS returns_to_sync`);
-    
+
     await db.execAsync(`
-      CREATE TABLE returns_to_sync (
+      CREATE TABLE IF NOT EXISTS returns_to_sync (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        supplier_code TEXT NOT NULL,
-        userid TEXT NOT NULL,
-        itemcode TEXT NOT NULL,
-        barcode TEXT NOT NULL,
-        quantity INTEGER NOT NULL,
-        rate REAL NOT NULL,
-        mrp REAL NOT NULL,
-        return_date TEXT NOT NULL,
+        supplier_code TEXT NOT NULL DEFAULT '',
+        userid TEXT NOT NULL DEFAULT '',
+        itemcode TEXT NOT NULL DEFAULT '',
+        barcode TEXT NOT NULL DEFAULT '',
+        quantity INTEGER NOT NULL DEFAULT 0,
+        rate REAL NOT NULL DEFAULT 0,
+        mrp REAL NOT NULL DEFAULT 0,
+        return_date TEXT NOT NULL DEFAULT '',
         sync_status TEXT DEFAULT 'pending',
-        created_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT '',
         product_name TEXT,
         is_manual_entry INTEGER DEFAULT 0,
-        return_reason TEXT DEFAULT ''
+        return_reason TEXT DEFAULT '',
+        text1 TEXT DEFAULT ''
       );
     `);
-    
-    console.log("✅ returns_to_sync table created successfully");
-    
+
+    // Safely patch any missing columns on existing installs
+    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(returns_to_sync)`);
+    const cols = tableInfo.map((col: any) => col.name);
+
+    const migrations = [
+      { col: 'supplier_code',   def: `ALTER TABLE returns_to_sync ADD COLUMN supplier_code TEXT NOT NULL DEFAULT ''` },
+      { col: 'userid',          def: `ALTER TABLE returns_to_sync ADD COLUMN userid TEXT NOT NULL DEFAULT ''` },
+      { col: 'itemcode',        def: `ALTER TABLE returns_to_sync ADD COLUMN itemcode TEXT NOT NULL DEFAULT ''` },
+      { col: 'barcode',         def: `ALTER TABLE returns_to_sync ADD COLUMN barcode TEXT NOT NULL DEFAULT ''` },
+      { col: 'product_name',    def: `ALTER TABLE returns_to_sync ADD COLUMN product_name TEXT DEFAULT ''` },
+      { col: 'is_manual_entry', def: `ALTER TABLE returns_to_sync ADD COLUMN is_manual_entry INTEGER DEFAULT 0` },
+      { col: 'return_reason',   def: `ALTER TABLE returns_to_sync ADD COLUMN return_reason TEXT DEFAULT ''` },
+      { col: 'text1',           def: `ALTER TABLE returns_to_sync ADD COLUMN text1 TEXT DEFAULT ''` },
+    ];
+
+    for (const m of migrations) {
+      if (!cols.includes(m.col)) {
+        console.log(`⚠️ Adding missing column to returns_to_sync: ${m.col}`);
+        try {
+          await db.execAsync(m.def);
+        } catch (e) {
+          console.warn(`Could not add column ${m.col}:`, e);
+        }
+      }
+    }
+
+    console.log("✅ returns_to_sync table ready");
+
   } catch (error) {
     console.error("❌ Error initializing returns table:", error);
   }
@@ -719,7 +750,7 @@ const initPendingReturnsTable = async () => {
     
     if (!tableExists) {
       // Create new table with complete schema
-      await db.execAsync(`
+     await db.execAsync(`
         CREATE TABLE pending_returns (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           supplier_code TEXT NOT NULL DEFAULT '',
@@ -736,7 +767,9 @@ const initPendingReturnsTable = async () => {
           product TEXT,
           brand TEXT,
           isManualEntry INTEGER DEFAULT 0,
-          return_reason TEXT DEFAULT ''
+          return_reason TEXT DEFAULT '',
+          moreoption TEXT DEFAULT '',
+          text1 TEXT DEFAULT ''
         );
       `);
       console.log("✅ Created pending_returns table with complete schema");
@@ -750,10 +783,10 @@ const initPendingReturnsTable = async () => {
     console.log("📋 Existing columns in pending_returns:", existingColumns.join(", "));
     
     // Define required columns
-    const requiredColumns = [
+   const requiredColumns = [
       'id', 'supplier_code', 'barcode', 'name', 'bmrp', 'cost', 
       'quantity', 'eCost', 'currentStock', 'batchSupplier', 
-      'scannedAt', 'batch_supplier', 'product', 'brand', 'isManualEntry', 'return_reason'
+      'scannedAt', 'batch_supplier', 'product', 'brand', 'isManualEntry', 'return_reason', 'moreoption', 'text1'
     ];
     
     const missingColumns = requiredColumns.filter(col => !existingColumns.includes(col));
@@ -762,50 +795,51 @@ const initPendingReturnsTable = async () => {
       console.log("🔄 Migrating pending_returns table - missing columns:", missingColumns.join(", "));
       
       // Create new table with complete schema
-      await db.execAsync(`
-        CREATE TABLE pending_returns_new (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          supplier_code TEXT NOT NULL DEFAULT '',
-          barcode TEXT NOT NULL,
-          name TEXT,
-          bmrp REAL DEFAULT 0,
-          cost REAL DEFAULT 0,
-          quantity INTEGER DEFAULT 0,
-          eCost REAL DEFAULT 0,
-          currentStock INTEGER DEFAULT 0,
-          batchSupplier TEXT,
-          scannedAt INTEGER,
-          batch_supplier TEXT,
-          product TEXT,
-          brand TEXT,
-          isManualEntry INTEGER DEFAULT 0,
-          return_reason TEXT DEFAULT ''
+    await db.withTransactionAsync(async () => {
+       await db.execAsync(`
+          CREATE TABLE pending_returns_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            supplier_code TEXT NOT NULL DEFAULT '',
+            barcode TEXT NOT NULL,
+            name TEXT,
+            bmrp REAL DEFAULT 0,
+            cost REAL DEFAULT 0,
+            quantity INTEGER DEFAULT 0,
+            eCost REAL DEFAULT 0,
+            currentStock INTEGER DEFAULT 0,
+            batchSupplier TEXT,
+            scannedAt INTEGER,
+            batch_supplier TEXT,
+            product TEXT,
+            brand TEXT,
+            isManualEntry INTEGER DEFAULT 0,
+            return_reason TEXT DEFAULT '',
+            moreoption TEXT DEFAULT '',
+            text1 TEXT DEFAULT ''
+          );
+        `);
+
+        const commonColumns = existingColumns.filter(col =>
+          requiredColumns.includes(col) && col !== 'id'
         );
-      `);
-      
-      // Build INSERT statement using only columns that exist in both tables
-      const commonColumns = existingColumns.filter(col => 
-        requiredColumns.includes(col) && col !== 'id'
-      );
-      
-      if (commonColumns.length > 0) {
-        const columnsList = commonColumns.join(', ');
-        
-        try {
-          await db.execAsync(`
-            INSERT INTO pending_returns_new (${columnsList})
-            SELECT ${columnsList}
-            FROM pending_returns
-          `);
-          console.log(`✅ Migrated ${commonColumns.length} columns of data`);
-        } catch (copyError) {
-          console.log("⚠️ Could not copy old data (table might be empty):", copyError);
+
+        if (commonColumns.length > 0) {
+          const columnsList = commonColumns.join(', ');
+          try {
+            await db.execAsync(`
+              INSERT INTO pending_returns_new (${columnsList})
+              SELECT ${columnsList}
+              FROM pending_returns
+            `);
+            console.log(`✅ Migrated ${commonColumns.length} columns of data`);
+          } catch (copyError) {
+            console.log("⚠️ Could not copy old data (table might be empty):", copyError);
+          }
         }
-      }
-      
-      // Drop old table and rename new one
-      await db.execAsync(`DROP TABLE pending_returns`);
-      await db.execAsync(`ALTER TABLE pending_returns_new RENAME TO pending_returns`);
+
+        await db.execAsync(`DROP TABLE pending_returns`);
+        await db.execAsync(`ALTER TABLE pending_returns_new RENAME TO pending_returns`);
+      });
       
       console.log("✅ Successfully migrated pending_returns table");
     } else {
@@ -818,7 +852,7 @@ const initPendingReturnsTable = async () => {
     try {
       console.log("🔄 Attempting to recreate table from scratch...");
       await db.execAsync(`DROP TABLE IF EXISTS pending_returns`);
-      await db.execAsync(`
+     await db.execAsync(`
         CREATE TABLE pending_returns (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           supplier_code TEXT NOT NULL DEFAULT '',
@@ -835,7 +869,9 @@ const initPendingReturnsTable = async () => {
           product TEXT,
           brand TEXT,
           isManualEntry INTEGER DEFAULT 0,
-          return_reason TEXT DEFAULT ''
+          return_reason TEXT DEFAULT '',
+          moreoption TEXT DEFAULT '',
+          text1 TEXT DEFAULT ''
         );
       `);
       console.log("✅ Successfully recreated pending_returns table");
@@ -899,6 +935,7 @@ export default function PurchaseReturnBarcodeEntry() {
     cost: '',
     quantity: '',
     return_reason: '',
+    size: '',
   });
 
   const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
@@ -962,7 +999,9 @@ export default function PurchaseReturnBarcodeEntry() {
           product,
           brand,
           COALESCE(isManualEntry, 0) as isManualEntry,
-          return_reason
+          return_reason,
+          COALESCE(moreoption, '') as moreoption
+          COALESCE(text1, '') as text1
         FROM pending_returns 
         WHERE supplier_code = ? 
         ORDER BY scannedAt DESC`,
@@ -994,7 +1033,9 @@ export default function PurchaseReturnBarcodeEntry() {
             product,
             brand,
             COALESCE(isManualEntry, 0) as isManualEntry,
-            return_reason
+            return_reason,
+            COALESCE(moreoption, '') as moreoption
+            COALESCE(text1, '') as text1
           FROM pending_returns 
           ORDER BY scannedAt DESC`
         );
@@ -1014,8 +1055,8 @@ export default function PurchaseReturnBarcodeEntry() {
       
       await db.runAsync(
         `INSERT INTO pending_returns 
-        (supplier_code, barcode, name, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, isManualEntry, return_reason)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (supplier_code, barcode, name, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, isManualEntry, return_reason, moreoption, text1)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           supplier_code || "",
           item.barcode,
@@ -1032,6 +1073,8 @@ export default function PurchaseReturnBarcodeEntry() {
           item.brand || "",
           item.isManualEntry || 0,
           item.return_reason || '',
+          item.moreoption || '',
+          item.text1 || '',
         ]
       );
       
@@ -1084,9 +1127,13 @@ export default function PurchaseReturnBarcodeEntry() {
   }, []);
 
   useEffect(() => {
-    loadAllProducts();
+    const init = async () => {
+      // Wait briefly to avoid DB lock with initPendingReturnsTable
+      await new Promise(resolve => setTimeout(resolve, 300));
+      loadAllProducts();
+    };
+    init();
   }, []);
-
   const loadAllProducts = async () => {
     try {
       const rows = await db.getAllAsync("SELECT * FROM product_data");
@@ -1339,7 +1386,7 @@ export default function PurchaseReturnBarcodeEntry() {
     }
   };
 
-  const openManualEntryModal = (barcode: string) => {
+const openManualEntryModal = (barcode: string) => {
     setManualEntryData({
       barcode: barcode,
       name: '',
@@ -1347,6 +1394,7 @@ export default function PurchaseReturnBarcodeEntry() {
       cost: '',
       quantity: '',
       return_reason: '',
+      size: '',
     });
     setShowManualEntryModal(true);
     setNameSuggestions([]);
@@ -1362,6 +1410,7 @@ export default function PurchaseReturnBarcodeEntry() {
       cost: '',
       quantity: '',
       return_reason: '',
+      size: '',
     });
     setNameSuggestions([]);
     setShowNameSuggestions(false);
@@ -1420,6 +1469,7 @@ export default function PurchaseReturnBarcodeEntry() {
       brand: '',
       isManualEntry: 1,
       return_reason: manualEntryData.return_reason,
+       moreoption: manualEntryData.size?.trim() || '',
     };
 
     console.log("💾 About to save newItem:", JSON.stringify(newItem, null, 2));
@@ -1825,6 +1875,8 @@ export default function PurchaseReturnBarcodeEntry() {
                     product_name: item.name,
                     is_manual_entry: isManualEntry ? 1 : 0,
                     return_reason: item.return_reason || '',
+                     text1: item.text1 || item.moreoption || '',
+
                   });
 
                   if (!isManualEntry) {
@@ -1867,10 +1919,23 @@ export default function PurchaseReturnBarcodeEntry() {
                 }
               }
 
-              if (errorCount === 0) {
-                Alert.alert("✅ Success", `All ${successCount} return entries saved for sync!`);
+             if (errorCount === 0) {
                 setScannedItems([]);
-                router.push("/(main)/");
+                Alert.alert(
+                  "✅ Data Saved Locally",
+                  `All ${successCount} entries saved successfully!\n\nDo you want to upload to the server now?`,
+                  [
+                    {
+                      text: "No",
+                      style: "cancel",
+                      onPress: () => router.push("/(main)/"),
+                    },
+                    {
+                      text: "Yes, Upload Now",
+                      onPress: () => router.push("/(main)/purchase-return-upload"), // 👈 update this route
+                    },
+                  ]
+                );
               } else if (successCount > 0) {
                 Alert.alert("⚠️ Partial Success", 
                   `${successCount} return entries saved, ${errorCount} failed.`);
@@ -2152,6 +2217,20 @@ export default function PurchaseReturnBarcodeEntry() {
                   onBlur={() => setIsEditing(false)}
                 />
               </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Size (optional)</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={manualEntryData.size}
+                  onChangeText={(text) => setManualEntryData({...manualEntryData, size: text})}
+                  placeholder="e.g. 500ml, L, XL, 1kg"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="default"
+                  returnKeyType="done"
+                  onFocus={() => setIsEditing(true)}
+                  onBlur={() => setIsEditing(false)}
+                />
+              </View>
             </ScrollView>
 
             <View style={styles.modalButtonContainer}>
@@ -2349,7 +2428,7 @@ export default function PurchaseReturnBarcodeEntry() {
                     getCardStyle(item, index)
                   ]}
                 >
-                  <View style={styles.productHeader}>
+                 <View style={item.isManualEntry === 1 ? styles.productHeaderManual : styles.productHeader}>
                     <View style={styles.productInfo}>
                       {item.isManualEntry === 1 && (
                         <View style={styles.manualEntryBadge}>
@@ -2359,7 +2438,13 @@ export default function PurchaseReturnBarcodeEntry() {
                       <Text style={styles.productName} numberOfLines={1}>
                         {item.name}
                       </Text>
-                      <Text style={styles.productBarcode}>{item.barcode}</Text>
+                     {item.barcode ? (
+                        <Text style={styles.productBarcode}>
+                          {item.barcode}{item.moreoption ? `  |  Size: ${item.moreoption}` : ''}
+                        </Text>
+                      ) : item.moreoption ? (
+                        <Text style={styles.productBarcode}>Size: {item.moreoption}</Text>
+                      ) : null}
                       {item.return_reason && (
                         <Text style={{fontSize: 12, color: '#dc2626', marginTop: 4}}>
                           Reason: {item.return_reason}
@@ -2408,6 +2493,9 @@ export default function PurchaseReturnBarcodeEntry() {
                       </Text>
                       <Text style={styles.detailText}>
                         Return Cost: <Text style={styles.eCostText}>₹{item.eCost || 0}</Text>
+                      </Text>
+                      <Text style={styles.detailText}>
+                        Size: <Text style={styles.eQtyText}>{item.text1 || 'null'}</Text>
                       </Text>
                     </View>
                   </View>

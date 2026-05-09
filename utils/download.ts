@@ -96,6 +96,26 @@ export const checkAuthenticationStatus = async () => {
   }
 };
 
+export const downloadFirmInfo = async () => {
+  try {
+    const api = await createDownloadAPI();
+    const res = await api.get(`/misel?cb=${Date.now()}`, {
+      headers: { "Cache-Control": "no-cache" },
+      timeout: 30000,
+    });
+    const data = res?.data;
+    const firm = Array.isArray(data?.data) ? data.data[0] : null;
+    if (firm) {
+      await SecureStore.setItemAsync("firm_info", JSON.stringify(firm));
+      console.log("✅ Firm info saved:", firm.firm_name);
+    }
+    return firm;
+  } catch (error: any) {
+    console.warn("⚠️ Could not fetch firm info:", error?.message);
+    return null;
+  }
+};
+
 // Download from any endpoint with authentication
 export async function downloadFromEndpointWithAuth(path: string) {
   try {
@@ -374,7 +394,8 @@ export const downloadWithRetry = async (maxRetries = 3) => {
           taxcode: String(product.taxcode || product.gst || product.tax || '0').trim(),
           productcode: String(product.productcode || product.product_code || '').trim(),
           expirydate: product.expirydate || product.expiry_date || null,
-          prices: product.prices || []
+          prices: product.prices || [],
+          text1: String(product.text1 || '').trim()
 
         };
       });

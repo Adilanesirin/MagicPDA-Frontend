@@ -17,15 +17,15 @@ export async function testConnectionEnhanced(ip: string): Promise<boolean> {
   console.log(`Testing connection to: ${cleanIP}:8000`);
 
   const methods = [
-    { name: "Direct HTTP", url: `http://${cleanIP}:8000/status` },
+    { name: "Direct HTTP", url: `http://${cleanIP}:8000/misel` },
     {
       name: "With User-Agent",
-      url: `http://${cleanIP}:8000/status`,
+      url: `http://${cleanIP}:8000/misel`,
       headers: { "User-Agent": "IMCSync-Mobile/1.0" },
     },
     {
       name: "Basic Fetch",
-      url: `http://${cleanIP}:8000/status`,
+      url: `http://${cleanIP}:8000/misel`,
       method: "fetch",
     },
   ];
@@ -49,12 +49,11 @@ export async function testConnectionEnhanced(ip: string): Promise<boolean> {
 
         clearTimeout(timeoutId);
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.status === "online") {
-            console.log(`${method.name} successful:`, data);
-            return true;
-          }
+        // Accept any response (200, 401, 403, etc) - means server is reachable
+        // Only fail on network errors (no response at all)
+        if (response) {
+          console.log(`${method.name} successful - server responded with ${response.status}`);
+          return true;
         }
       } else {
         const axiosConfig = {
@@ -65,15 +64,16 @@ export async function testConnectionEnhanced(ip: string): Promise<boolean> {
             "User-Agent": "IMCSync-Mobile/1.0",
             ...method.headers,
           },
-          httpsAgent: false,
-          rejectUnauthorized: false,
+          validateStatus: () => true, // Accept all status codes
         };
 
         const response = await axios.get(method.url, axiosConfig);
 
-        if (response.data && response.data.status === "online") {
-            console.log(`${method.name} successful:`, response.data);
-            return true;
+        // If we got ANY response from server, connection works
+        // (401, 403, 200 all mean server is reachable)
+        if (response.status) {
+          console.log(`${method.name} successful - server responded with ${response.status}`);
+          return true;
         }
       }
     } catch (error: any) {
@@ -122,7 +122,6 @@ export async function createEnhancedAPI() {
       },
       maxRedirects: 0,
       validateStatus: (status) => status < 500,
-      adapter: undefined,
     });
 
     // Enhanced request interceptor with SELECTIVE cache-busting
@@ -308,7 +307,7 @@ export async function runNetworkDiagnostics(ip: string) {
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(`http://${ip}:8000/status`, {
+    const response = await fetch(`http://${ip}:8000/misel`, {
       signal: controller.signal,
     });
 
@@ -329,7 +328,7 @@ export async function runNetworkDiagnostics(ip: string) {
 
   // Test 2: Axios with minimal config
   try {
-    const response = await axios.get(`http://${ip}:8000/status`, {
+    const response = await axios.get(`http://${ip}:8000/misel`, {
       timeout: 5000,
     });
 

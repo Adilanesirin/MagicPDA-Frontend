@@ -1,24 +1,24 @@
 import { getDatabase } from "@/utils/database";
-import { getPendingSalesOrders, markSalesAsSynced, saveSaleToSync } from "@/utils/sync";
-import { uploadPendingSalesOrders } from "@/utils/upload";
+import { getPendingSalesReturnOrders, markSalesReturnAsSynced, saveSaleReturnToSync } from "@/utils/sync";
+import { uploadPendingSalesReturnOrders } from "@/utils/upload";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import LottieView from "lottie-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Animated,
+    Dimensions,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
@@ -46,7 +46,7 @@ interface CartItem {
   product_name?: string;
 }
 
-interface SalesCartDrawerProps {
+interface SalesReturnCartDrawerProps {
   visible: boolean;
   items: CartItem[];
   customerName?: string;
@@ -121,7 +121,7 @@ const QtyEditModal: React.FC<QtyEditModalProps> = ({
                   <Ionicons
                     name="create-outline"
                     size={20}
-                    color="#43b1d6"
+                    color="#F97316"
                     style={{ marginRight: 8 }}
                   />
                   <Text style={modalStyles.title}>Edit Quantity</Text>
@@ -140,7 +140,7 @@ const QtyEditModal: React.FC<QtyEditModalProps> = ({
                     onPress={() => adjust(-1)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="remove" size={20} color="#131f3d" />
+                    <Ionicons name="remove" size={20} color="#EA580C" />
                   </TouchableOpacity>
 
                   <TextInput
@@ -160,7 +160,7 @@ const QtyEditModal: React.FC<QtyEditModalProps> = ({
                     onPress={() => adjust(1)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="add" size={20} color="#131f3d" />
+                    <Ionicons name="add" size={20} color="#EA580C" />
                   </TouchableOpacity>
                 </View>
 
@@ -195,7 +195,7 @@ const QtyEditModal: React.FC<QtyEditModalProps> = ({
 
 // ─── Main Drawer ─────────────────────────────────────────────────────────────
 
-const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
+const SalesReturnCartDrawer: React.FC<SalesReturnCartDrawerProps> = ({
   visible,
   items,
   customerName,
@@ -308,12 +308,12 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
     try {
       const today = new Date().toISOString().split("T")[0];
       const db = getDatabase();
-      await db.runAsync(`DELETE FROM sales_to_sync WHERE sync_status = 'pending'`);
+      await db.runAsync(`DELETE FROM sales_return_to_sync WHERE sync_status = 'pending'`);
 
       const clientId = (await AsyncStorage.getItem("clientId")) || "";
 
       for (const item of localItems) {
-        await saveSaleToSync({
+        await saveSaleReturnToSync({
           supplier_code: item.supplier_code || "",
           userid: item.userid || "",
           itemcode: item.itemcode || item.barcode,
@@ -330,16 +330,16 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
         });
       }
 
-      const pendingOrders = await getPendingSalesOrders();
-      const result = await uploadPendingSalesOrders(pendingOrders);
-      await markSalesAsSynced();
+      const pendingOrders = await getPendingSalesReturnOrders();
+      const result = await uploadPendingSalesReturnOrders(pendingOrders);
+      await markSalesReturnAsSynced();
 
       setUploadResult(result);
       setView("success");
       Toast.show({
         type: "success",
         text1: "✅ Upload Successful",
-        text2: result.message || `Uploaded ${pendingOrders.length} sales orders`,
+        text2: result.message || `Uploaded ${pendingOrders.length} return orders`,
       });
       onUploadSuccess?.();
     } catch (err: any) {
@@ -417,7 +417,7 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
       return (
         <View style={styles.centeredContent}>
           <Text style={styles.uploadingTitle}>
-            Uploading {uploadedItems.length} Sales Orders...
+            Uploading Sales Return Orders...
           </Text>
           <Text style={styles.uploadingSubtitle}>Please don't close the app</Text>
           <LottieView
@@ -426,7 +426,7 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
             loop
             style={{ width: 180, height: 180 }}
           />
-          <Text style={styles.uploadingHint}>Syncing sales with server...</Text>
+          <Text style={styles.uploadingHint}>Syncing returns with server...</Text>
         </View>
       );
     }
@@ -440,11 +440,11 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
       return (
         <View style={styles.centeredContent}>
           <View style={styles.successIconWrapper}>
-            <Ionicons name="checkmark-circle" size={48} color="#10B981" />
+            <Ionicons name="checkmark-circle" size={48} color="#EA580C" />
           </View>
-          <Text style={styles.successTitle}>Sales Upload Successful!</Text>
+          <Text style={styles.successTitle}>Sales Return Upload Successful!</Text>
           <Text style={styles.successSubtitle}>
-            {uploadResult?.message || "All sales orders have been uploaded successfully."}
+            {uploadResult?.message || "All return orders have been uploaded successfully."}
           </Text>
           <View style={styles.successBadge}>
             <Text style={styles.successBadgeMain}>
@@ -457,7 +457,7 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
               onPress={handleUploadMore}
               style={[styles.actionBtn, styles.actionBtnPrimary]}
             >
-              <Text style={styles.actionBtnTextPrimary}>Upload More Sales Orders</Text>
+              <Text style={styles.actionBtnTextPrimary}>Upload More Return Orders</Text>
             </Pressable>
             <Pressable
               onPress={onClose}
@@ -542,10 +542,10 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
             ]}
           >
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="arrow-forward" size={22} color="#94A3B8" />
+              <Ionicons name="arrow-forward" size={22} color="#fefeff" />
             </TouchableOpacity>
             <View style={styles.headerTitleBlock}>
-              <Text style={styles.drawerTitle}>Cart</Text>
+              <Text style={styles.drawerTitle}>CART</Text>
               {view === "cart" && (
                 <View style={styles.itemCountBadge}>
                   <Text style={styles.itemCountText}>{localItems.length}</Text>
@@ -557,7 +557,7 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
           {/* Customer Row */}
           {view === "cart" && (customerName || customerPhone) ? (
             <View style={styles.customerRow}>
-              <Ionicons name="person-circle-outline" size={18} color="#10B981" />
+              <Ionicons name="person-circle-outline" size={18} color="#EA580C" />
               <View style={{ flex: 1 }}>
                 {customerName ? (
                   <Text style={styles.customerText} numberOfLines={1}>
@@ -593,7 +593,7 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
   );
 };
 
-export default SalesCartDrawer;
+export default SalesReturnCartDrawer;
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -621,14 +621,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingBottom: 14,
-    backgroundColor: "#131f3d",
+    backgroundColor: "#EA580C",
     gap: 12,
   },
   closeBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   itemCountBadge: {
-    backgroundColor: "#EF4444",
+    backgroundColor: "#fffefe",
     borderRadius: 10,
     minWidth: 22,
     height: 22,
@@ -654,8 +654,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   itemCountText: {
-    color: "#fff",
-    fontSize: 11,
+    color: "#ca3939",
+    fontSize: 18,
     fontWeight: "700",
   },
   customerRow: {
@@ -664,7 +664,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginHorizontal: 16,
     marginTop: 12,
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#FFF7ED",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
   customerText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#059669",
+    color: "#C2410C",
     flex: 1,
   },
   divider: {
@@ -748,7 +748,7 @@ const styles = StyleSheet.create({
   itemTotal: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#131f3d",
+    color: "#EA580C",
     textAlign: "right",
   },
   editQtyBtn: {
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    backgroundColor: "#43b1d6",
+    backgroundColor: "#F97316",
     borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 5,
@@ -812,14 +812,14 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#131f3d",
+    color: "#EA580C",
   },
   uploadButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#43b1d6",
+    backgroundColor: "#F97316",
     borderRadius: 12,
     paddingVertical: 15,
   },
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
   uploadingTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#43b1d6",
+    color: "#F97316",
     textAlign: "center",
   },
   uploadingSubtitle: {
@@ -855,7 +855,7 @@ const styles = StyleSheet.create({
   successIconWrapper: {
     width: 80,
     height: 80,
-    backgroundColor: "#D1FAE5",
+    backgroundColor: "#FFF7ED",
     borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
@@ -864,7 +864,7 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#059669",
+    color: "#C2410C",
     textAlign: "center",
   },
   successSubtitle: {
@@ -874,7 +874,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   successBadge: {
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#FFF7ED",
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,
@@ -885,11 +885,11 @@ const styles = StyleSheet.create({
   successBadgeMain: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#065F46",
+    color: "#9A3412",
   },
   successBadgeSub: {
     fontSize: 12,
-    color: "#059669",
+    color: "#C2410C",
   },
   successActions: {
     width: "100%",
@@ -902,7 +902,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  actionBtnPrimary: { backgroundColor: "#43b1d6" },
+  actionBtnPrimary: { backgroundColor: "#F97316" },
   actionBtnSecondary: { backgroundColor: "#E2E8F0" },
   actionBtnTextPrimary: { color: "#fff", fontSize: 15, fontWeight: "700" },
   actionBtnTextSecondary: { color: "#475569", fontSize: 15, fontWeight: "600" },
@@ -937,7 +937,7 @@ const modalStyles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#131f3d",
+    color: "#EA580C",
   },
   itemName: {
     fontSize: 14,
@@ -972,11 +972,11 @@ const modalStyles = StyleSheet.create({
     width: 80,
     height: 52,
     borderWidth: 2,
-    borderColor: "#43b1d6",
+    borderColor: "#F97316",
     borderRadius: 12,
     fontSize: 22,
     fontWeight: "700",
-    color: "#131f3d",
+    color: "#EA580C",
     textAlign: "center",
     backgroundColor: "#F8FAFC",
     // Android needs explicit padding reset for centered text
@@ -997,7 +997,7 @@ const modalStyles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   btnConfirm: {
-    backgroundColor: "#43b1d6",
+    backgroundColor: "#F97316",
   },
   btnDisabled: {
     backgroundColor: "#BAE6FD",

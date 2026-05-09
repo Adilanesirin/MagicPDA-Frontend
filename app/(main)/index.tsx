@@ -1,4 +1,5 @@
 // app/(main)/index.tsx
+import { BUILD_DATE, BUILD_VERSION } from "@/constants/buildInfo";
 import { deleteUserid, getUserid, logout } from "@/utils/auth";
 import { clearPairing } from "@/utils/pairing";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,11 +8,12 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Toast from "react-native-toast-message";
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [showBuildInfo, setShowBuildInfo] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [licenseType, setLicenseType] = useState<string | null>(null);
   const [demoExpiresAt, setDemoExpiresAt] = useState<string | null>(null);
@@ -166,12 +168,42 @@ export default function HomeScreen() {
             </MaskedView>
           </View>
           
-          <TouchableOpacity
-            onPress={handleLogout}
-            style={styles.logoutButton}
-          >
-            <Ionicons name="log-out-outline" size={24} color="#e02222ff" />
-          </TouchableOpacity>
+         <TouchableOpacity
+  onPress={() => setShowBuildInfo(true)}
+  style={styles.logoutButton}
+>
+  <Ionicons name="log-out-outline" size={24} color="#e02222ff" />
+</TouchableOpacity>
+
+{/* Build Info Modal */}
+<Modal
+  transparent
+  animationType="fade"
+  visible={showBuildInfo}
+  onRequestClose={() => setShowBuildInfo(false)}
+>
+  <TouchableOpacity
+    style={styles.modalOverlay}
+    activeOpacity={1}
+    onPress={() => setShowBuildInfo(false)}
+  >
+    <View style={styles.buildCard}>
+      <Text style={styles.buildCardTitle}>TaskPMS</Text>
+      <Text style={styles.buildCardSub}>Version {BUILD_VERSION}</Text>
+      <Text style={styles.buildCardSub}>Build Date: {BUILD_DATE}</Text>
+      <TouchableOpacity
+        style={styles.buildLogoutBtn}
+        onPress={() => {
+          setShowBuildInfo(false);
+          handleLogout();
+        }}
+      >
+        <Ionicons name="log-out-outline" size={18} color="white" />
+        <Text style={styles.buildLogoutText}>Logout</Text>
+      </TouchableOpacity>
+    </View>
+  </TouchableOpacity>
+</Modal>
         </View>
       </View>
 
@@ -288,26 +320,7 @@ export default function HomeScreen() {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.gridItem}
-              onPress={() => router.push("/(main)/download")}
-            >
-              <View style={styles.cardContent}>
-                <View style={styles.iconContainer}>
-                  <LinearGradient
-                    colors={['#3B82F6', '#1E40AF']}
-                    style={styles.iconGradient}
-                  >
-                    <Ionicons name="cloud-download-outline" size={32} color="white" />
-                  </LinearGradient>
-                </View>
-                <View style={styles.cardTextContainer}>
-                  <Text style={styles.cardTitle}>Download</Text>
-                  <Text style={styles.cardDescription}>Sync Data</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-                    
+           
             <TouchableOpacity
               style={[styles.gridItem, !allowedModules.includes("MOD005") && styles.gridItemLocked]}
               onPress={() => handleModulePress("MOD005", () => router.push("/(main)/tracker"))}
@@ -324,27 +337,6 @@ export default function HomeScreen() {
                 <View style={styles.cardTextContainer}>
                   <Text style={styles.cardTitle}>Tracker</Text>
                   <Text style={styles.cardDescription}>Track Progress</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-            
-
-            <TouchableOpacity
-              style={styles.gridItem}
-              onPress={() => router.push("/(main)/settings")}
-            >
-              <View style={styles.cardContent}>
-                <View style={styles.iconContainer}>
-                  <LinearGradient
-                    colors={['#8B5CF6', '#7C3AED']}
-                    style={styles.iconGradient}
-                  >
-                    <Ionicons name="settings-outline" size={32} color="white" />
-                  </LinearGradient>
-                </View>
-                <View style={styles.cardTextContainer}>
-                  <Text style={styles.cardTitle}>Settings</Text>
-                  <Text style={styles.cardDescription}>App Settings</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -371,7 +363,7 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               style={[styles.gridItem, !allowedModules.includes("MOD027") && styles.gridItemLocked]}
-              onPress={() => handleModulePress("MOD027", () => showComingSoon("Sales Return"))}
+              onPress={() => handleModulePress("MOD027", () => router.push("/(main)/sales-return"))}
             >
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
@@ -413,7 +405,7 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               style={[styles.gridItem, !allowedModules.includes("MOD006") && styles.gridItemLocked]}
-              onPress={() => handleModulePress("MOD006", () => showComingSoon("Stock Taking"))}
+              onPress={() => handleModulePress("MOD006", () => router.push("/(main)/stock-taking"))}
             >
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
@@ -430,9 +422,44 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-            
-
-
+             <TouchableOpacity
+              style={styles.gridItem}
+              onPress={() => router.push("/(main)/download")}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#3B82F6', '#1E40AF']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="cloud-download-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Download</Text>
+                  <Text style={styles.cardDescription}>Sync Data</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+              <TouchableOpacity
+              style={styles.gridItem}
+              onPress={() => router.push("/(main)/settings")}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#8B5CF6', '#7C3AED']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="settings-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Settings</Text>
+                  <Text style={styles.cardDescription}>App Settings</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -704,5 +731,56 @@ const styles = StyleSheet.create({
     color: "#DC2626",
     fontWeight: "500",
     marginTop: 2,
+  },
+   modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-start",
+    alignItems: "flex-end",
+    paddingTop: Platform.OS === "android" ? 110 : 100,
+    paddingRight: 16,
+  },
+
+  buildCard: {
+    backgroundColor: "white",
+    borderRadius: 14,
+    padding: 18,
+    width: 200,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+
+  buildCardTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 6,
+  },
+
+  buildCardSub: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginBottom: 3,
+  },
+
+  buildLogoutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e02222ff",
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 10,
+    marginTop: 14,
+    gap: 6,
+  },
+
+  buildLogoutText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 14,
   },
 });
