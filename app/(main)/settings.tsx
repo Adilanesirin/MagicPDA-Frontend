@@ -1,24 +1,46 @@
 import { createEnhancedAPI } from "@/utils/api";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import Toast from "react-native-toast-message";
 
 export default function Settings() {
   const [mode, setMode] = useState<"hardware" | "camera">("hardware");
   const [pinging, setPinging] = useState(false);
   const [pingStatus, setPingStatus] = useState<"success" | "failed" | null>(null);
+  const [removingLicense, setRemovingLicense] = useState(false);
+  const [mrpEditable, setMrpEditable] = useState(false);
+  const [licenseInfo, setLicenseInfo] = useState<{
+    customerName: string;
+    licenseKey: string;
+    deviceId: string;
+  } | null>(null);
 
   useEffect(() => {
-    const loadSetting = async () => {
+    const loadSettings = async () => {
+      // Load scan mode
       const saved = await SecureStore.getItemAsync("scanMode");
       if (saved === "camera" || saved === "hardware") {
         setMode(saved);
       }
+
+      // Load MRP editable setting
+      const mrpSetting = await SecureStore.getItemAsync("mrpEditable");
+      setMrpEditable(mrpSetting === "true");
+
+      // Load license info
+      const customerName = await AsyncStorage.getItem("customerName");
+      const licenseKey = await AsyncStorage.getItem("licenseKey");
+      const deviceId = await AsyncStorage.getItem("deviceId");
+
+      if (customerName && licenseKey && deviceId) {
+        setLicenseInfo({ customerName, licenseKey, deviceId });
+      }
     };
-    loadSetting();
+    loadSettings();
   }, []);
 
   const saveSetting = async (selected: "hardware" | "camera") => {
@@ -26,25 +48,31 @@ export default function Settings() {
     setMode(selected);
   };
 
+  const toggleMrpEditable = async (value: boolean) => {
+    await SecureStore.setItemAsync("mrpEditable", value.toString());
+    setMrpEditable(value);
+    Toast.show({
+      type: "success",
+      text1: value ? "MRP Edit Enabled" : "MRP Edit Disabled",
+      text2: value ? "You can now edit MRP in GRN products" : "MRP editing is now disabled",
+      visibilityTime: 2000,
+    });
+  };
+
   const handlePingServer = async () => {
     setPinging(true);
-    setPingStatus(null); // Reset status
+    setPingStatus(null);
     try {
       const api = await createEnhancedAPI();
       const startTime = Date.now();
       
-      // Test server connectivity by making a simple request
-      // We'll try to hit the login endpoint with an OPTIONS request first (if supported)
-      // or make a minimal request to see if server responds
       let response;
       
       try {
-        // Method 1: Try a basic GET to root path
         console.log("🔍 Testing server connectivity...");
         response = await api.get("/", {
           timeout: 10000,
           validateStatus: function (status) {
-            // Accept any response (even 404) as long as server responds
             return status < 500;
           }
         });
@@ -52,15 +80,11 @@ export default function Settings() {
         console.log(`📡 Server responded with status: ${response.status}`);
         
       } catch (error: any) {
-        // Method 2: If GET fails, try making a test POST to login without credentials
-        // This will fail authentication but proves server is reachable
         try {
           console.log("🔍 Testing with login endpoint...");
           response = await api.post("/login", {}, {
             timeout: 10000,
             validateStatus: function (status) {
-              // Accept 400 (bad request) or 401 (unauthorized) as valid responses
-              // These indicate server is working but rejecting our request
               return status === 400 || status === 401 || (status >= 200 && status < 300);
             }
           });
@@ -68,7 +92,6 @@ export default function Settings() {
           console.log(`📡 Login endpoint responded with status: ${response.status}`);
           
         } catch (loginError: any) {
-          // If both methods fail, server is likely unreachable
           throw loginError;
         }
       }
@@ -76,7 +99,6 @@ export default function Settings() {
       const endTime = Date.now();
       const responseTime = endTime - startTime;
       
-      // Consider it successful if server responded (even with 4xx errors)
       if (response && response.status < 500) {
         setPingStatus("success");
         console.log("🎉 Server is reachable!");
@@ -107,7 +129,6 @@ export default function Settings() {
         if (error.response.status >= 500) {
           errorMessage = `Server error: ${error.response.status}`;
         } else {
-          // 4xx errors mean server is reachable but request was invalid
           errorMessage = "Server authentication required";
         }
       } else if (error.request) {
@@ -125,6 +146,215 @@ export default function Settings() {
     }
   };
 
+  const handleRemoveLicense = () => {
+    if (!licenseInfo) {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "No license information found",
+      });
+      return;
+    }
+
+    Alert.alert(
+      "Remove License",
+      `Are you sure you want to deactivate this device from license?\n\nCustomer: ${licenseInfo.customerName}\n\nThis will log you out and you'll need to activate again.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: confirmRemoveLicense
+        }
+      ]
+    );
+  };
+
+  const confirmRemoveLicense = async () => {
+    if (!licenseInfo) return;
+
+    setRemovingLicense(true);
+
+    try {
+      console.log("🗑️ Removing license...");
+      console.log("License Key:", licenseInfo.licenseKey);
+      console.log("Device ID:", licenseInfo.deviceId);
+
+      const LOGOUT_API = `https://activate.imcbs.com/mobileapp/api/project/taskpms/logout/`;
+
+      const response = await fetch(LOGOUT_API, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          license_key: licenseInfo.licenseKey,
+          device_id: licenseInfo.deviceId,
+        }),
+      });
+
+      const responseText = await response.text();
+      console.log("Raw response:", responseText);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        Toast.show({
+          type: "error",
+          text1: "Server Error",
+          text2: "Invalid response from server",
+        });
+        setRemovingLicense(false);
+        return;
+      }
+
+      console.log("Logout response:", data);
+
+      if (response.ok && data.success) {
+        console.log("✅ License removed successfully");
+
+        // Clear all stored data
+        await AsyncStorage.multiRemove([
+          "licenseActivated",
+          "licenseKey",
+          "deviceId",
+          "customerName",
+          "projectName",
+          "clientId",
+        ]);
+
+        // Also clear auth tokens
+        await SecureStore.deleteItemAsync("authToken");
+        await SecureStore.deleteItemAsync("userId");
+
+        Toast.show({
+          type: "success",
+          text1: "License Removed",
+          text2: "Device has been deactivated successfully",
+        });
+
+        // Redirect to license activation screen after a short delay
+        setTimeout(() => {
+          router.replace("/(auth)/license");
+        }, 1500);
+      } else {
+        const errorMessage =
+          data.message ||
+          data.error ||
+          data.detail ||
+          "Failed to remove license";
+
+        console.error("License removal failed:", errorMessage);
+
+        Toast.show({
+          type: "error",
+          text1: "Removal Failed",
+          text2: errorMessage,
+        });
+      }
+    } catch (error: any) {
+      console.error("💥 License removal error:", error);
+
+      let errorMessage = "Network error. Please check your connection.";
+
+      if (error.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+
+      if (
+        error.name === "TypeError" &&
+        error.message.includes("Network request failed")
+      ) {
+        errorMessage = "Cannot connect to server. Check your internet connection.";
+      }
+
+      Toast.show({
+        type: "error",
+        text1: "Connection Error",
+        text2: errorMessage,
+      });
+    } finally {
+      setRemovingLicense(false);
+    }
+  };
+
+
+  const handleClearLicense = () => {
+  Alert.alert(
+    "Clear License",
+    "This will clear your current license and log you out. You'll need to activate a new license.\n\nAre you sure?",
+    [
+      {
+        text: "Cancel",
+        style: "cancel"
+      },
+      {
+        text: "Clear License",
+        style: "destructive",
+        onPress: confirmClearLicense
+      }
+    ]
+  );
+};
+
+const confirmClearLicense = async () => {
+  try {
+    console.log("🔄 Clearing license data...");
+
+    // Clear all license data (both demo and production)
+    await AsyncStorage.multiRemove([
+      "licenseActivated",
+      "licenseType",
+      "licenseKey",
+      "demoLicenseKey",
+      "demoCompany",
+      "deviceId",
+      "license_device_id",
+      "customerName",
+      "projectName",
+      "clientId",
+      "demoExpiresAt",
+      "demoDaysRemaining",
+      "demoStatus",
+      "pairing_ip",
+      "server_ip",
+      "base_url",
+    ]);
+
+    // Clear auth tokens
+    await SecureStore.deleteItemAsync("authToken");
+    await SecureStore.deleteItemAsync("userId");
+    await SecureStore.deleteItemAsync("paired_ip");
+    await AsyncStorage.removeItem("userLoggedIn");
+
+    console.log("✅ License cleared successfully");
+
+    Toast.show({
+      type: "success",
+      text1: "License Cleared",
+      text2: "Please activate a new license",
+      visibilityTime: 3000,
+    });
+
+    // Navigate to license screen
+    setTimeout(() => {
+      router.replace("/(auth)/license");
+    }, 1500);
+  } catch (error) {
+    console.error("Error clearing license:", error);
+    Toast.show({
+      type: "error",
+      text1: "Error",
+      text2: "Failed to clear license data",
+    });
+  }
+};
+
   return (
     <View style={styles.container}>
       {/* Back Button */}
@@ -135,9 +365,10 @@ export default function Settings() {
         <Ionicons name="arrow-back" size={24} color="#3B82F6" />
       </TouchableOpacity>
 
-      <View style={styles.content}>
-       
-
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Scan Mode Settings */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Scan Mode</Text>
@@ -206,9 +437,53 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
 
+        {/* MRP Edit Settings */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>GRN Settings</Text>
+          <Text style={styles.cardSubtitle}>
+            Configure GRN product editing options
+          </Text>
+
+          <View style={styles.switchOption}>
+            <View style={styles.switchContent}>
+              <Ionicons 
+                name="pricetag-outline" 
+                size={24} 
+                color={mrpEditable ? "#3B82F6" : "#6B7280"} 
+              />
+              <View style={styles.switchText}>
+                <Text style={[
+                  styles.switchTitle,
+                  mrpEditable && styles.switchTitleActive
+                ]}>
+                  Enable MRP Editing
+                </Text>
+                <Text style={styles.switchDescription}>
+                  Allow editing MRP in GRN products
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={mrpEditable}
+              onValueChange={toggleMrpEditable}
+              trackColor={{ false: "#D1D5DB", true: "#BFDBFE" }}
+              thumbColor={mrpEditable ? "#3B82F6" : "#9CA3AF"}
+              ios_backgroundColor="#D1D5DB"
+            />
+          </View>
+
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle-outline" size={18} color="#3B82F6" />
+            <Text style={styles.infoText}>
+              {mrpEditable 
+                ? "MRP field will be editable when editing GRN products"
+                : "MRP field will be read-only in GRN product edit page"}
+            </Text>
+          </View>
+        </View>
+
         {/* Server Status */}
         <View style={styles.card}>
-          {/* Status Indicator Circle - Enhanced */}
           {(pingStatus || pinging) && (
             <View style={[
               styles.statusIndicator,
@@ -257,13 +532,95 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
 
+        {/* License Management */}
+        {licenseInfo && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>License Management</Text>
+            <Text style={styles.cardSubtitle}>
+              Manage your device license activation
+            </Text>
+
+            {/* License Info Display */}
+            <View style={styles.licenseInfoBox}>
+              <View style={styles.licenseInfoRow}>
+                <Ionicons name="person-outline" size={18} color="#6B7280" />
+                <Text style={styles.licenseInfoLabel}>Customer:</Text>
+                <Text style={styles.licenseInfoValue}>{licenseInfo.customerName}</Text>
+              </View>
+              <View style={styles.licenseInfoRow}>
+                <Ionicons name="key-outline" size={18} color="#6B7280" />
+                <Text style={styles.licenseInfoLabel}>License:</Text>
+                <Text style={styles.licenseInfoValue} numberOfLines={1}>
+                  {licenseInfo.licenseKey}
+                </Text>
+              </View>
+              <View style={styles.licenseInfoRow}>
+                <Ionicons name="phone-portrait-outline" size={18} color="#6B7280" />
+                <Text style={styles.licenseInfoLabel}>Device:</Text>
+                <Text style={styles.licenseInfoValue} numberOfLines={1}>
+                  {licenseInfo.deviceId.substring(0, 20)}...
+                </Text>
+              </View>
+            </View>
+
+            {/* Remove License Button */}
+            <TouchableOpacity
+              style={[
+                styles.removeButton,
+                removingLicense && styles.removeButtonDisabled
+              ]}
+              onPress={handleRemoveLicense}
+              disabled={removingLicense}
+            >
+              {removingLicense ? (
+                <>
+                  <ActivityIndicator size="small" color="#DC2626" />
+                  <Text style={styles.removeButtonText}>Removing...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={20} color="#DC2626" />
+                  <Text style={styles.removeButtonText}>Remove License</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <Text style={styles.warningText}>
+              ⚠️ Removing license will deactivate this device and log you out
+            </Text>
+          </View>
+        )} 
+
+        {/* Clear License Section */}
+<View style={styles.card}>
+  <Text style={styles.cardTitle}>Clear License</Text>
+  <Text style={styles.cardSubtitle}>
+    Remove current license and return to activation screen
+  </Text>
+
+  <TouchableOpacity
+    style={styles.clearLicenseButton}
+    onPress={handleClearLicense}
+  >
+    <Ionicons name="key-outline" size={20} color="#DC2626" />
+    <Text style={styles.clearLicenseButtonText}>Clear License</Text>
+  </TouchableOpacity>
+
+  <View style={styles.clearLicenseWarning}>
+    <Ionicons name="warning-outline" size={16} color="#F59E0B" />
+    <Text style={styles.clearLicenseWarningText}>
+      This will remove your license and log you out. Use this to switch between demo and production licenses.
+    </Text>
+  </View>
+</View>
+
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             Powered by IMC Business Solutions
           </Text>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -272,7 +629,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FAFAFA",
-    padding: 24,
   },
   backButton: {
     position: "absolute",
@@ -288,29 +644,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  content: {
-    flex: 1,
-    justifyContent: "center",
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 100,
+    paddingBottom: 40,
     gap: 30,
-    paddingTop: 60,
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: "bold",
-    marginTop: 16,
-    textAlign: "center",
-    color: "#111827",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#6B7280",
-    marginTop: 8,
-    textAlign: "center",
-    paddingHorizontal: 16,
   },
   card: {
     backgroundColor: "white",
@@ -370,6 +708,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
   },
+  switchOption: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  switchContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  switchText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  switchTitle: {
+    fontWeight: "600",
+    fontSize: 16,
+    color: "#111827",
+  },
+  switchTitleActive: {
+    color: "#1D4ED8",
+  },
+  switchDescription: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  infoBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#EBF8FF",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    gap: 8,
+  },
+  infoText: {
+    fontSize: 13,
+    color: "#1D4ED8",
+    flex: 1,
+    lineHeight: 18,
+  },
   statusIndicator: {
     position: "absolute",
     top: 16,
@@ -422,14 +809,100 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1D4ED8",
   },
+  licenseInfoBox: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  licenseInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    gap: 8,
+  },
+  licenseInfoLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+    minWidth: 70,
+  },
+  licenseInfoValue: {
+    fontSize: 14,
+    color: "#111827",
+    fontWeight: "600",
+    flex: 1,
+  },
+  removeButton: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#FECACA",
+    backgroundColor: "#FEF2F2",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  removeButtonDisabled: {
+    backgroundColor: "#F9FAFB",
+    borderColor: "#E5E7EB",
+  },
+  removeButtonText: {
+    marginLeft: 8,
+    fontWeight: "600",
+    color: "#DC2626",
+    fontSize: 16,
+  },
+  warningText: {
+    fontSize: 12,
+    color: "#F59E0B",
+    textAlign: "center",
+    fontStyle: "italic",
+  },
   footer: {
     alignItems: "center",
-    marginTop: 32,
-    
+    marginTop: 20,
+    paddingVertical: 20,
   },
   footerText: {
     fontSize: 13,
     color: "#9CA3AF",
     textAlign: "center",
   },
+  clearLicenseButton: {
+  padding: 16,
+  borderRadius: 12,
+  borderWidth: 2,
+  borderColor: "#FECACA",
+  backgroundColor: "#FEF2F2",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  marginBottom: 12,
+},
+clearLicenseButtonText: {
+  marginLeft: 8,
+  fontWeight: "600",
+  color: "#DC2626",
+  fontSize: 16,
+},
+clearLicenseWarning: {
+  flexDirection: "row",
+  alignItems: "flex-start",
+  backgroundColor: "#FEF3C7",
+  padding: 12,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: "#FDE68A",
+  gap: 8,
+},
+clearLicenseWarningText: {
+  fontSize: 12,
+  color: "#92400E",
+  flex: 1,
+  lineHeight: 16,
+},
 });

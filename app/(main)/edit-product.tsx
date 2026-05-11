@@ -13,8 +13,9 @@ import {
 
 export default function EditProduct() {
   const router = useRouter();
-  const { itemData, itemIndex, supplier, supplier_code } = useLocalSearchParams<{
-    itemData: string;
+  // FIXED: Changed 'itemData' to 'item' to match barcode-entry.tsx
+  const { item, itemIndex, supplier, supplier_code } = useLocalSearchParams<{
+    item: string;
     itemIndex: string;
     supplier: string;
     supplier_code: string;
@@ -22,32 +23,40 @@ export default function EditProduct() {
 
   const [product, setProduct] = useState<any>({});
   const [editedCost, setEditedCost] = useState("");
+  const [editedMrp, setEditedMrp] = useState("");
   const [editedQuantity, setEditedQuantity] = useState("");
   const [editedSupplier, setEditedSupplier] = useState("");
 
   useEffect(() => {
-    if (itemData) {
-      const parsedItem = JSON.parse(itemData);
-      setProduct(parsedItem);
-      
-      // UPDATED LOGIC: If eCost is 0 or not set, use cost value
-      // This ensures E.Cost field shows the current cost by default
-      const initialECost = (parsedItem.eCost && parsedItem.eCost !== 0) 
-        ? parsedItem.eCost 
-        : (parsedItem.cost || 0);
-      
-      setEditedCost(initialECost.toString());
-      setEditedQuantity(parsedItem.quantity?.toString() || "1");
-      setEditedSupplier(parsedItem.batchSupplier || supplier || "");
+    // FIXED: Changed 'itemData' to 'item'
+    if (item) {
+      try {
+        const parsedItem = JSON.parse(item);
+        console.log("📦 Parsed Product Data:", parsedItem);
+        setProduct(parsedItem);
+        
+        // Pre-fill with existing eCost if set, otherwise cost
+        const currentCost = (parsedItem.eCost && parsedItem.eCost !== 0) ? parsedItem.eCost : (parsedItem.cost || 0);
+        setEditedCost(currentCost.toString());
+        setEditedMrp((parsedItem.bmrp || 0).toString());
+        
+        // Use the saved quantity value if it exists, otherwise empty string
+        setEditedQuantity(parsedItem.quantity ? parsedItem.quantity.toString() : "");
+        
+        setEditedSupplier(parsedItem.batchSupplier || supplier || "");
+      } catch (error) {
+        console.error("❌ Error parsing item:", error);
+      }
     }
-  }, [itemData]);
+  }, [item]);
 
   const handleSave = () => {
     const updatedItem = {
       ...product,
-      cost: product.cost, // Keep original cost unchanged
-      eCost: parseFloat(editedCost) || 0, // Save edited cost as eCost
-      quantity: parseInt(editedQuantity) || 1,
+      cost: product.cost,
+      eCost: parseFloat(editedCost) || 0,
+      bmrp: parseFloat(editedMrp) || 0,
+      quantity: parseInt(editedQuantity) || 0,
       batchSupplier: editedSupplier,
     };
 
@@ -75,6 +84,8 @@ export default function EditProduct() {
     const currentQty = parseInt(editedQuantity) || 0;
     if (currentQty > 0) {
       setEditedQuantity((currentQty - 1).toString());
+    } else {
+      setEditedQuantity("0");
     }
   };
 
@@ -99,99 +110,129 @@ export default function EditProduct() {
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="p-4">
-          {/* Product Info with Blue Outline */}
+          {/* Product Info with Blue Outline - COMPLETE DETAILS */}
           <View className="bg-white rounded-lg p-4 mb-4 border-2 border-blue-500">
+            {/* Product Name */}
             <Text className="text-base font-semibold text-gray-800 mb-1" numberOfLines={2}>
-              {product.name}
+              {product.name || "Product Name"}
             </Text>
-            <Text className="text-sm text-gray-500 mb-2">{product.barcode}</Text>
+            
+            {/* Barcode */}
+            <Text className="text-sm text-gray-500 mb-2">
+              {product.barcode || "No Barcode"}
+            </Text>
+            
+            {/* MRP and Stock */}
             <Text className="text-sm text-gray-600">
               MRP: <Text className="font-semibold text-green-600">₹{product.bmrp || 0}</Text>
-              {" • "}Stock: <Text className="font-semibold">{product.currentStock || 0}</Text>
+              {" • "}
+              Stock: <Text className="font-semibold">{product.currentStock || 0}</Text>
             </Text>
+            
+            {/* Original Cost and Current E.Cost */}
             <Text className="text-sm text-gray-600 mt-1">
               Original Cost: <Text className="font-semibold text-orange-600">₹{product.cost || 0}</Text>
-              {" • "}Current E.Cost: <Text className="font-semibold text-red-600">₹{currentDisplayCost || 0}</Text>
+              {" • "}
+              Current E.Cost: <Text className="font-semibold text-red-600">₹{currentDisplayCost || 0}</Text>
             </Text>
           </View>
 
-          {/* Edit Form - Reordered: Supplier, E.Qty, E.Cost */}
+          {/* Edit Form - Compact Design */}
           <View className="bg-white rounded-lg p-4 mb-4">
-            {/* Supplier (Non-editable) */}
+            
+            {/* Supplier Name */}
             <View className="mb-4">
-              <Text className="text-gray-700 font-medium mb-2">Supplier</Text>
-              <View className="border border-gray-300 rounded-lg px-3 py-2 bg-gray-100">
-                <Text className="text-gray-600">{editedSupplier || "No supplier selected"}</Text>
-              </View>
-              <Text className="text-xs text-gray-500 mt-1">
-                Supplier information is read-only
+              <Text className="text-xs text-gray-500 mb-1">Supplier</Text>
+              <Text className="text-base font-semibold text-indigo-600">
+                {editedSupplier || "No supplier selected"}
               </Text>
             </View>
 
-            {/* Quantity */}
+            {/* Quantity Section */}
             <View className="mb-4">
-              <Text className="text-gray-700 font-medium mb-2">E.Qty (Editable Quantity)</Text>
-              <View className="flex-row items-center">
+              <Text className="text-sm text-gray-700 mb-2 font-medium">E.Qty (Editable Quantity)</Text>
+              <View className="flex-row items-center justify-center">
                 <TouchableOpacity
                   onPress={decrementQuantity}
-                  className="bg-gray-100 w-10 h-10 rounded-lg items-center justify-center"
+                  className="bg-red-500 w-10 h-10 rounded-full items-center justify-center"
+                  activeOpacity={0.7}
                 >
-                  <Ionicons name="remove" size={20} color="#374151" />
+                  <Ionicons name="remove" size={20} color="#ffffff" />
                 </TouchableOpacity>
+                
                 <TextInput
                   value={editedQuantity}
                   onChangeText={setEditedQuantity}
                   keyboardType="numeric"
-                  className="flex-1 mx-3 border border-gray-300 rounded-lg px-3 py-2 text-center font-semibold"
+                  placeholder="0"
+                  className="text-center font-semibold text-gray-800 mx-4"
+                  style={{ 
+                    fontSize: 24,
+                    minWidth: 60,
+                  }}
                 />
+                
                 <TouchableOpacity
                   onPress={incrementQuantity}
-                  className="bg-gray-100 w-10 h-10 rounded-lg items-center justify-center"
+                  className="bg-blue-500 w-10 h-10 rounded-full items-center justify-center"
+                  activeOpacity={0.7}
                 >
-                  <Ionicons name="add" size={20} color="#374151" />
+                  <Ionicons name="add" size={20} color="#ffffff" />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Cost */}
-            <View>
-              <Text className="text-gray-700 font-medium mb-2">
-                E.Cost (₹)
-              </Text>
-              <TextInput
-                value={editedCost}
-                onChangeText={setEditedCost}
-                keyboardType="decimal-pad"
-                placeholder="0"
-                className="border border-gray-300 rounded-lg px-3 py-2 font-semibold"
-              />
-              <Text className="text-xs text-gray-500 mt-1">
-                Modify this cost if needed. Original cost: ₹{product.cost || 0}
-              </Text>
+            {/* E.Cost and MRP row */}
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <Text className="text-sm text-gray-700 mb-2 font-medium">E.Cost (₹)</Text>
+                <TextInput
+                  value={editedCost}
+                  onChangeText={setEditedCost}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  className="bg-teal-50 border border-teal-300 rounded-md px-3 py-3.5 font-semibold text-center text-teal-700"
+                  style={{ fontSize: 18 }}
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm text-gray-700 mb-2 font-medium">MRP (₹)</Text>
+                <TextInput
+                  value={editedMrp}
+                  onChangeText={setEditedMrp}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  className="bg-green-50 border border-green-300 rounded-md px-3 py-3.5 font-semibold text-center text-green-700"
+                  style={{ fontSize: 18 }}
+                />
+              </View>
             </View>
+
           </View>
 
           {/* Total Value */}
-          <View className="bg-blue-50 rounded-lg p-4 mb-6">
-            <Text className="text-center text-sm text-gray-600 mb-1">Total Value</Text>
+          <View className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-300">
+            <Text className="text-center text-sm text-gray-700 mb-1 font-medium">Total Value</Text>
             <Text className="text-center text-2xl font-bold text-blue-600">
               ₹{((parseFloat(editedCost) || 0) * (parseInt(editedQuantity) || 0)).toFixed(2)}
             </Text>
           </View>
 
           {/* Action Buttons */}
-          <View className="flex-row gap-3 mb-8">
+          <View className="flex-row gap-3 mb-6">
             <TouchableOpacity
               onPress={handleBack}
-              className="flex-1 bg-gray-400 rounded-lg py-3"
+              className="flex-1 bg-gray-500 rounded-lg py-3"
+              activeOpacity={0.8}
             >
-              <Text className="text-white text-center font-semibold">Cancel</Text>
+              <Text className="text-white text-center font-semibold text-base">Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSave}
               className="flex-1 bg-blue-500 rounded-lg py-3"
+              activeOpacity={0.8}
             >
-              <Text className="text-white text-center font-semibold">Save</Text>
+              <Text className="text-white text-center font-semibold text-base">Save</Text>
             </TouchableOpacity>
           </View>
         </View>
