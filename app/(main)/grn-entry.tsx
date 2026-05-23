@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import * as SQLite from "expo-sqlite";
 import React, { useEffect, useState } from "react";
 import {
   FlatList,
@@ -11,11 +10,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getAllSuppliers } from "../../utils/database";
+import { getAllSuppliers, getDatabase } from "../../utils/database";
 
 type Supplier = { code: string; name: string };
 
-const db = SQLite.openDatabaseSync("magicpedia.db");
 
 export default function GRNEntry() {
   const [suppliers, setSuppliers] = useState([]);
@@ -32,7 +30,7 @@ export default function GRNEntry() {
     try {
       console.log("🔍 Checking for suppliers with pending GRN items...");
       
-      const pendingItems: any[] = await db.getAllAsync(
+      const pendingItems: any[] = await getDatabase().getAllAsync(
         `SELECT DISTINCT supplier_code FROM pending_grn_items WHERE supplier_code IS NOT NULL AND supplier_code != ''`
       );
       

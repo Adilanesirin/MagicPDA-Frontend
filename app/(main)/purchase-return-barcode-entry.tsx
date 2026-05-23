@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import * as SQLite from "expo-sqlite";
+import { getDatabase } from "@/utils/database";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -20,7 +20,6 @@ import {
   View
 } from "react-native";
 
-const db = SQLite.openDatabaseSync("magicpedia.db");
 
 const styles = StyleSheet.create({
   container: {
@@ -686,7 +685,7 @@ const initReturnsTable = async () => {
   try {
     console.log("🔄 Initializing returns_to_sync table...");
 
-    await db.execAsync(`
+    await getDatabase().execAsync(`
       CREATE TABLE IF NOT EXISTS returns_to_sync (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_code TEXT NOT NULL DEFAULT '',
@@ -707,7 +706,7 @@ const initReturnsTable = async () => {
     `);
 
     // Safely patch any missing columns on existing installs
-    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(returns_to_sync)`);
+    const tableInfo: any[] = await getDatabase().getAllAsync(`PRAGMA table_info(returns_to_sync)`);
     const cols = tableInfo.map((col: any) => col.name);
 
     const migrations = [
@@ -725,7 +724,7 @@ const initReturnsTable = async () => {
       if (!cols.includes(m.col)) {
         console.log(`⚠️ Adding missing column to returns_to_sync: ${m.col}`);
         try {
-          await db.execAsync(m.def);
+          await getDatabase().execAsync(m.def);
         } catch (e) {
           console.warn(`Could not add column ${m.col}:`, e);
         }
@@ -744,13 +743,13 @@ const initPendingReturnsTable = async () => {
     console.log("🔄 Initializing pending_returns table...");
     
     // First, check if table exists
-    const tableExists = await db.getFirstAsync(
+    const tableExists = await getDatabase().getFirstAsync(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='pending_returns'"
     ) as any;
     
     if (!tableExists) {
       // Create new table with complete schema
-     await db.execAsync(`
+     await getDatabase().execAsync(`
         CREATE TABLE pending_returns (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           supplier_code TEXT NOT NULL DEFAULT '',
@@ -777,7 +776,7 @@ const initPendingReturnsTable = async () => {
     }
     
     // Table exists, get its column information
-    const tableInfo = await db.getAllAsync(`PRAGMA table_info(pending_returns)`) as Array<{name: string}>;
+    const tableInfo = await getDatabase().getAllAsync(`PRAGMA table_info(pending_returns)`) as Array<{name: string}>;
     const existingColumns = tableInfo.map((col: any) => col.name);
     
     console.log("📋 Existing columns in pending_returns:", existingColumns.join(", "));
@@ -795,8 +794,8 @@ const initPendingReturnsTable = async () => {
       console.log("🔄 Migrating pending_returns table - missing columns:", missingColumns.join(", "));
       
       // Create new table with complete schema
-    await db.withTransactionAsync(async () => {
-       await db.execAsync(`
+    await getDatabase().withTransactionAsync(async () => {
+       await getDatabase().execAsync(`
           CREATE TABLE pending_returns_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             supplier_code TEXT NOT NULL DEFAULT '',
@@ -826,7 +825,7 @@ const initPendingReturnsTable = async () => {
         if (commonColumns.length > 0) {
           const columnsList = commonColumns.join(', ');
           try {
-            await db.execAsync(`
+            await getDatabase().execAsync(`
               INSERT INTO pending_returns_new (${columnsList})
               SELECT ${columnsList}
               FROM pending_returns
@@ -837,8 +836,8 @@ const initPendingReturnsTable = async () => {
           }
         }
 
-        await db.execAsync(`DROP TABLE pending_returns`);
-        await db.execAsync(`ALTER TABLE pending_returns_new RENAME TO pending_returns`);
+        await getDatabase().execAsync(`DROP TABLE pending_returns`);
+        await getDatabase().execAsync(`ALTER TABLE pending_returns_new RENAME TO pending_returns`);
       });
       
       console.log("✅ Successfully migrated pending_returns table");
@@ -851,8 +850,8 @@ const initPendingReturnsTable = async () => {
     // If all else fails, try to recreate the table from scratch
     try {
       console.log("🔄 Attempting to recreate table from scratch...");
-      await db.execAsync(`DROP TABLE IF EXISTS pending_returns`);
-     await db.execAsync(`
+      await getDatabase().execAsync(`DROP TABLE IF EXISTS pending_returns`);
+     await getDatabase().execAsync(`
         CREATE TABLE pending_returns (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           supplier_code TEXT NOT NULL DEFAULT '',
@@ -885,19 +884,19 @@ const debugManualEntry = async (barcode: string) => {
   console.log("\n🔍 === DEBUGGING MANUAL RETURN ENTRY ===");
   
   try {
-    const pendingItem = await db.getFirstAsync(
+    const pendingItem = await getDatabase().getFirstAsync(
       `SELECT barcode, name, isManualEntry, supplier_code FROM pending_returns WHERE barcode = ?`,
       [barcode]
     ) as any;
     console.log("1️⃣ pending_returns table:", JSON.stringify(pendingItem, null, 2));
     
-    const syncReturn = await db.getFirstAsync(
+    const syncReturn = await getDatabase().getFirstAsync(
       `SELECT barcode, product_name, is_manual_entry, itemcode FROM returns_to_sync WHERE barcode = ? ORDER BY created_at DESC LIMIT 1`,
       [barcode]
     ) as any;
     console.log("2️⃣ returns_to_sync table:", JSON.stringify(syncReturn, null, 2));
     
-    const tableInfo = await db.getAllAsync(`PRAGMA table_info(pending_returns)`);
+    const tableInfo = await getDatabase().getAllAsync(`PRAGMA table_info(pending_returns)`);
     console.log("3️⃣ pending_returns schema:");
     tableInfo.forEach((col: any) => {
       console.log(`   - ${col.name} (${col.type})`);
@@ -982,7 +981,7 @@ export default function PurchaseReturnBarcodeEntry() {
   const loadPendingItems = async () => {
     try {
       // Query with all required columns
-      const rows = await db.getAllAsync(
+      const rows = await getDatabase().getAllAsync(
         `SELECT 
           id,
           supplier_code,
@@ -1016,7 +1015,7 @@ export default function PurchaseReturnBarcodeEntry() {
       // Fallback: Try without supplier_code filter
       try {
         console.log("⚠️ Attempting fallback query without supplier filter...");
-        const rows = await db.getAllAsync(
+        const rows = await getDatabase().getAllAsync(
           `SELECT 
             id,
             supplier_code,
@@ -1053,7 +1052,7 @@ export default function PurchaseReturnBarcodeEntry() {
       console.log("\n💾 === SAVING PENDING RETURN ITEM ===");
       console.log("Item data:", JSON.stringify(item, null, 2));
       
-      await db.runAsync(
+      await getDatabase().runAsync(
         `INSERT INTO pending_returns 
         (supplier_code, barcode, name, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, isManualEntry, return_reason, moreoption, text1)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1078,7 +1077,7 @@ export default function PurchaseReturnBarcodeEntry() {
         ]
       );
       
-      const saved = await db.getFirstAsync(
+      const saved = await getDatabase().getFirstAsync(
         `SELECT barcode, name, isManualEntry FROM pending_returns WHERE barcode = ? ORDER BY id DESC LIMIT 1`,
         [item.barcode]
       );
@@ -1092,7 +1091,7 @@ export default function PurchaseReturnBarcodeEntry() {
 
   const deletePendingItem = async (itemId: number) => {
     try {
-      await db.runAsync(
+      await getDatabase().runAsync(
         "DELETE FROM pending_returns WHERE id = ?",
         [itemId]
       );
@@ -1104,7 +1103,7 @@ export default function PurchaseReturnBarcodeEntry() {
 
   const updatePendingItem = async (itemId: number, item: any) => {
     try {
-      await db.runAsync(
+      await getDatabase().runAsync(
         `UPDATE pending_returns 
         SET quantity = ?, eCost = ?, cost = ?, batchSupplier = ?, supplier_code = ?, return_reason = ?
         WHERE id = ?`,
@@ -1136,7 +1135,7 @@ export default function PurchaseReturnBarcodeEntry() {
   }, []);
   const loadAllProducts = async () => {
     try {
-      const rows = await db.getAllAsync("SELECT * FROM product_data");
+      const rows = await getDatabase().getAllAsync("SELECT * FROM product_data");
       setAllProducts(rows);
     } catch (error) {
       console.error("Error loading products:", error);
@@ -1363,17 +1362,17 @@ export default function PurchaseReturnBarcodeEntry() {
 
   const searchBarcodeWithVariants = async (barcode: string) => {
     try {
-      const exactRows = await db.getAllAsync(
+      const exactRows = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode = ?",
         [barcode]
       );
 
-      const variantRows1 = await db.getAllAsync(
+      const variantRows1 = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode LIKE ?",
         [`${barcode} :%`]
       );
 
-      const variantRows2 = await db.getAllAsync(
+      const variantRows2 = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode LIKE ?",
         [`${barcode}:%`]
       );
@@ -1847,7 +1846,7 @@ const openManualEntryModal = (barcode: string) => {
                   const isManualEntry = item.isManualEntry === 1;
                   
                   if (!isManualEntry) {
-                    const productData = await db.getFirstAsync(
+                    const productData = await getDatabase().getFirstAsync(
                       "SELECT code FROM product_data WHERE barcode = ?",
                       [item.barcode]
                     ) as { code?: string } | null;
@@ -1880,13 +1879,13 @@ const openManualEntryModal = (barcode: string) => {
                   });
 
                   if (!isManualEntry) {
-                    const productExists = await db.getFirstAsync(
+                    const productExists = await getDatabase().getFirstAsync(
                       "SELECT 1 FROM product_data WHERE barcode = ?",
                       [item.barcode]
                     );
                     
                     if (productExists) {
-                      await db.runAsync(
+                      await getDatabase().runAsync(
                         "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
                         [item.quantity, finalCost, item.barcode]
                       );
@@ -1909,7 +1908,7 @@ const openManualEntryModal = (barcode: string) => {
               
               if (successCount > 0) {
                 try {
-                  await db.runAsync(
+                  await getDatabase().runAsync(
                     "DELETE FROM pending_returns WHERE supplier_code = ?",
                     [supplier_code || ""]
                   );

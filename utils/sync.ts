@@ -511,8 +511,8 @@ export const saveOrderToSync = async (order: {
 // ============================================
 
 export const getPendingGRNs = async () => {
-  const db = getDatabase();
   try {
+    const db = getDatabase();
     const grns = await db.getAllAsync(
       `SELECT 
          g.*,
@@ -524,7 +524,18 @@ export const getPendingGRNs = async () => {
       ['pending']
     );
     return grns;
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.includes('NullPointerException') || error?.message?.includes('prepareAsync')) {
+      console.log('⚠️ GRN DB error — retrying with fresh connection...');
+      const { resetDatabase } = await import('./database');
+      resetDatabase();
+      const db = getDatabase();
+      return await db.getAllAsync(
+        `SELECT g.*, COALESCE(g.product_name, p.name) as product_name
+         FROM grn_to_sync g LEFT JOIN product_data p ON g.barcode = p.barcode
+         WHERE g.sync_status = 'pending' ORDER BY g.created_at ASC, g.id ASC`
+      );
+    }
     console.error("❌ Error getting pending GRNs:", error);
     return [];
   }
@@ -652,8 +663,8 @@ export const saveGRNToSync = async (order: {
 
 export const getPendingGRNOrders = getPendingGRNs;
 export const getLocalGRNDataStats = async () => {
-  const db = getDatabase();
   try {
+    const db = getDatabase();
     const stats = await db.getFirstAsync(
       `SELECT 
          COUNT(*) as totalCount,
@@ -663,7 +674,21 @@ export const getLocalGRNDataStats = async () => {
        FROM grn_to_sync`
     ) as any;
     return stats || { totalCount: 0, pendingCount: 0, syncedCount: 0, lastSynced: null };
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.includes('NullPointerException') || error?.message?.includes('prepareAsync')) {
+      console.log('⚠️ GRN stats DB error — retrying...');
+      const { resetDatabase } = await import('./database');
+      resetDatabase();
+      try {
+        const db = getDatabase();
+        const stats = await db.getFirstAsync(
+          `SELECT COUNT(*) as totalCount, SUM(CASE WHEN sync_status='pending' THEN 1 ELSE 0 END) as pendingCount,
+           SUM(CASE WHEN sync_status='synced' THEN 1 ELSE 0 END) as syncedCount, MAX(created_at) as lastSynced
+           FROM grn_to_sync`
+        ) as any;
+        return stats || { totalCount: 0, pendingCount: 0, syncedCount: 0, lastSynced: null };
+      } catch { }
+    }
     console.error("❌ Error getting GRN stats:", error);
     return { totalCount: 0, pendingCount: 0, syncedCount: 0, lastSynced: null };
   }

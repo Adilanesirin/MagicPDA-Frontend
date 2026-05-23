@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import * as SQLite from "expo-sqlite";
+import { getDatabase } from "@/utils/database";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -24,7 +24,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
-const db = SQLite.openDatabaseSync("magicpedia.db");
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const C = {
@@ -48,7 +47,7 @@ const C = {
 
 // ─── DB init helpers (unchanged logic) ───────────────────────────────────────
 const initOrdersTable = async () => {
-  await db.execAsync(`
+  await getDatabase().execAsync(`
     CREATE TABLE IF NOT EXISTS orders_to_sync (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userid TEXT NOT NULL, itemcode TEXT NOT NULL, barcode TEXT NOT NULL,
@@ -58,10 +57,10 @@ const initOrdersTable = async () => {
     );
   `);
   try {
-    const cols = await db.getAllAsync(`PRAGMA table_info(orders_to_sync)`) as Array<{ name: string }>;
+    const cols = await getDatabase().getAllAsync(`PRAGMA table_info(orders_to_sync)`) as Array<{ name: string }>;
     if (cols.some(c => c.name === "supplier_code")) {
-      await db.execAsync(`DROP TABLE IF EXISTS orders_to_sync_new;`);
-      await db.execAsync(`
+      await getDatabase().execAsync(`DROP TABLE IF EXISTS orders_to_sync_new;`);
+      await getDatabase().execAsync(`
         CREATE TABLE orders_to_sync_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           userid TEXT NOT NULL, itemcode TEXT NOT NULL, barcode TEXT NOT NULL,
@@ -70,12 +69,12 @@ const initOrdersTable = async () => {
           created_at TEXT NOT NULL, product_name TEXT, is_manual_entry INTEGER DEFAULT 0
         );
       `);
-      await db.execAsync(`
+      await getDatabase().execAsync(`
         INSERT INTO orders_to_sync_new (userid,itemcode,barcode,quantity,rate,mrp,order_date,sync_status,created_at,product_name,is_manual_entry)
         SELECT userid,itemcode,barcode,quantity,rate,mrp,order_date,sync_status,created_at,product_name,is_manual_entry FROM orders_to_sync;
       `);
-      await db.execAsync(`DROP TABLE orders_to_sync;`);
-      await db.execAsync(`ALTER TABLE orders_to_sync_new RENAME TO orders_to_sync;`);
+      await getDatabase().execAsync(`DROP TABLE orders_to_sync;`);
+      await getDatabase().execAsync(`ALTER TABLE orders_to_sync_new RENAME TO orders_to_sync;`);
     }
   } catch (_) {}
 };
@@ -107,16 +106,16 @@ const PENDING_REQUIRED = [
 
 const initPendingItemsTable = async () => {
   try {
-    const tableExists = await db.getFirstAsync(
+    const tableExists = await getDatabase().getFirstAsync(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='pending_items'"
     ) as any;
 
     if (!tableExists) {
-      await db.execAsync(PENDING_SCHEMA);
+      await getDatabase().execAsync(PENDING_SCHEMA);
       return;
     }
 
-    const tableInfo = await db.getAllAsync(
+    const tableInfo = await getDatabase().getAllAsync(
       `PRAGMA table_info(pending_items)`
     ) as Array<{ name: string }>;
     const existing = tableInfo.map((c: any) => c.name);
@@ -131,13 +130,13 @@ const initPendingItemsTable = async () => {
         c => PENDING_REQUIRED.includes(c) && c !== "id"
       );
 
-      await db.execAsync(`DROP TABLE IF EXISTS pending_items_new;`);
-      await db.execAsync(PENDING_SCHEMA.replace("pending_items", "pending_items_new"));
+      await getDatabase().execAsync(`DROP TABLE IF EXISTS pending_items_new;`);
+      await getDatabase().execAsync(PENDING_SCHEMA.replace("pending_items", "pending_items_new"));
 
       if (safeCols.length > 0) {
         try {
           const cols = safeCols.join(",");
-          await db.execAsync(
+          await getDatabase().execAsync(
             `INSERT INTO pending_items_new (${cols}) SELECT ${cols} FROM pending_items;`
           );
         } catch (_) {
@@ -145,14 +144,14 @@ const initPendingItemsTable = async () => {
         }
       }
 
-      await db.execAsync(`DROP TABLE pending_items;`);
-      await db.execAsync(`ALTER TABLE pending_items_new RENAME TO pending_items;`);
+      await getDatabase().execAsync(`DROP TABLE pending_items;`);
+      await getDatabase().execAsync(`ALTER TABLE pending_items_new RENAME TO pending_items;`);
     }
   } catch (error) {
     // Last resort — drop and recreate
     try {
-      await db.execAsync(`DROP TABLE IF EXISTS pending_items;`);
-      await db.execAsync(PENDING_SCHEMA);
+      await getDatabase().execAsync(`DROP TABLE IF EXISTS pending_items;`);
+      await getDatabase().execAsync(PENDING_SCHEMA);
     } catch (_) {}
   }
 };
@@ -161,7 +160,7 @@ const saveOrderToSync = async (orderData: {
   userid: string; itemcode: string; barcode: string; quantity: number;
   rate: number; mrp: number; order_date: string; product_name?: string; is_manual_entry?: number;
 }) => {
-  await db.runAsync(
+  await getDatabase().runAsync(
     `INSERT INTO stock_count_to_sync (userid,itemcode,barcode,quantity,rate,mrp,count_date,sync_status,created_at,product_name)
      VALUES (?,?,?,?,?,?,?,'pending',datetime('now'),?)`,
     [orderData.userid, orderData.itemcode, orderData.barcode, orderData.quantity,
@@ -293,7 +292,7 @@ export default function StockBarcodeEntry() {
       const updated = JSON.parse(params.updatedItem as string);
       const item = scannedItems[parseInt(params.itemIndex as string)];
       if (item?.id) {
-        db.runAsync(
+        getDatabase().runAsync(
           `UPDATE pending_items SET quantity=?,eCost=?,cost=?,bmrp=?,batchSupplier=? WHERE id=?`,
           [updated.quantity, updated.eCost, updated.cost, updated.bmrp, updated.batchSupplier, item.id]
         ).then(() => loadPendingItems());
@@ -305,7 +304,7 @@ export default function StockBarcodeEntry() {
   // ─── DB helpers ────────────────────────────────────────────────────────────
   const loadPendingItems = async () => {
     try {
-      const rows = await db.getAllAsync(
+      const rows = await getDatabase().getAllAsync(
         `SELECT id,barcode,name,COALESCE(bmrp,0) as bmrp,COALESCE(cost,0) as cost,
          COALESCE(quantity,0) as quantity,COALESCE(eCost,0) as eCost,
          COALESCE(currentStock,0) as currentStock,batchSupplier,scannedAt,
@@ -317,7 +316,7 @@ export default function StockBarcodeEntry() {
   };
 
   const savePendingItem = async (item: any) => {
-    await db.runAsync(
+    await getDatabase().runAsync(
       `INSERT INTO pending_items (barcode,name,bmrp,cost,quantity,eCost,currentStock,batchSupplier,scannedAt,batch_supplier,product,brand,isManualEntry)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [item.barcode, item.name, item.bmrp||0, item.cost||0, item.quantity||0, item.eCost||0,
@@ -327,11 +326,11 @@ export default function StockBarcodeEntry() {
   };
 
   const deletePendingItem = async (id: number) => {
-    await db.runAsync("DELETE FROM pending_items WHERE id=?", [id]);
+    await getDatabase().runAsync("DELETE FROM pending_items WHERE id=?", [id]);
   };
 
   const updatePendingItem = async (id: number, item: any) => {
-    await db.runAsync(
+    await getDatabase().runAsync(
       `UPDATE pending_items SET quantity=?,eCost=?,cost=?,bmrp=?,batchSupplier=? WHERE id=?`,
       [item.quantity, item.eCost, item.cost, item.bmrp, item.batchSupplier, id]
     );
@@ -340,7 +339,7 @@ export default function StockBarcodeEntry() {
   const loadAllProducts = async () => {
     if (allProducts.length > 0) return;
     try {
-      const rows = await db.getAllAsync(
+      const rows = await getDatabase().getAllAsync(
         "SELECT code,name,barcode,quantity,bmrp,cost,batch_supplier FROM product_data LIMIT 5000"
       );
       setAllProducts(rows);
@@ -348,9 +347,9 @@ export default function StockBarcodeEntry() {
   };
 
   const searchBarcodeWithVariants = async (barcode: string) => {
-    const exact = await db.getAllAsync("SELECT * FROM product_data WHERE barcode=?", [barcode]);
-    const v1 = await db.getAllAsync("SELECT * FROM product_data WHERE barcode LIKE ?", [`${barcode} :%`]);
-    const v2 = await db.getAllAsync("SELECT * FROM product_data WHERE barcode LIKE ?", [`${barcode}:%`]);
+    const exact = await getDatabase().getAllAsync("SELECT * FROM product_data WHERE barcode=?", [barcode]);
+    const v1 = await getDatabase().getAllAsync("SELECT * FROM product_data WHERE barcode LIKE ?", [`${barcode} :%`]);
+    const v2 = await getDatabase().getAllAsync("SELECT * FROM product_data WHERE barcode LIKE ?", [`${barcode}:%`]);
     return [...exact, ...v1, ...v2];
   };
 
@@ -576,7 +575,7 @@ export default function StockBarcodeEntry() {
               const isManual = item.isManualEntry === 1;
               let itemCode = item.barcode;
               if (!isManual) {
-                const pd = await db.getFirstAsync("SELECT code FROM product_data WHERE barcode=?", [item.barcode]) as any;
+                const pd = await getDatabase().getFirstAsync("SELECT code FROM product_data WHERE barcode=?", [item.barcode]) as any;
                 itemCode = pd?.code || item.barcode;
               }
               await saveOrderToSync({ userid: userId ?? "unknown", itemcode: itemCode,
@@ -584,14 +583,14 @@ export default function StockBarcodeEntry() {
                 mrp: item.bmrp ?? 0, order_date: today, product_name: item.name,
                 is_manual_entry: isManual ? 1 : 0 });
               if (!isManual) {
-                const exists = await db.getFirstAsync("SELECT 1 FROM product_data WHERE barcode=?", [item.barcode]);
-                if (exists) await db.runAsync("UPDATE product_data SET quantity=?,cost=? WHERE barcode=?", [item.quantity, finalCost, item.barcode]);
+                const exists = await getDatabase().getFirstAsync("SELECT 1 FROM product_data WHERE barcode=?", [item.barcode]);
+                if (exists) await getDatabase().runAsync("UPDATE product_data SET quantity=?,cost=? WHERE barcode=?", [item.quantity, finalCost, item.barcode]);
               }
               successCount++;
             } catch { errorCount++; }
           }
 
-          if (successCount > 0) await db.runAsync("DELETE FROM pending_items");
+          if (successCount > 0) await getDatabase().runAsync("DELETE FROM pending_items");
 
           if (errorCount === 0) {
             setScannedItems([]);

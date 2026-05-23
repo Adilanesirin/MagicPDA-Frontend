@@ -2,14 +2,37 @@
 import * as SQLite from "expo-sqlite";
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
+let dbInitialized = false;
 
 export const getDatabase = (): SQLite.SQLiteDatabase => {
   if (!dbInstance) {
     dbInstance = SQLite.openDatabaseSync("magicpedia.db");
-    console.log("✅ New database connection created");
+    console.log("✅ Database connection created");
   }
   return dbInstance;
 };
+
+export const resetDatabase = () => {
+  dbInstance = null;
+  dbInitialized = false;
+  console.log("⚠️ Database instance reset");
+};
+
+// Wraps any DB operation: if it fails with NullPointerException, resets and retries once
+export async function withDb<T>(fn: (db: SQLite.SQLiteDatabase) => Promise<T>): Promise<T> {
+  try {
+    return await fn(getDatabase());
+  } catch (e: any) {
+    const msg = e?.message || '';
+    if (msg.includes('NullPointerException') || msg.includes('prepareAsync')) {
+      console.log('⚠️ DB NullPointerException — resetting and retrying...');
+      dbInstance = null;
+      dbInstance = SQLite.openDatabaseSync('magicpedia.db');
+      return await fn(dbInstance);
+    }
+    throw e;
+  }
+}
 
 export const closeDatabase = () => {
   if (dbInstance) {
@@ -740,23 +763,24 @@ export const saveOrderToSync = async (order: {
 // ============================================
 
 export const getPendingGRNs = async () => {
-  const db = getDatabase();
-  try {
-    const grns = await db.getAllAsync(
-      `SELECT 
-         g.*,
-         p.name as product_name
-       FROM grn_to_sync g 
-       LEFT JOIN product_data p ON g.barcode = p.barcode 
-       WHERE g.sync_status = ? 
-       ORDER BY g.created_at ASC, g.id ASC`,
-      ['pending']
-    );
-    return grns;
-  } catch (err) {
-    console.error("❌ Error getting pending GRNs:", err);
-    return [];
-  }
+  return withDb(async (db) => {
+    try {
+      const grns = await db.getAllAsync(
+        `SELECT 
+           g.*,
+           p.name as product_name
+         FROM grn_to_sync g 
+         LEFT JOIN product_data p ON g.barcode = p.barcode 
+         WHERE g.sync_status = ? 
+         ORDER BY g.created_at ASC, g.id ASC`,
+        ['pending']
+      );
+      return grns;
+    } catch (err) {
+      console.error("❌ Error getting pending GRNs:", err);
+      return [];
+    }
+  });
 };
 
 export const getPendingGRNsByDateRange = async (startDate: string, endDate: string) => {
@@ -873,21 +897,22 @@ export const getPendingGRNOrders = getPendingGRNs;
 export const markGRNOrdersAsSynced = markGRNsAsSynced;
 
 export const getLocalGRNDataStats = async () => {
-  const db = getDatabase();
-  try {
-    const stats = await db.getFirstAsync(
-      `SELECT 
-         COUNT(*) as totalCount,
-         SUM(CASE WHEN sync_status = 'pending' THEN 1 ELSE 0 END) as pendingCount,
-         SUM(CASE WHEN sync_status = 'synced' THEN 1 ELSE 0 END) as syncedCount,
-         MAX(created_at) as lastSynced
-       FROM grn_to_sync`
-    ) as any;
-    return stats || { totalCount: 0, pendingCount: 0, syncedCount: 0, lastSynced: null };
-  } catch (err) {
-    console.error("❌ Error getting GRN stats:", err);
-    return { totalCount: 0, pendingCount: 0, syncedCount: 0, lastSynced: null };
-  }
+  return withDb(async (db) => {
+    try {
+      const stats = await db.getFirstAsync(
+        `SELECT 
+           COUNT(*) as totalCount,
+           SUM(CASE WHEN sync_status = 'pending' THEN 1 ELSE 0 END) as pendingCount,
+           SUM(CASE WHEN sync_status = 'synced' THEN 1 ELSE 0 END) as syncedCount,
+           MAX(created_at) as lastSynced
+         FROM grn_to_sync`
+      ) as any;
+      return stats || { totalCount: 0, pendingCount: 0, syncedCount: 0, lastSynced: null };
+    } catch (err) {
+      console.error("❌ Error getting GRN stats:", err);
+      return { totalCount: 0, pendingCount: 0, syncedCount: 0, lastSynced: null };
+    }
+  });
 };
 
 // ============================================

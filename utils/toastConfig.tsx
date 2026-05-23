@@ -2,6 +2,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Animated, Text, View } from "react-native";
 
+const cleanToastText = (value?: string) =>
+  value
+    ?.replace(/^[^\w\s]+/, "")
+    .replace(/^✅\s*/, "")
+    .replace(/^❌\s*/, "")
+    .replace(/^⚠️\s*/, "")
+    .replace(/^Ã\S*(?=\s)/, "")
+    .trim();
+
 const ToastBase = ({
   iconName,
   iconColor,
@@ -43,7 +52,7 @@ const ToastBase = ({
           marginBottom: text2 ? 2 : 0,
         }}
       >
-        {text1}
+        {cleanToastText(text1)}
       </Text>
       {text2 && (
         <Text
@@ -53,7 +62,7 @@ const ToastBase = ({
             opacity: 0.9,
           }}
         >
-          {text2}
+          {cleanToastText(text2)}
         </Text>
       )}
     </View>

@@ -1,5 +1,4 @@
 // app/index.tsx
-import { initDatabase } from "@/utils/database";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Redirect } from "expo-router";
 import * as SecureStore from "expo-secure-store";
@@ -14,10 +13,7 @@ export default function Index() {
       try {
         console.log("=== APP INITIALIZATION START ===");
         
-        // ✅ Initialize DB
-        await initDatabase();
-
-        // ✅ FIRST: Check if user is logged in
+        // ✅ Check if user is logged in
         const userLoggedIn = await SecureStore.getItemAsync("userLoggedIn");
         const token = await SecureStore.getItemAsync("token");
         
