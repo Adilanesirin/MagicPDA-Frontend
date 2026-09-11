@@ -36,4 +36,4 @@ rootProject.name = 'TaskPMS'
 expoAutolinking.useExpoVersionCatalog()
 
 include ':app'
-
+includeBuild(expoAutolinking.reactNativeGradlePlugin)

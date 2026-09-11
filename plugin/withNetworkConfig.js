@@ -6,27 +6,51 @@ const {
 const fs = require("fs");
 const path = require("path");
 
+const NETWORK_SECURITY_CONFIG_XML = `<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
+`;
+
 function withNetworkConfig(config) {
-  // Only apply modifications on Android
+  config = withDangerousMod(config, [
+    "android",
+    async (mod) => {
+      const xmlDir = path.join(
+        mod.modRequest.platformProjectRoot,
+        "app",
+        "src",
+        "main",
+        "res",
+        "xml"
+      );
+      fs.mkdirSync(xmlDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(xmlDir, "network_security_config.xml"),
+        NETWORK_SECURITY_CONFIG_XML
+      );
+      return mod;
+    },
+  ]);
+
   return withAndroidManifest(config, (mod) => {
     try {
       const app = mod.modResults.manifest.application[0];
 
-      // Enable cleartext traffic (needed for development/local networks)
       app.$["android:usesCleartextTraffic"] = "true";
-
-      // Set network security config if the file exists
       app.$["android:networkSecurityConfig"] = "@xml/network_security_config";
 
-      // Preserve backup settings
       if (!app.$["android:allowBackup"]) {
         app.$["android:allowBackup"] = "false";
       }
 
-      console.log("✅ Updated AndroidManifest.xml with network security config");
+      console.log("Updated AndroidManifest.xml with network security config");
     } catch (e) {
-      console.warn("⚠️ Failed to update AndroidManifest.xml:", e.message);
-      // Don't fail the build if manifest update fails
+      console.warn("Failed to update AndroidManifest.xml:", e.message);
     }
 
     return mod;

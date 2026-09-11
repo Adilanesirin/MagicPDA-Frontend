@@ -9,7 +9,7 @@
     "ios": "node scripts/set-build-info.js && expo run:ios",
     "web": "node scripts/set-build-info.js && expo start --web",
     "lint": "node scripts/set-build-info.js && expo lint",
-    "postinstall": "node scripts/fix-react-native-gradle-plugin.js && npx expo prebuild --clean && node scripts/fix-react-native-gradle-plugin.js"
+    "postinstall": "npx expo prebuild --clean"
   },
   "dependencies": {
     "@expo/config": "^57.0.0",
