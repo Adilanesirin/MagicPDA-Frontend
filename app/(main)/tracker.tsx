@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -75,9 +75,10 @@ export default function StockTrackerScreen() {
   const [searchMode, setSearchMode] = useState<'barcode' | 'name'>('barcode');
   const [dataSource] = useState<'api' | 'database'>('database');
   const [isInitialized, setIsInitialized] = useState(false);
-  const [godownList, setGodownList] = useState<{goddownid: string, name: string}[]>([]);
-  const [godownLoading, setGodownLoading] = useState(false);
-  const [apiProductsCache, setApiProductsCache] = useState<any[]>([]); 
+const [godownList, setGodownList] = useState<{goddownid: string, name: string}[]>([]);
+const [priceModalVisible, setPriceModalVisible] = useState(false); // controls the price popup opened via the eye icon
+const [godownLoading, setGodownLoading] = useState(false);
+const [apiProductsCache, setApiProductsCache] = useState<any[]>([]);
   const inputRef = useRef<TextInput>(null);
   const [hardwareScanValue, setHardwareScanValue] = useState('');
 
@@ -207,6 +208,12 @@ useEffect(() => {
 
 useEffect(() => {
   SecureStore.getItemAsync("user_role").then(role => setUserRole(role));
+}, []);
+const [coVisible, setCoVisible] = useState(true);
+useEffect(() => {
+  SecureStore.getItemAsync("coVisible").then(val =>
+    setCoVisible(val === null ? true : val === "true")
+  );
 }, []);
 
   const initializeDatabase = async () => {
@@ -638,18 +645,24 @@ setProductData(validatedProduct);
         <Text style={styles.suggestionName} numberOfLines={1}>
           {item.name}
         </Text>
-        <View style={styles.suggestionDetailsContainer}>
-          <View style={styles.detailChip}>
-            <Text style={styles.detailChipLabel}>Stock:</Text>
-            <Text style={styles.detailChipValue}>{Math.abs(item.quantity)}</Text>
-          </View>
-          {item.category ? (
-            <View style={styles.detailChip}>
-              <Text style={styles.detailChipLabel}>Cat:</Text>
-              <Text style={styles.detailChipValue} numberOfLines={1}>{item.category}</Text>
-            </View>
-          ) : null}
+     <View style={styles.suggestionDetailsContainer}>
+      <View style={styles.detailChip}>
+        <Text style={styles.detailChipLabel}>Stock:</Text>
+        <Text style={styles.detailChipValue}>{Math.abs(item.quantity)}</Text>
+      </View>
+      {item.category ? (
+        <View style={styles.detailChip}>
+          <Text style={styles.detailChipLabel}>Cat:</Text>
+          <Text style={styles.detailChipValue} numberOfLines={1}>{item.category}</Text>
         </View>
+      ) : null}
+      {item.barcode ? (
+        <View style={styles.detailChip}>
+          <Text style={styles.detailChipLabel}>Barcode:</Text>
+          <Text style={styles.detailChipValue}>{item.barcode}</Text>
+        </View>
+      ) : null}
+    </View>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#999999" />
     </TouchableOpacity>
@@ -782,8 +795,8 @@ const getPriceValue = (priceCode: string): number => {
             barcodeScannerSettings={{
               barcodeTypes: ["ean13", "ean8", "code128", "code39", "upc_a", "upc_e"]
             }}
-          >
-            <View style={styles.scannerOverlay}>
+          />
+          <View style={styles.scannerOverlay}>
               <TouchableOpacity style={styles.closeButton} onPress={handleCloseScanner}>
                 <Ionicons name="close" size={32} color="white" />
               </TouchableOpacity>
@@ -798,8 +811,7 @@ const getPriceValue = (priceCode: string): number => {
                   {scanned ? 'Processing...' : 'Align barcode within the frame'}
                 </Text>
               </View>
-            </View>
-          </CameraView>
+          </View>
         </View>
       </Modal>
 
@@ -914,7 +926,6 @@ const getPriceValue = (priceCode: string): number => {
             {productData && (
               <>
                 {/* Product Details Section */}
-                {/* Product Details Section */}
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Product Details</Text>
@@ -1022,87 +1033,100 @@ const getPriceValue = (priceCode: string): number => {
                   </View>
                 </View>
 
-                {/* Price Details Section - Simple Table Format */}
+                             {/* Price Details Section - tap the eye icon to view prices in a popup */}
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Price Details</Text>
+                    <TouchableOpacity onPress={() => setPriceModalVisible(true)}>
+                      <Ionicons name="eye-outline" size={22} color="#FFFFFF" />
+                    </TouchableOpacity>
                   </View>
                   <View style={styles.detailsContainer}>
-                    {/* Always try to show prices - check both arrays and individual fields */}
-                    {(() => {
-                      // Check if we have prices from array
-                      const hasPricesArray = productData.prices && productData.prices.length > 0;
-                      
-                      // Check if we have prices from individual fields
-                      const CO = productData.CO || 0;
-                      const MR = productData.MR || 0;
-                      const S1 = productData.S1 || 0;
-                      const S2 = productData.S2 || 0;
-                      const hasIndividualPrices = CO > 0 || MR > 0 || S1 > 0 || S2 > 0;
-                      
-                      console.log('💰 Price Display Check:', {
-                        hasPricesArray,
-                        hasIndividualPrices,
-                        CO, MR, S1, S2,
-                        pricesArrayLength: productData.prices?.length || 0
-                      });
-                      
-                      if (hasPricesArray) {
-                        return productData.prices
-                        .filter(price => !(userRole === "Level 1" && price.price_code === "CO"))
-                        .map((price, index) => (
-                          <View key={index} style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>{price.price_name}:</Text>
-                            <Text style={styles.detailValue}>₹{parseFloat(price.value).toFixed(2)}</Text>
-                          </View>
-                        ));
-                      } else if (hasIndividualPrices) {
-                        // Display from individual fields
-                        return (
-                          <>
-                          {userRole !== "Level 1" && CO > 0 && (
-                            <View style={styles.detailRow}>
-                              <Text style={styles.detailLabel}>COST (CO):</Text>
-                              <Text style={styles.detailValue}>₹{CO.toFixed(2)}</Text>
-                            </View>
-                          )}
-                            {MR > 0 && (
-                              <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>MRP (MR):</Text>
-                                <Text style={styles.detailValue}>₹{MR.toFixed(2)}</Text>
-                              </View>
-                            )}
-                            {S1 > 0 && (
-                              <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>RETAIL (S1):</Text>
-                                <Text style={styles.detailValue}>₹{S1.toFixed(2)}</Text>
-                              </View>
-                            )}
-                            {S2 > 0 && (
-                              <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>D.P (S2):</Text>
-                                <Text style={styles.detailValue}>₹{S2.toFixed(2)}</Text>
-                              </View>
-                            )}
-                          </>
-                        );
-                      } else {
-                        // No prices available anywhere
-                        return (
-                          <View style={styles.noPriceContainer}>
-                            <Ionicons name="warning" size={32} color="#F57C00" style={{marginBottom: 12}} />
-                            <Text style={styles.noPriceText}>No price data available</Text>
-                            <Text style={styles.noPriceHint}>Click the refresh button (↻) at the top to sync prices from server</Text>
-                            <TouchableOpacity onPress={syncWithAPI} style={styles.syncNowButton}>
-                              <Ionicons name="refresh" size={18} color="#FFFFFF" />
-                              <Text style={styles.syncNowButtonText}>Sync Now</Text>
-                            </TouchableOpacity>
-                          </View>
-                        );
-                      }
-                    })()}
+                    <Text style={styles.noPriceHint}>Tap the eye icon above to view price details</Text>
                   </View>
                 </View>
+
+                {/* Price Popup Modal */}
+                <Modal
+                  visible={priceModalVisible}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setPriceModalVisible(false)}
+                >
+                  <View style={styles.priceModalOverlay}>
+                    <View style={styles.priceModalCard}>
+                      <View style={styles.priceModalHeader}>
+                        <Text style={styles.priceModalTitle}>Price Details</Text>
+                        <TouchableOpacity onPress={() => setPriceModalVisible(false)}>
+                          <Ionicons name="close" size={24} color="#111827" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {(() => {
+                        const hasPricesArray = productData.prices && productData.prices.length > 0;
+                        const CO = productData.CO || 0;
+                        const MR = productData.MR || 0;
+                        const S1 = productData.S1 || 0;
+                        const S2 = productData.S2 || 0;
+                        const hasIndividualPrices = CO > 0 || MR > 0 || S1 > 0 || S2 > 0;
+
+                          if (hasPricesArray) {
+                          return productData.prices
+                          .filter(price => !(userRole === "Level 1" && price.price_code === "CO"))
+                          .filter(price => !(price.price_code === "CO" && !coVisible))
+                          .map((price, index) => (
+                            <View key={index} style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>{price.price_name}:</Text>
+                              <Text style={styles.detailValue}>₹{parseFloat(price.value).toFixed(2)}</Text>
+                            </View>
+                          ));
+                        } else if (hasIndividualPrices) {
+                          return (
+                            <>
+                        {userRole !== "Level 1" && coVisible && CO > 0 && (
+                          <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>COST (CO):</Text>
+                            <Text style={styles.detailValue}>₹{CO.toFixed(2)}</Text>
+                          </View>
+                        )}
+                              {MR > 0 && (
+                                <View style={styles.detailRow}>
+                                  <Text style={styles.detailLabel}>MRP (MR):</Text>
+                                  <Text style={styles.detailValue}>₹{MR.toFixed(2)}</Text>
+                                </View>
+                              )}
+                              {S1 > 0 && (
+                                <View style={styles.detailRow}>
+                                  <Text style={styles.detailLabel}>RETAIL (S1):</Text>
+                                  <Text style={styles.detailValue}>₹{S1.toFixed(2)}</Text>
+                                </View>
+                              )}
+                              {S2 > 0 && (
+                                <View style={styles.detailRow}>
+                                  <Text style={styles.detailLabel}>D.P (S2):</Text>
+                                  <Text style={styles.detailValue}>₹{S2.toFixed(2)}</Text>
+                                </View>
+                              )}
+                            </>
+                          );
+                        } else {
+                          return (
+                            <View style={styles.noPriceContainer}>
+                              <Ionicons name="warning" size={32} color="#F57C00" style={{marginBottom: 12}} />
+                              <Text style={styles.noPriceText}>No price data available</Text>
+                              <Text style={styles.noPriceHint}>Click the refresh button (↻) at the top to sync prices from server</Text>
+                              <TouchableOpacity onPress={syncWithAPI} style={styles.syncNowButton}>
+                                <Ionicons name="refresh" size={18} color="#FFFFFF" />
+                                <Text style={styles.syncNowButtonText}>Sync Now</Text>
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        }
+                      })()}
+                    </View>
+                  </View>
+                </Modal>
+              
                 {/* Godown Stock Section */}
                {(godownLoading || (productData.goddown_stock && productData.goddown_stock.length > 0)) && (
                 <View style={styles.section}>
@@ -1170,7 +1194,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    paddingTop: 20,
+    paddingTop: Platform.OS === 'android' ? 20 : 50,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
@@ -1506,12 +1530,37 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
-  noPriceHint: {
+   noPriceHint: {
     fontSize: 13,
     color: '#666666',
     textAlign: 'center',
     marginBottom: 16,
     lineHeight: 20,
+  },
+  priceModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  priceModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+  },
+  priceModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  priceModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
   },
   syncNowButton: {
     flexDirection: 'row',

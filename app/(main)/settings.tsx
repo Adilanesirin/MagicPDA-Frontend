@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import Toast from "react-native-toast-message";
 
@@ -13,6 +13,7 @@ export default function Settings() {
   const [pingStatus, setPingStatus] = useState<"success" | "failed" | null>(null);
   const [removingLicense, setRemovingLicense] = useState(false);
   const [mrpEditable, setMrpEditable] = useState(false);
+  const [coVisible, setCoVisible] = useState(true);
   const [licenseInfo, setLicenseInfo] = useState<{
     customerName: string;
     licenseKey: string;
@@ -30,6 +31,11 @@ export default function Settings() {
       // Load MRP editable setting
       const mrpSetting = await SecureStore.getItemAsync("mrpEditable");
       setMrpEditable(mrpSetting === "true");
+
+      // Load CO price visibility setting (default enabled)
+      const coSetting = await SecureStore.getItemAsync("coVisible");
+      setCoVisible(coSetting === null ? true : coSetting === "true");
+
 
       // Load license info
       const customerName = await AsyncStorage.getItem("customerName");
@@ -58,6 +64,17 @@ export default function Settings() {
       visibilityTime: 2000,
     });
   };
+   const toggleCoVisible = async (value: boolean) => {
+    await SecureStore.setItemAsync("coVisible", value.toString());
+    setCoVisible(value);
+    Toast.show({
+      type: "success",
+      text1: value ? "CO Price Enabled" : "CO Price Disabled",
+      text2: value ? "COST (CO) will show in Tracker price details" : "COST (CO) is now hidden in Tracker",
+      visibilityTime: 2000,
+    });
+  };
+
 
   const handlePingServer = async () => {
     setPinging(true);
@@ -472,7 +489,7 @@ const confirmClearLicense = async () => {
             />
           </View>
 
-          <View style={styles.infoBox}>
+                    <View style={styles.infoBox}>
             <Ionicons name="information-circle-outline" size={18} color="#3B82F6" />
             <Text style={styles.infoText}>
               {mrpEditable 
@@ -482,6 +499,53 @@ const confirmClearLicense = async () => {
           </View>
         </View>
 
+         {/* CO Price Visibility Settings */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Tracker Settings</Text>
+          <Text style={styles.cardSubtitle}>
+            Configure Tracker price display options
+          </Text>
+
+          <View style={styles.switchOption}>
+            <View style={styles.switchContent}>
+              <Ionicons 
+                name="cash-outline" 
+                size={24} 
+                color={coVisible ? "#3B82F6" : "#6B7280"} 
+              />
+              <View style={styles.switchText}>
+                <Text style={[
+                  styles.switchTitle,
+                  coVisible && styles.switchTitleActive
+                ]}>
+                  Show CO (Cost) Price
+                </Text>
+                <Text style={styles.switchDescription}>
+                  Allow COST (CO) to appear in Tracker price details
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={coVisible}
+              onValueChange={toggleCoVisible}
+              trackColor={{ false: "#D1D5DB", true: "#BFDBFE" }}
+              thumbColor={coVisible ? "#3B82F6" : "#9CA3AF"}
+              ios_backgroundColor="#D1D5DB"
+            />
+          </View>
+
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle-outline" size={18} color="#3B82F6" />
+            <Text style={styles.infoText}>
+              {coVisible 
+                ? "COST (CO) will be shown in the Tracker price popup"
+                : "COST (CO) will be hidden from the Tracker price popup, regardless of user role"}
+            </Text>
+          </View>
+        </View>
+
+        
+        
         {/* Server Status */}
         <View style={styles.card}>
           {(pingStatus || pinging) && (

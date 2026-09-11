@@ -721,8 +721,8 @@ export default function StockBarcodeEntry() {
             style={{ flex: 1 }} facing="back"
             onBarcodeScanned={scanned ? undefined : (d) => handleBarCodeScanned(d, "scanner")}
             barcodeScannerSettings={{ barcodeTypes: ["qr","ean13","ean8","code128","code39","upc_a","upc_e","code93","itf14"] }}
-          >
-            <View style={s.scanOverlay}>
+          />
+          <View style={s.scanOverlay}>
               <TouchableOpacity style={s.scanCloseBtn} onPress={handleCloseScanner}>
                 <Ionicons name="close" size={32} color={C.white} />
               </TouchableOpacity>
@@ -736,8 +736,7 @@ export default function StockBarcodeEntry() {
                   {scanned ? "Processing..." : "Align barcode within the frame"}
                 </Text>
               </View>
-            </View>
-          </CameraView>
+          </View>
         </View>
       </Modal>
 

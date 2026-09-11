@@ -2113,8 +2113,8 @@ const orderData = {
                 "itf14",
               ],
             }}
-          >
-            <View style={styles.scannerOverlay}>
+          />
+          <View style={styles.scannerOverlay}>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={handleCloseScanner}
@@ -2134,8 +2134,7 @@ const orderData = {
                   {scanned ? 'Processing...' : 'Align barcode within the frame'}
                 </Text>
               </View>
-            </View>
-          </CameraView>
+          </View>
         </View>
       </Modal>
 

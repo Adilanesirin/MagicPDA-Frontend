@@ -314,6 +314,28 @@ export const initDatabase = async () => {
     `);
     await addColumnIfMissing(db, 'orders_to_sync', 'text1', "TEXT DEFAULT ''");
 
+     // === QUOTATION TO SYNC TABLE ===
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS quotation_to_sync (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_code TEXT NOT NULL,
+        userid TEXT NOT NULL,
+        itemcode TEXT,
+        barcode TEXT NOT NULL,
+        quantity NUMERIC NOT NULL,
+        rate NUMERIC NOT NULL,
+        mrp NUMERIC NOT NULL,
+        order_date TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        sync_status TEXT DEFAULT 'pending',
+        product_name TEXT,
+        is_manual_entry INTEGER DEFAULT 0,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        text1 TEXT DEFAULT ''
+      );
+    `);
+    await addColumnIfMissing(db, 'quotation_to_sync', 'text1', "TEXT DEFAULT ''");
+
     // === GRN TO SYNC TABLE ===
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS grn_to_sync (
@@ -435,6 +457,8 @@ await db.execAsync(`
     quantity NUMERIC NOT NULL,
     rate NUMERIC NOT NULL,
     mrp NUMERIC NOT NULL,
+    taxcode TEXT DEFAULT '0',
+    salestax NUMERIC DEFAULT 0,
     sale_date TEXT NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     sync_status TEXT DEFAULT 'pending',
@@ -452,6 +476,8 @@ await addColumnIfMissing(db, 'sales_to_sync', 'barcode', "TEXT NOT NULL DEFAULT 
 await addColumnIfMissing(db, 'sales_to_sync', 'quantity', 'NUMERIC NOT NULL DEFAULT 0');
 await addColumnIfMissing(db, 'sales_to_sync', 'rate', 'NUMERIC NOT NULL DEFAULT 0');
 await addColumnIfMissing(db, 'sales_to_sync', 'mrp', 'NUMERIC NOT NULL DEFAULT 0');
+await addColumnIfMissing(db, 'sales_to_sync', 'taxcode', "TEXT DEFAULT '0'");
+await addColumnIfMissing(db, 'sales_to_sync', 'salestax', 'NUMERIC DEFAULT 0');
 await addColumnIfMissing(db, 'sales_to_sync', 'sale_date', "TEXT NOT NULL DEFAULT ''");  // ← the fix
 await addColumnIfMissing(db, 'sales_to_sync', 'product_name', 'TEXT');
 await addColumnIfMissing(db, 'sales_to_sync', 'sales_date', "TEXT NOT NULL DEFAULT ''");
@@ -731,6 +757,141 @@ export const saveOrderToSync = async (order: {
     }
   } catch (err) {
     console.error("❌ Error saving order to sync:", err);
+    throw err;
+  }
+};
+
+
+// ============================================
+// QUOTATION FUNCTIONS - MIRRORS ORDERS
+// ============================================
+
+export const getPendingQuotations = async () => {
+  const db = getDatabase();
+  try {
+    const quotations = await db.getAllAsync(
+      `SELECT 
+         q.*,
+         p.name as product_name
+       FROM quotation_to_sync q 
+       LEFT JOIN product_data p ON q.barcode = p.barcode 
+       WHERE q.sync_status = ? 
+       ORDER BY q.created_at ASC, q.id ASC`,
+      ['pending']
+    );
+    return quotations;
+  } catch (err) {
+    console.error("❌ Error fetching pending quotations:", err);
+    return [];
+  }
+};
+
+export const getPendingQuotationsByDateRange = async (startDate: string, endDate: string) => {
+  const db = getDatabase();
+  try {
+    const quotations = await db.getAllAsync(
+      `SELECT 
+         q.*,
+         p.name as product_name
+       FROM quotation_to_sync q 
+       LEFT JOIN product_data p ON q.barcode = p.barcode 
+       WHERE q.sync_status = ? 
+         AND q.order_date >= ? 
+         AND q.order_date <= ?
+       ORDER BY q.created_at ASC, q.id ASC`,
+      ['pending', startDate, endDate]
+    );
+    return quotations;
+  } catch (err) {
+    console.error("❌ Error fetching pending quotations by date:", err);
+    return [];
+  }
+};
+
+export const markQuotationsAsSynced = async () => {
+  const db = getDatabase();
+  try {
+    await db.runAsync(
+      'UPDATE quotation_to_sync SET sync_status = ?, updated_at = CURRENT_TIMESTAMP WHERE sync_status = ?',
+      ['synced', 'pending']
+    );
+    console.log("✅ Quotations marked as synced");
+  } catch (err) {
+    console.error("❌ Error marking quotations as synced:", err);
+    throw err;
+  }
+};
+
+export const markQuotationsAsSyncedByIds = async (quotationIds: number[]) => {
+  const db = getDatabase();
+  try {
+    if (quotationIds.length === 0) return;
+    const placeholders = quotationIds.map(() => '?').join(',');
+    await db.runAsync(
+      `UPDATE quotation_to_sync SET sync_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+      ['synced', ...quotationIds]
+    );
+    console.log(`✅ ${quotationIds.length} quotations marked as synced by ID`);
+  } catch (err) {
+    console.error("❌ Error marking quotations as synced by IDs:", err);
+    throw err;
+  }
+};
+
+export const saveQuotationToSync = async (quotation: {
+  supplier_code: string;
+  userid: string;
+  itemcode?: string;
+  barcode: string;
+  quantity: number;
+  rate: number;
+  mrp: number;
+  order_date: string;
+  product_name?: string;
+  is_manual_entry?: number;
+}) => {
+  const db = getDatabase();
+  try {
+    const existingQuotation = await db.getFirstAsync(
+      `SELECT id, quantity FROM quotation_to_sync 
+       WHERE barcode = ? AND order_date = ? AND userid = ? AND supplier_code = ? 
+       AND sync_status = 'pending'`,
+      [quotation.barcode, quotation.order_date, quotation.userid, quotation.supplier_code]
+    ) as any;
+
+    if (existingQuotation) {
+      const newQuantity = (existingQuotation.quantity || 0) + quotation.quantity;
+      await db.runAsync(
+        `UPDATE quotation_to_sync 
+         SET quantity = ?, rate = ?, mrp = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [newQuantity, quotation.rate, quotation.mrp, existingQuotation.id]
+      );
+      console.log("✅ Updated existing quotation quantity");
+    } else {
+      const now = new Date().toISOString();
+      await db.runAsync(
+        `INSERT INTO quotation_to_sync 
+         (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date, product_name, is_manual_entry, sync_status, created_at, updated_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, CURRENT_TIMESTAMP)`,
+        [
+          quotation.supplier_code, 
+          quotation.userid, 
+          quotation.itemcode || quotation.barcode,
+          quotation.barcode, 
+          quotation.quantity, 
+          quotation.rate, 
+          quotation.mrp, 
+          quotation.order_date,
+          quotation.product_name || '',
+          quotation.is_manual_entry || 0,
+          now
+        ]
+      );
+      console.log("✅ New quotation saved for sync");
+    }
+  } catch (err) {
+    console.error("❌ Error saving quotation to sync:", err);
     throw err;
   }
 };

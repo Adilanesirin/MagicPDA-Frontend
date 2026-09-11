@@ -28,27 +28,31 @@ export default function HomeScreen() {
     const user = await getUserid();
     setUsername(user);
 
-    const raw = await AsyncStorage.getItem("allowed_modules");
-    const parsedLicenseModules: string[] = JSON.parse(raw || "[]");
-    setLicenseModules(parsedLicenseModules);
+        // ✅ NEW: Load demo license data FIRST so we know whether to bypass module checks
+      const type = await AsyncStorage.getItem("licenseType");
+      setLicenseType(type);
 
-    const moreoptions = await AsyncStorage.getItem("user_moreoptions");
+      const raw = await AsyncStorage.getItem("allowed_modules");
+      const parsedLicenseModules: string[] = JSON.parse(raw || "[]");
+      setLicenseModules(parsedLicenseModules);
 
-    let parsedUserModules: string[] = [];
-    let finalModules: string[] = [];
+      const moreoptionsRaw = await AsyncStorage.getItem("user_moreoptions");
 
-    if (moreoptions && moreoptions.trim() !== "") {
-      parsedUserModules = moreoptions.match(/##(.*?)##/g)
-        ?.map((code: string) => code.replace(/##/g, "")) || [];
-      finalModules = parsedLicenseModules.filter(mod => parsedUserModules.includes(mod));
-    }
+      let parsedUserModules: string[] = [];
+      let finalModules: string[] = [];
 
-    setUserModules(parsedUserModules);
-    setAllowedModules(finalModules);
-    
-    // ✅ NEW: Load demo license data
-    const type = await AsyncStorage.getItem("licenseType");
-    setLicenseType(type);
+      if (type === "DEMO") {
+        // Demo license = full access to every module, no purchase/privilege checks
+                // Demo license = full access to every module, no purchase/privilege checks
+        finalModules = ["MOD003","MOD004","MOD005","MOD006","MOD025","MOD026","MOD027","MOD028","MOD077"];
+      } else if (moreoptionsRaw) {
+        const matches = moreoptionsRaw.match(/##(.*?)##/g) || [];
+        parsedUserModules = matches.map((m) => m.replace(/##/g, ""));
+        finalModules = parsedLicenseModules.filter((mod) => parsedUserModules.includes(mod));
+      }
+
+      setUserModules(parsedUserModules);
+      setAllowedModules(finalModules);
     
     if (type === "DEMO") {
       const expires = await AsyncStorage.getItem("demoExpiresAt");
@@ -102,7 +106,8 @@ export default function HomeScreen() {
       [{ text: "OK" }]
     );
   };
- const getModuleStatus = (moduleCode: string): "allowed" | "not_licensed" | "no_privilege" => {
+const getModuleStatus = (moduleCode: string): "allowed" | "not_licensed" | "no_privilege" => {
+    if (licenseType === "DEMO") return "allowed";
     const inLicense = licenseModules.includes(moduleCode);
     const inUser = userModules.includes(moduleCode);
     if (!inLicense) return "not_licensed";
@@ -340,6 +345,26 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
+
+                        <TouchableOpacity
+              style={[styles.gridItem, !allowedModules.includes("MOD077") && styles.gridItemLocked]}
+              onPress={() => handleModulePress("MOD077", () => router.push("/(main)/price-checker"))}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#38BDF8', '#0EA5E9']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="pricetag-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Price Checker</Text>
+                  <Text style={styles.cardDescription}>Live Price Lookup</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
                     
             <TouchableOpacity
               style={[styles.gridItem, !allowedModules.includes("MOD026") && styles.gridItemLocked]}
@@ -422,7 +447,45 @@ export default function HomeScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-             <TouchableOpacity
+            <TouchableOpacity
+              style={styles.gridItem}
+              onPress={() => router.push("/(main)/e-gate")}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#0EA5E9', '#0369A1']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="shield-checkmark-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>E-gate</Text>
+                  <Text style={styles.cardDescription}>Invoice Verify</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+                      <TouchableOpacity
+              style={styles.gridItem}
+              onPress={() => router.push("/(main)/quotation")}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={['#14B8A6', '#0F766E']}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="document-text-outline" size={32} color="white" />
+                  </LinearGradient>
+                </View>
+                <View style={styles.cardTextContainer}>
+                  <Text style={styles.cardTitle}>Quotation</Text>
+                  <Text style={styles.cardDescription}>Entry & Upload</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.gridItem}
               onPress={() => router.push("/(main)/download")}
             >

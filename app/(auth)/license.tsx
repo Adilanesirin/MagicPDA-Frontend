@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Linking,
   PermissionsAndroid,
@@ -19,8 +18,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+  View
 } from "react-native";
 import Toast from "react-native-toast-message";
 
@@ -935,16 +933,17 @@ export default function License() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       style={{ flex: 1 }}
     >
       <StatusBar backgroundColor="#FB923C" />
 
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled"
-        >
+              <ScrollView
+              contentContainerStyle={{ flexGrow: 1 }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
           <View className="flex-1 justify-center items-center px-5 py-10">
             {/* Header Section */}
             <View className="items-center w-full">
@@ -982,16 +981,17 @@ export default function License() {
                   <Text className="text-gray-700 font-semibold mb-2">
                     License Key
                   </Text>
-                  <TextInput
+                 <TextInput
                     value={licenseKey}
                     onChangeText={(text) => {
                       setLicenseKey(text);
                       setLicenseError(false);
                     }}
                     placeholder="Enter your license key"
-                    autoCapitalize="none"
+                    autoCapitalize="characters"
                     autoCorrect={false}
-                    editable={!loading}
+                    showSoftInputOnFocus={true}
+                    editable={true}
                     className={`border rounded-lg px-4 py-4 text-base bg-white ${
                       licenseError ? "border-red-400" : "border-orange-300"
                     }`}
@@ -1069,7 +1069,6 @@ export default function License() {
             </View>
           </View>
         </ScrollView>
-      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }

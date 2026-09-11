@@ -70,20 +70,25 @@
       "output": "static",
       "favicon": "./assets/images/BG-fix.png"
     },
-"plugins": [
-  "expo-router",
-  "expo-secure-store",
-  "expo-sqlite",
-  "./plugin/withNetworkConfig",
-  [
-    "expo-build-properties",
-    {
-      "android": {
-        "usesCleartextTraffic": true
-      }
-    }
-  ]
-],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      "./plugin/withNetworkConfig",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      "expo-image",
+      "expo-splash-screen",
+      "expo-status-bar"
+    ],
     "experiments": {
       "typedRoutes": true
     },

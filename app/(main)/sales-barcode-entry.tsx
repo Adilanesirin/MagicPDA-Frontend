@@ -816,7 +816,9 @@ const initPendingSalesItemsTable = async () => {
         product TEXT,
         brand TEXT,
         isManualEntry INTEGER DEFAULT 0,
-        S1 NUMERIC DEFAULT 0
+        S1 NUMERIC DEFAULT 0,
+        taxcode TEXT DEFAULT '0'
+
       );
     `);
 
@@ -857,6 +859,11 @@ if (!hasCodeColumn) {
   await db.execAsync(`ALTER TABLE pending_sales_items ADD COLUMN code TEXT;`);
 }
 
+const hasTaxcodeColumn = tableInfo.some((col: any) => col.name === 'taxcode');
+if (!hasTaxcodeColumn) {
+  await db.execAsync(`ALTER TABLE pending_sales_items ADD COLUMN taxcode TEXT DEFAULT '0';`);
+}
+
 const hasS1Column = tableInfo.some((col: any) => col.name === 'S1');
 if (!hasS1Column) {
   await db.execAsync(`ALTER TABLE pending_sales_items ADD COLUMN S1 NUMERIC DEFAULT 0;`);
@@ -881,7 +888,9 @@ if (!hasS1Column) {
             scannedAt INTEGER,
             product TEXT,
             brand TEXT,
-            isManualEntry INTEGER DEFAULT 0
+            isManualEntry INTEGER DEFAULT 0,
+             S1 NUMERIC DEFAULT 0,
+            taxcode TEXT DEFAULT '0'
           );
         `);
       } catch (recreateError) {
@@ -901,12 +910,14 @@ const saveSalesOrderToSync = async (orderData: {
   sales_date: string;
   product_name?: string;
   is_manual_entry?: number;
+  taxcode?: string;
+  salestax?: number;
 }) => {
   try {
     await db.runAsync(
       `INSERT INTO sales_to_sync
-      (userid, itemcode, barcode, quantity, rate, mrp, sales_date, sync_status, created_at, product_name, is_manual_entry)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?, ?)`,
+      (userid, itemcode, barcode, quantity, rate, mrp, taxcode, salestax, sales_date, sync_status, created_at, product_name, is_manual_entry)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?, ?)`,
       [
         orderData.userid,
         orderData.itemcode,
@@ -914,6 +925,8 @@ const saveSalesOrderToSync = async (orderData: {
         orderData.quantity,
         orderData.rate,
         orderData.mrp,
+        orderData.taxcode || '0',
+        orderData.salestax || 0,
         orderData.sales_date,
         orderData.product_name || '',
         orderData.is_manual_entry || 0
@@ -927,10 +940,11 @@ const saveSalesOrderToSync = async (orderData: {
 
 const savePendingSalesItem = async (item: any) => {
   try {
+// AFTER
 await db.runAsync(
   `INSERT INTO pending_sales_items
-(barcode, name, code, bmrp, cost, quantity, eCost, currentStock, scannedAt, product, brand, isManualEntry, S1)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+(barcode, name, code, bmrp, cost, quantity, eCost, currentStock, scannedAt, product, brand, isManualEntry, S1, taxcode)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   [
     item.barcode,
     item.name,
@@ -944,7 +958,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.product || '',
     item.brand || '',
     item.isManualEntry || 0,
-    item.S1 || 0
+    item.S1 || 0,
+    item.taxcode || '0'
   ]
 );
   } catch (error) {
@@ -1302,6 +1317,7 @@ const loadPendingSalesItems = async () => {
           product: existingProduct.product || '',
           brand: existingProduct.brand || '',
           code: existingProduct.code,
+          taxcode: existingProduct.taxcode || '0',
           isManualEntry: 0,
         };
       } else {
@@ -1571,17 +1587,19 @@ const handleAddAllToCart = async () => {
                     }
                   }
 
-                  await saveSalesOrderToSync({
-                    userid: userId ?? "unknown",
-                    itemcode: itemCode,
-                    barcode: item.barcode,
-                    quantity: item.quantity,
-                    rate: finalCost ?? 0,
-                    mrp: item.bmrp ?? 0,
-                    sales_date: today,
-                    product_name: item.name,
-                    is_manual_entry: isManualEntry ? 1 : 0,
-                  });
+                 await saveSalesOrderToSync({
+                  userid: userId ?? "unknown",
+                  itemcode: itemCode,
+                  barcode: item.barcode,
+                  quantity: item.quantity,
+                  rate: finalCost ?? 0,
+                  mrp: item.bmrp ?? 0,
+                  taxcode: item.taxcode || "0",
+                  salestax: item.salestax || 0,
+                  sales_date: today,
+                  product_name: item.name,
+                  is_manual_entry: isManualEntry ? 1 : 0,
+                });
 
                   if (!isManualEntry) {
                     const productExists = await db.getFirstAsync(
@@ -1796,8 +1814,8 @@ const handleAddAllToCart = async () => {
             barcodeScannerSettings={{
               barcodeTypes: ["qr","ean13","ean8","code128","code39","upc_a","upc_e","code93","itf14"],
             }}
-          >
-            <View style={styles.scannerOverlay}>
+          />
+          <View style={styles.scannerOverlay}>
               <TouchableOpacity style={styles.closeButton} onPress={handleCloseScanner}>
                 <Ionicons name="close" size={32} color="white" />
               </TouchableOpacity>
@@ -1812,8 +1830,7 @@ const handleAddAllToCart = async () => {
                   {scanned ? 'Processing...' : 'Align barcode within the frame'}
                 </Text>
               </View>
-            </View>
-          </CameraView>
+          </View>
         </View>
       </Modal>
       {/* ── Customer Modal ── */}

@@ -149,7 +149,9 @@ export async function createEnhancedAPI() {
           '/sync-data',
           '/get-data',
           '/data-download',
-          '/api/data'
+          '/api/data',
+          '/product-details'
+
         ];
 
         // Check if current URL needs cache-busting
@@ -181,11 +183,12 @@ export async function createEnhancedAPI() {
     );
 
     // Enhanced response interceptor with silent error support
-    instance.interceptors.response.use(
-      (response) => {
-        console.log(`API Success [${instanceId}]: ${response.status} ${response.config.url}`);
-        return response;
-      },
+  instance.interceptors.response.use(
+  (response) => {
+    const label = response.status >= 200 && response.status < 300 ? "API Success" : "API Non-2xx";
+    console.log(`${label} [${instanceId}]: ${response.status} ${response.config.url}`);
+    return response;
+  },
       async (error) => {
         // Check if this is a silent error (don't log expected failures)
         const isSilent = error.config?.headers?.['X-Silent-Error'] === 'true';

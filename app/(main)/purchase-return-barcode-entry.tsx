@@ -2281,8 +2281,8 @@ const openManualEntryModal = (barcode: string) => {
                 "itf14",
               ],
             }}
-          >
-            <View style={styles.scannerOverlay}>
+          />
+          <View style={styles.scannerOverlay}>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={handleCloseScanner}
@@ -2302,8 +2302,7 @@ const openManualEntryModal = (barcode: string) => {
                   {scanned ? 'Processing...' : 'Align barcode within the frame'}
                 </Text>
               </View>
-            </View>
-          </CameraView>
+          </View>
         </View>
       </Modal>
 

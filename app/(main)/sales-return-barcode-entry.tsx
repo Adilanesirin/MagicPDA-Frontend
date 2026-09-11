@@ -1800,8 +1800,8 @@ const handleAddAllToCart = async () => {
             barcodeScannerSettings={{
               barcodeTypes: ["qr","ean13","ean8","code128","code39","upc_a","upc_e","code93","itf14"],
             }}
-          >
-            <View style={styles.scannerOverlay}>
+          />
+          <View style={styles.scannerOverlay}>
               <TouchableOpacity style={styles.closeButton} onPress={handleCloseScanner}>
                 <Ionicons name="close" size={32} color="white" />
               </TouchableOpacity>
@@ -1816,8 +1816,7 @@ const handleAddAllToCart = async () => {
                   {scanned ? 'Processing...' : 'Align barcode within the frame'}
                 </Text>
               </View>
-            </View>
-          </CameraView>
+          </View>
         </View>
       </Modal>
       {/* ── Customer Modal ── */}

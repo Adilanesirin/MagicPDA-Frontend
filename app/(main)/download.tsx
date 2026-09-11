@@ -9,8 +9,7 @@ import {
   updateLastSynced
 } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import LottieView from "lottie-react-native";
 import React, { useEffect, useState } from "react";

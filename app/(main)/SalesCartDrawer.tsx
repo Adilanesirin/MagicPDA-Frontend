@@ -321,6 +321,8 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
           quantity: item.quantity,
           rate: item.eCost || item.cost || item.rate || 0,
           mrp: item.bmrp || item.mrp || 0,
+          taxcode: item.taxcode || "0",
+          salestax: item.salestax || 0,
           sale_date: item.sale_date || item.order_date || today,
           product_name: item.name || item.product_name || "",
           is_manual_entry: item.is_manual_entry ? 1 : 0,

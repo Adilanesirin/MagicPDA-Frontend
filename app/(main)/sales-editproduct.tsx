@@ -38,18 +38,17 @@ export default function EditSalesProduct() {
     if (itemData) {
       const parsedItem = JSON.parse(itemData);
       setProduct(parsedItem);
-      const currentECost = parsedItem.eCost || parsedItem.cost || 0;
-      setEditedCost(currentECost.toString());
+      const currentSalesPrice = parsedItem.S1 ?? parsedItem.eCost ?? parsedItem.cost ?? 0;
+      setEditedCost(currentSalesPrice.toString());
       setEditedQuantity(parsedItem.quantity ? parsedItem.quantity.toString() : "");
       setEditedMrp(parsedItem.bmrp ? parsedItem.bmrp.toString() : "0");
     }
   }, [itemData]);
 
-  const handleSave = () => {
+ const handleSave = () => {
     const updatedItem = {
       ...product,
-      cost: parseFloat(editedCost) || product.cost || 0,
-      eCost: parseFloat(editedCost) || 0,
+      S1: parseFloat(editedCost) || product.S1 || 0,
       quantity: parseInt(editedQuantity) || 0,
       bmrp: parseFloat(editedMrp) || product.bmrp || 0,
     };

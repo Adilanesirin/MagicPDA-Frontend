@@ -54,7 +54,7 @@ export async function uploadPendingOrders(orders: any[]) {
         othercharges: 0,
         cessoned: 0,
         cess: 0,
-        taxcode: 'NT',
+        taxcode: order.taxcode && order.taxcode !== '0' ? order.taxcode : "NT",
         otype: 'O',
       };
 
@@ -142,6 +142,152 @@ else {
       success: true,
       message: "Orders processed by server",
       uploaded_count: sortedOrders.length,
+      original_order_preserved: true
+    };
+    
+  } catch (error: any) {
+    console.error("❌ Upload error:", error.response?.data || error.message);
+    
+    if (error.response?.status === 401) {
+      throw new Error("Authentication failed. Please login again.");
+    } else if (error.response?.status === 400) {
+      throw new Error("Invalid data format: " + (error.response.data?.message || "Check your data"));
+    } else if (error.code === "NETWORK_ERROR") {
+      throw new Error("Network error. Please check your connection.");
+    } else if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    } else {
+      throw new Error(error.message || "Upload failed");
+    }
+  }
+}
+
+
+
+// ============================================
+// QUOTATION UPLOAD - otype = 'Q'
+// ============================================
+
+export async function uploadPendingQuotations(quotations: any[]) {
+  try {
+    console.log("📤 Starting upload of", quotations.length, "quotations");
+    
+    const token = await SecureStore.getItemAsync("token");
+    if (!token) {
+      throw new Error("Authentication token not found. Please login again.");
+    }
+
+    const api = await createEnhancedAPI();
+    
+    const formattedQuotations = quotations.map((quotation, index) => {
+      const isManualEntry = quotation.is_manual_entry === 1 || quotation.is_manual_entry === '1' || quotation.is_manual_entry === true;
+      
+      const formattedQuotation: any = {
+        supplier_code: quotation.supplier_code,
+        user_id: quotation.userid,
+        barcode: quotation.barcode,
+        quantity: quotation.quantity,
+        rate: quotation.rate,
+        mrp: quotation.mrp,
+        order_date: quotation.order_date,
+        created_at: quotation.created_at,
+        original_index: index, // ✅ Preserve original order from database
+        discount: 0,
+        pnfcharges: 0,
+        exceiseduty: 0,
+        salestax: 0,
+        freightcharge: 0,
+        othercharges: 0,
+        cessoned: 0,
+        cess: 0,
+        taxcode: quotation.taxcode && quotation.taxcode !== '0' ? quotation.taxcode : "NT",
+        otype: 'Q',
+      };
+
+      const isFullyManual = quotation.is_manual_entry === 1 || quotation.is_manual_entry === '1';
+      const isNewBarcodeExistingName = quotation.is_manual_entry === 2 || quotation.is_manual_entry === '2';
+
+      if (isNewBarcodeExistingName) {
+        formattedQuotation.code = quotation.itemcode;
+        formattedQuotation.item = quotation.product_name || '';
+        formattedQuotation.ioflag = -101;
+      } else if (isFullyManual) {
+        const hasBarcode = quotation.barcode && quotation.barcode !== '' && quotation.barcode !== 'NULL';
+        formattedQuotation.code = hasBarcode ? quotation.barcode : '';
+        formattedQuotation.barcode = hasBarcode ? quotation.barcode : '';
+        formattedQuotation.item = quotation.product_name || '';
+        formattedQuotation.itemdetails = quotation.product_name || '';
+        formattedQuotation.text1 = quotation.text1 || '';
+        formattedQuotation.ioflag = -100;
+      }
+      else {
+        formattedQuotation.code = quotation.itemcode;
+        formattedQuotation.barcode = quotation.barcode || '';
+        formattedQuotation.item = '';
+        formattedQuotation.text1 = quotation.text1 || '';
+        formattedQuotation.ioflag = 0;
+      }
+
+      return formattedQuotation;
+    });
+
+    // ✅ Use improved sorting function
+    const sortedQuotations = sortChronologically(formattedQuotations);
+
+    // ✅ Verify order
+    console.log("📋 Upload order verification:");
+    sortedQuotations.slice(0, 5).forEach((quotation, idx) => {
+      console.log(`  ${idx + 1}. ${quotation.item || quotation.code} (Created: ${quotation.created_at}, Index: ${quotation.original_index})`);
+    });
+    if (sortedQuotations.length > 5) {
+      console.log(`  ... and ${sortedQuotations.length - 5} more`);
+    }
+
+    console.log("🏷️ All entries have otype='Q' for Quotation");
+
+    const res = await api.post("/upload-orders", { 
+      orders: sortedQuotations,
+      total_orders: sortedQuotations.length,
+      transaction_type: 'QUOTATION',
+      upload_sequence: 'chronological'
+    });
+
+    console.log("✅ Upload response:", res.data);
+
+    if (res.data) {
+      if (res.data.success === true) {
+        return {
+          success: true,
+          message: res.data.message || "Quotations uploaded successfully",
+          uploaded_count: res.data.uploaded_count || sortedQuotations.length,
+          original_order_preserved: true
+        };
+      }
+      
+      if (res.data.status === "success") {
+        return {
+          success: true,
+          message: res.data.message || "Quotations uploaded successfully",
+          uploaded_count: sortedQuotations.length,
+          original_order_preserved: true
+        };
+      }
+      
+      if (typeof res.data === "string" && res.data.includes("success")) {
+        return {
+          success: true,
+          message: res.data,
+          uploaded_count: sortedQuotations.length,
+          original_order_preserved: true
+        };
+      }
+    }
+
+    console.warn("⚠️ Unexpected response format from server:", res.data);
+    return {
+      success: true,
+      message: "Quotations processed by server",
+      uploaded_count: sortedQuotations.length,
       original_order_preserved: true
     };
     
@@ -505,7 +651,7 @@ export async function uploadPendingSalesOrders(orders: any[]) {
       const formattedOrder: any = {
         supplier_code: order.supplier_code,
         user_id: order.userid,
-        barcode: order.is_manual_entry === 0 ? order.itemcode : order.barcode,
+        barcode: (order.barcode || '').split(' : ')[0] || '',
         quantity: order.quantity,
         rate: order.rate,
         mrp: order.mrp,
@@ -520,7 +666,7 @@ export async function uploadPendingSalesOrders(orders: any[]) {
         othercharges: 0,
         cessoned: 0,
         cess: 0,
-        taxcode: "NT",
+          taxcode: order.taxcode && order.taxcode !== '0' ? order.taxcode : "NT",
         otype: "S",
         customer: order.customer || '',
         enclosures: order.enclosures || '',
@@ -539,16 +685,19 @@ if (isNewBarcodeExistingName) {
   formattedOrder.item = order.product_name || '';
   formattedOrder.ioflag = -100;
 } else {
-  formattedOrder.code = order.itemcode;
+  formattedOrder.code = (order.barcode || '').split(' : ')[0] || order.itemcode;
+  formattedOrder.barcode = (order.barcode || '').split(' : ')[0] || '';
   formattedOrder.item = '';
   formattedOrder.ioflag = 0;
 }
       return formattedOrder;
     });
 
+   // AFTER
     const sortedOrders = sortChronologically(formattedOrders);
 
     console.log("🏷️ All entries have otype='S' for Sales");
+    console.log("📦 Outgoing taxcodes:", sortedOrders.map(o => ({ barcode: o.barcode, taxcode: o.taxcode })));
 
     const res = await api.post("/upload-orders", {
       orders: sortedOrders,
@@ -1098,8 +1247,8 @@ if (isNewBarcodeExistingName) {
   formattedOrder.text1 = order.text1 || '';
   formattedOrder.ioflag = -100;
 } else {
-   formattedOrder.code = order.itemcode;
-  formattedOrder.barcode = order.barcode || '';
+ formattedOrder.code = (order.barcode || '').split(' : ')[0] || order.itemcode;
+  formattedOrder.barcode = (order.barcode || '').split(' : ')[0] || '';
   formattedOrder.item = '';
   formattedOrder.ioflag = 0;
 }

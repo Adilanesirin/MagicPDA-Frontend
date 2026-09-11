@@ -507,6 +507,169 @@ export const saveOrderToSync = async (order: {
 };
 
 // ============================================
+// QUOTATION SYNC FUNCTIONS (mirrors orders)
+// ============================================
+
+export const getPendingQuotations = async () => {
+  const db = getDatabase();
+  try {
+    const quotations = await db.getAllAsync(
+      `SELECT 
+         q.*,
+         COALESCE(q.product_name, p.name, '') as product_name
+       FROM quotation_to_sync q 
+       LEFT JOIN product_data p ON q.barcode = p.barcode 
+       WHERE q.sync_status = ? 
+       ORDER BY q.created_at ASC, q.id ASC`,
+      ['pending']
+    );
+    return quotations;
+  } catch (error) {
+    console.error("❌ Error getting pending quotations:", error);
+    return [];
+  }
+};
+
+export const getPendingQuotationsByDateRange = async (startDate: string, endDate: string) => {
+  const db = getDatabase();
+  try {
+    const quotations = await db.getAllAsync(
+      `SELECT 
+         q.*,
+         COALESCE(q.product_name, p.name, '') as product_name
+       FROM quotation_to_sync q 
+       LEFT JOIN product_data p ON q.barcode = p.barcode 
+       WHERE q.sync_status = ? 
+         AND q.order_date >= ? 
+         AND q.order_date <= ?
+       ORDER BY q.created_at ASC, q.id ASC`,
+      ['pending', startDate, endDate]
+    );
+    return quotations;
+  } catch (error) {
+    console.error("❌ Error getting pending quotations by date:", error);
+    return [];
+  }
+};
+
+export const markQuotationsAsSynced = async () => {
+  const db = getDatabase();
+  try {
+    await db.runAsync(
+      'UPDATE quotation_to_sync SET sync_status = ? WHERE sync_status = ?',
+      ['synced', 'pending']
+    );
+    console.log("✅ Quotations marked as synced");
+  } catch (error) {
+    console.error("❌ Error marking quotations as synced:", error);
+    throw error;
+  }
+};
+
+export const markQuotationsAsSyncedByIds = async (quotationIds: number[]) => {
+  const db = getDatabase();
+  try {
+    if (quotationIds.length === 0) return;
+    const placeholders = quotationIds.map(() => '?').join(',');
+    await db.runAsync(
+      `UPDATE quotation_to_sync SET sync_status = ? WHERE id IN (${placeholders})`,
+      ['synced', ...quotationIds]
+    );
+    console.log(`✅ ${quotationIds.length} quotations marked as synced by ID`);
+  } catch (error) {
+    console.error("❌ Error marking quotations as synced by IDs:", error);
+    throw error;
+  }
+};
+
+export const saveQuotationToSync = async (quotation: {
+  supplier_code: string;
+  userid: string;
+  itemcode: string;
+  barcode: string;
+  quantity: number;
+  rate: number;
+  mrp: number;
+  order_date: string;
+  product_name?: string;
+  is_manual_entry?: number;
+  text1?: string;
+}) => {
+  const db = getDatabase();
+  try {
+    const existingQuotation = await db.getFirstAsync(
+      `SELECT id, quantity, created_at FROM quotation_to_sync 
+       WHERE barcode = ? AND order_date = ? AND userid = ? AND supplier_code = ? 
+       AND sync_status = 'pending'`,
+      [quotation.barcode, quotation.order_date, quotation.userid, quotation.supplier_code]
+    ) as any;
+
+    const now = new Date().toISOString();
+
+    if (existingQuotation) {
+      const newQuantity = (existingQuotation.quantity || 0) + quotation.quantity;
+      await db.runAsync(
+        `UPDATE quotation_to_sync 
+         SET quantity = ?, rate = ?, mrp = ?, created_at = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [newQuantity, quotation.rate, quotation.mrp, existingQuotation.created_at || now, existingQuotation.id]
+      );
+    } else {
+      await db.runAsync(
+        `INSERT INTO quotation_to_sync 
+         (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date, product_name, is_manual_entry, text1, sync_status, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        [
+          quotation.supplier_code, 
+          quotation.userid, 
+          quotation.itemcode,
+          quotation.barcode, 
+          quotation.quantity, 
+          quotation.rate, 
+          quotation.mrp, 
+          quotation.order_date,
+          quotation.product_name || '',
+          quotation.is_manual_entry || 0,
+          quotation.text1 || '',
+          now
+        ]
+      );
+    }
+  } catch (error: any) {
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      const now = new Date().toISOString();
+      await db.runAsync(
+        `UPDATE quotation_to_sync 
+         SET quantity = quantity + ?, rate = ?, mrp = ?, created_at = COALESCE(created_at, ?), updated_at = CURRENT_TIMESTAMP 
+         WHERE barcode = ? AND order_date = ? AND userid = ? AND supplier_code = ?`,
+        [quotation.quantity, quotation.rate, quotation.mrp, now, quotation.barcode, quotation.order_date, quotation.userid, quotation.supplier_code]
+      );
+    } else {
+      console.error("❌ Error saving quotation to sync:", error);
+      throw error;
+    }
+  }
+};
+
+export const cleanupDuplicateQuotations = async () => {
+  const db = getDatabase();
+  try {
+    const result = await db.runAsync(`
+      DELETE FROM quotation_to_sync 
+      WHERE id NOT IN (
+        SELECT MAX(id) 
+        FROM quotation_to_sync 
+        GROUP BY barcode, itemcode, order_date, supplier_code, userid
+      )
+    `);
+    return result.changes || 0;
+  } catch (error) {
+    console.error('❌ Error cleaning up duplicate quotations:', error);
+    throw error;
+  }
+};
+
+// ============================================
 // GRN FUNCTIONS (unchanged)
 // ============================================
 
@@ -912,19 +1075,22 @@ export const saveSaleToSync = async (sale: {
   customer?: string;
   enclosures?: string;
   description?: string;
+  taxcode?: string;
+  salestax?: number;
 }) => {
   const db = getDatabase();
   try {
     const now = new Date().toISOString();
-    await db.runAsync(
-      `INSERT INTO sales_to_sync
-       (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, sale_date, sales_date, product_name, is_manual_entry, customer, enclosures, description, sync_status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-      [sale.supplier_code, sale.userid, sale.itemcode, sale.barcode,
-       sale.quantity, sale.rate, sale.mrp, sale.sale_date, sale.sale_date,
-       sale.product_name || '', sale.is_manual_entry || 0,
-       sale.customer || '', sale.enclosures || '', sale.description || '', now]
-    );
+     await db.runAsync(
+    `INSERT INTO sales_to_sync
+     (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, taxcode, salestax, sale_date, sales_date, product_name, is_manual_entry, customer, enclosures, description, sync_status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+    [sale.supplier_code, sale.userid, sale.itemcode, sale.barcode,
+     sale.quantity, sale.rate, sale.mrp, sale.taxcode || '0', sale.salestax || 0,
+     sale.sale_date, sale.sale_date,
+     sale.product_name || '', sale.is_manual_entry || 0,
+     sale.customer || '', sale.enclosures || '', sale.description || '', now]
+  );
   } catch (error) {
     console.error("❌ Error saving sale to sync:", error);
     throw error;
