@@ -220,7 +220,7 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
   // Sync localItems when parent adds or removes items (but not on every render)
   useEffect(() => {
     setLocalItems([...items]);
-  }, [items.length]);
+  }, [items]);
 
   // Qty-edit modal state
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -523,19 +523,23 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
 
   return (
     <>
-      <View
-        style={StyleSheet.absoluteFillObject}
-        pointerEvents={visible ? "auto" : "none"}
+      <Modal
+        visible={visible}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={onClose}
       >
-        {/* Backdrop */}
-        <TouchableWithoutFeedback onPress={onClose}>
-          <Animated.View style={[styles.backdrop, { opacity: backdropAnim }]} />
-        </TouchableWithoutFeedback>
+        <View style={styles.modalRoot} pointerEvents="auto">
+          {/* Backdrop */}
+          <TouchableWithoutFeedback onPress={onClose}>
+            <Animated.View style={[styles.backdrop, { opacity: backdropAnim }]} />
+          </TouchableWithoutFeedback>
 
-        {/* Drawer Panel */}
-        <Animated.View
-          style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}
-        >
+          {/* Drawer Panel */}
+          <Animated.View
+            style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}
+          >
           {/* Header */}
           <View
             style={[
@@ -581,8 +585,9 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
           {view === "cart" && <View style={styles.divider} />}
 
           {renderContent()}
-        </Animated.View>
-      </View>
+          </Animated.View>
+        </View>
+      </Modal>
 
       {/* Qty Edit Modal — rendered outside the drawer so it floats above everything */}
       <QtyEditModal
@@ -600,6 +605,9 @@ export default SalesCartDrawer;
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.45)",

@@ -14,6 +14,7 @@ export default function Settings() {
   const [removingLicense, setRemovingLicense] = useState(false);
   const [mrpEditable, setMrpEditable] = useState(false);
   const [coVisible, setCoVisible] = useState(true);
+  const [allowDuplicateSale, setAllowDuplicateSale] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<{
     customerName: string;
     licenseKey: string;
@@ -32,9 +33,12 @@ export default function Settings() {
       const mrpSetting = await SecureStore.getItemAsync("mrpEditable");
       setMrpEditable(mrpSetting === "true");
 
-      // Load CO price visibility setting (default enabled)
-      const coSetting = await SecureStore.getItemAsync("coVisible");
-      setCoVisible(coSetting === null ? true : coSetting === "true");
+      // after
+        const coSetting = await SecureStore.getItemAsync("coVisible");
+        setCoVisible(coSetting === null ? true : coSetting === "true");
+
+        const dupSetting = await SecureStore.getItemAsync("allowDuplicateSale");
+        setAllowDuplicateSale(dupSetting === "true");
 
 
       // Load license info
@@ -74,6 +78,18 @@ export default function Settings() {
       visibilityTime: 2000,
     });
   };
+  const toggleAllowDuplicateSale = async (value: boolean) => {
+  await SecureStore.setItemAsync("allowDuplicateSale", value.toString());
+  setAllowDuplicateSale(value);
+  Toast.show({
+    type: "success",
+    text1: value ? "Duplicate Items Allowed" : "Duplicate Items Blocked",
+    text2: value
+      ? "Re-scanning/searching an item will add to its quantity"
+      : "Re-scanning/searching an item will show 'already scanned'",
+    visibilityTime: 2000,
+  });
+};
 
 
   const handlePingServer = async () => {
@@ -543,11 +559,34 @@ const confirmClearLicense = async () => {
             </Text>
           </View>
         </View>
+       // after
+{/* Duplicate Sale Item Settings */}
+<View style={styles.card}>
+  <Text style={styles.cardTitle}>Sales Settings</Text>
+  <View style={styles.switchOption}>
+    <View style={styles.switchContent}>
+      <Ionicons name="copy-outline" size={24} color={allowDuplicateSale ? "#3B82F6" : "#6B7280"} />
+      <View style={styles.switchText}>
+        <Text style={[styles.switchTitle, allowDuplicateSale && styles.switchTitleActive]}>
+          Allow Duplicate Items
+        </Text>
+        <Text style={styles.switchDescription}>
+          Rescanning/searching an item adds to its quantity instead of blocking it
+        </Text>
+      </View>
+    </View>
+    <Switch
+      value={allowDuplicateSale}
+      onValueChange={toggleAllowDuplicateSale}
+      trackColor={{ false: "#D1D5DB", true: "#BFDBFE" }}
+      thumbColor={allowDuplicateSale ? "#3B82F6" : "#9CA3AF"}
+      ios_backgroundColor="#D1D5DB"
+    />
+  </View>
+</View>
 
-        
-        
-        {/* Server Status */}
-        <View style={styles.card}>
+{/* Server Status */}
+<View style={styles.card}>
           {(pingStatus || pinging) && (
             <View style={[
               styles.statusIndicator,

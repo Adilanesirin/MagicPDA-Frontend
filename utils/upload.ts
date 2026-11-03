@@ -182,8 +182,19 @@ export async function uploadPendingQuotations(quotations: any[]) {
     const formattedQuotations = quotations.map((quotation, index) => {
       const isManualEntry = quotation.is_manual_entry === 1 || quotation.is_manual_entry === '1' || quotation.is_manual_entry === true;
       
+      const [custName = "", custPlace = "", customerNumber = ""] = String(quotation.supplier_code || "").split("||");
+
       const formattedQuotation: any = {
-        supplier_code: quotation.supplier_code,
+        supplier_code: custName,
+        supplier_name: custName,
+        supplier_place: custPlace,
+        customer_name: custName,
+        customer_place: custPlace,
+        customer: custName,
+        enclosures: custPlace,
+        // Keep the API's legacy singular key while also sending the DB column name.
+        enclosure2: customerNumber,
+        enclosures2: customerNumber,
         user_id: quotation.userid,
         barcode: quotation.barcode,
         quantity: quotation.quantity,

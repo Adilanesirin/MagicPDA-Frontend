@@ -100,9 +100,10 @@ export default function SalesReportScreen() {
   const [pendingCount, setPendingCount]   = useState(0);
   const [syncedCount, setSyncedCount]     = useState(0);
 
-  // Edit qty
-  const [editingItem, setEditingItem] = useState<{ id: number; qty: number } | null>(null);
-  const [editQty, setEditQty]         = useState("");
+ // after
+const [editingItem, setEditingItem] = useState<{ id: number; qty: number } | null>(null);
+const [editQty, setEditQty]         = useState("");
+const [cardTapCounts, setCardTapCounts] = useState<Record<number, number>>({});
 
   // Printer state
   const [printerReady, setPrinterReady]         = useState(false);
@@ -118,7 +119,6 @@ export default function SalesReportScreen() {
   const [showLogs, setShowLogs] = useState(false);
   const [firmInfo, setFirmInfo] = useState<any>(null);
 
-  // Wire global logger to local state
   useEffect(() => {
     _setLogs = setLogs;
     import("expo-secure-store").then(SecureStore => {
@@ -129,7 +129,6 @@ export default function SalesReportScreen() {
     return () => { _setLogs = null; };
   }, []);
 
-  // Load native printer module on mount
   useEffect(() => {
     plog("INFO", "Initialising BLE printer module…");
     try {
@@ -504,9 +503,10 @@ export default function SalesReportScreen() {
     </View>
   );
 
-  const renderSyncedCard = (item: SyncedItem & { type: "synced" }) => (
-    <View style={s.card}>
-      <View style={s.cardTop}>
+  // after
+const renderSyncedCard = (item: SyncedItem & { type: "synced" }) => (
+  <View style={s.card}>
+    <TouchableOpacity activeOpacity={0.7} onPress={() => handleSyncedCardTap(item)} style={s.cardTop}>
         <View style={{ flex: 1, marginRight: 10 }}>
           {item.is_manual_entry === 1 && (
             <View style={s.manualBadge}><Text style={s.manualBadgeText}>MANUAL</Text></View>
@@ -514,10 +514,11 @@ export default function SalesReportScreen() {
           <Text style={s.cardName} numberOfLines={1}>{item.name || "Unknown Product"}</Text>
           <Text style={s.cardBarcode}>{item.barcode}</Text>
         </View>
+        // after
         <View style={[s.badge, { backgroundColor: "#D1FAE5" }]}>
           <Text style={[s.badgeText, { color: C.success }]}>Synced</Text>
         </View>
-      </View>
+      </TouchableOpacity>
       {(item.customer || item.enclosures) ? (
         <View style={s.customerRow}>
           <Ionicons name="person-outline" size={12} color={C.accent} />
@@ -525,6 +526,7 @@ export default function SalesReportScreen() {
             {[item.customer, item.enclosures].filter(Boolean).join("  •  ")}
           </Text>
         </View>
+        
       ) : null}
       <View style={s.divider} />
       <View style={s.metaRow}>
@@ -562,6 +564,39 @@ export default function SalesReportScreen() {
       </Text>
     </View>
   );
+  // after (new function)
+const handleSyncedCardTap = (item: SyncedItem) => {
+  setCardTapCounts(prev => {
+    const current = (prev[item.id] || 0) + 1;
+    if (current >= 5) {
+      Alert.alert(
+        "Re-upload Sale?",
+        `Do you want to re-upload this sale for "${item.name || item.barcode}"?\n\nUse this if the uploaded data appears broken or missing.`,
+        [
+          { text: "Cancel", style: "cancel", onPress: () => {} },
+          {
+            text: "Re-upload",
+            style: "default",
+            onPress: async () => {
+              try {
+                await db.runAsync(
+                  `UPDATE sales_to_sync SET sync_status = 'pending' WHERE id = ?`,
+                  [item.id]
+                );
+                Alert.alert("Done", "Item moved back to pending. Go to Cart tab to re-upload.");
+                loadData();
+              } catch (err: any) {
+                Alert.alert("Error", err.message || "Failed to re-queue item.");
+              }
+            }
+          }
+        ]
+      );
+      return { ...prev, [item.id]: 0 };
+    }
+    return { ...prev, [item.id]: current };
+  });
+};
 
   // ─────────────────────────────────────────────────────────────────────────────
   // MAIN RENDER

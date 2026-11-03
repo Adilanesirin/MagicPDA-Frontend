@@ -3,7 +3,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -1034,7 +1034,9 @@ export default function SalesBarcodeEntry() {
   // Quantity Modal States
   const [showQuantityModal, setShowQuantityModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [selectedQuantity, setSelectedQuantity] = useState(1);
+ // after
+const [selectedQuantity, setSelectedQuantity] = useState(1);
+const [allowDuplicateSale, setAllowDuplicateSale] = useState(false);
 
   // Auto-reset stuck scanner
   useEffect(() => {
@@ -1047,6 +1049,10 @@ export default function SalesBarcodeEntry() {
     }, 5000);
     return () => clearTimeout(resetTimer);
   }, [scanned, showScanner]);
+
+  useEffect(() => {
+  SecureStore.getItemAsync("allowDuplicateSale").then((v) => setAllowDuplicateSale(v === "true"));
+}, []);
 
  useEffect(() => {
   const initialize = async () => {
@@ -1211,12 +1217,23 @@ const loadPendingSalesItems = async () => {
 
   const increaseQuantity = () => setSelectedQuantity(prev => prev + 1);
   const decreaseQuantity = () => setSelectedQuantity(prev => prev > 1 ? prev - 1 : 1);
-
+  const mergeIntoExisting = async (existing: any, addQty: number) => {
+  await db.runAsync(
+    `UPDATE pending_sales_items SET quantity = quantity + ? WHERE id = ?`,
+    [addQty, existing.id]
+  );
+  await loadPendingSalesItems();
+};
   const addProductFromQuantityModal = async () => {
     if (!selectedProduct) return;
+   // after
     const existing = scannedItems.find((item) => item.barcode === selectedProduct.barcode);
     if (existing) {
-      Alert.alert("Info", `Product already scanned: ${existing.name}`);
+      if (allowDuplicateSale) {
+        await mergeIntoExisting(existing, selectedQuantity);
+      } else {
+        Alert.alert("Info", `Product already scanned: ${existing.name}`);
+      }
       closeQuantityModal();
       return;
     }
@@ -1237,15 +1254,20 @@ const loadPendingSalesItems = async () => {
   };
 
   const addProductDirectly = async (product: any) => {
-    const existing = scannedItems.find((item) => item.barcode === product.barcode);
-    if (existing) {
-      Alert.alert("Info", `Product already scanned: ${existing.name}`);
-      return;
-    }
+   // after
+const existing = scannedItems.find((item) => item.barcode === product.barcode);
+if (existing) {
+  if (allowDuplicateSale) {
+    await mergeIntoExisting(existing, 1);
+  } else {
+    Alert.alert("Info", `Product already scanned: ${existing.name}`);
+  }
+  return;
+}
     const currentCost = product.cost ?? product.bmrp ?? 0;
     const newItem = {
       ...product,
-      quantity: 0,
+      quantity: 1,
       cost: currentCost,
       eCost: currentCost,
       currentStock: product.quantity ?? 0,
@@ -1382,8 +1404,9 @@ const loadPendingSalesItems = async () => {
 
       if (allMatches.length === 1) {
         const product = allMatches[0] as { [key: string]: any; quantity?: number };
+        // after
         const existing = scannedItems.find((item) => item.barcode === product.barcode);
-        if (existing) {
+        if (existing && !allowDuplicateSale) {
           Alert.alert("Info", `Product already scanned: ${existing.name}`, [
             { text: 'OK', onPress: () => {
               if (source === 'scanner') { setScanned(false); scanLockRef.current = false; processingAlertRef.current = false; }
@@ -1420,9 +1443,10 @@ const loadPendingSalesItems = async () => {
     const trimmed = manualBarcode.trim();
     if (!trimmed) { Alert.alert("Error", "Please enter a search term"); return; }
 
-    if (searchMode === 'barcode') {
-      try {
-        const allMatches = await searchBarcodeWithVariants(trimmed);
+   if (searchMode === 'barcode') {
+  setManualBarcode('');   // clear right after Get so the next scan starts empty
+  try {
+    const allMatches = await searchBarcodeWithVariants(trimmed);
         if (allMatches.length === 0) {
           Alert.alert("Product not found", `Barcode: ${trimmed}\n\nWould you like to add this product manually?`,
             [
@@ -1433,10 +1457,9 @@ const loadPendingSalesItems = async () => {
           return;
         }
         if (allMatches.length === 1) {
-          const product = allMatches[0];
-          const existing = scannedItems.find((item) => item.barcode === product.barcode);
-          if (existing) { Alert.alert("Info", `Product already scanned: ${existing.name}`); return; }
-          addProductDirectly(product);
+         // after
+        const product = allMatches[0];
+        addProductDirectly(product); 
         } else {
           setSuggestions(allMatches);
           setShowSuggestions(true);
@@ -1486,6 +1509,7 @@ const loadPendingSalesItems = async () => {
   };
 
 const handleAddAllToCart = async () => {
+  setShowCartModal(true);
   const userId = await SecureStore.getItemAsync("user_id") || "";
   const today = new Date().toISOString().split("T")[0];
 
@@ -1498,7 +1522,6 @@ const handleAddAllToCart = async () => {
   }));
 
   setCartItems(enrichedItems);   // replace, not append — avoids duplicates on re-open
-  setShowCartModal(true);
 };
 
   const handleRemoveFromCart = async (index: number) => {
@@ -1631,7 +1654,7 @@ const handleAddAllToCart = async () => {
               console.error("Error uploading sales data:", error);
               Alert.alert("Error", "Failed to upload sales data");
             }
-          },
+          }, 
         },
       ]
     );
@@ -1919,11 +1942,11 @@ const handleAddAllToCart = async () => {
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowCartModal(true)} style={styles.headerIconBtn}>
               <Ionicons name="cart-outline" size={22} color="#131f3d" />
-             {cartItems.length > 0 && (
+              {cartItems.length > 0 && (
                 <View style={styles.cartBadge}>
-                    <Text style={styles.cartBadgeText}>{cartItems.length}</Text>
+                  <Text style={styles.cartBadgeText}>{cartItems.length}</Text>
                 </View>
-                )}
+              )}
             </TouchableOpacity>
           </View>
         </View>

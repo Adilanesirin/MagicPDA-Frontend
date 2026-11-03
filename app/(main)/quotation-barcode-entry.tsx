@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -225,17 +225,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#38bdf8',
   },
-  productHeader: {
+    productHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: -50,
+    zIndex: 10,
+    elevation: 10,
   },
   productHeaderManual: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: -30,
+    zIndex: 10,
+    elevation: 10,
   },
   productInfo: {
     flex: 1,
@@ -901,12 +905,13 @@ const saveQuotationToSync = async (quotationData: {
 };
 
 export default function QuotationBarcodeEntry() {
-  const { supplier, supplier_code, updatedItem, itemIndex } = useLocalSearchParams<{
+   const { supplier, supplier_code, updatedItem, itemIndex } = useLocalSearchParams<{
     supplier: string;
     supplier_code: string;
     updatedItem?: string;
     itemIndex?: string;
   }>();
+  const customerPlace = (supplier_code || "").split("||")[1] || "";
   const router = useRouter();
 
   const [scannedItems, setScannedItems] = useState<any[]>([]);
@@ -1116,24 +1121,16 @@ export default function QuotationBarcodeEntry() {
     }
   };
 
-  useEffect(() => {
-    if (updatedItem && itemIndex !== undefined) {
+   useEffect(() => {
+    const applyEditedItem = async () => {
+      if (!updatedItem) return;
       try {
         const parsedItem = JSON.parse(updatedItem);
-        const index = parseInt(itemIndex);
-        
-        setScannedItems(prevItems => {
-          const newItems = [...prevItems];
-          if (index >= 0 && index < newItems.length) {
-            newItems[index] = { ...newItems[index], ...parsedItem };
-            if (newItems[index].id) {
-              updatePendingItem(newItems[index].id, newItems[index]);
-            }
-          } else {
-            newItems.unshift(parsedItem);
-          }
-          return newItems;
-        });
+
+        if (parsedItem.id) {
+          await updatePendingItem(parsedItem.id, parsedItem);
+          await loadPendingItems();
+        }
 
         router.setParams({ 
           updatedItem: undefined, 
@@ -1142,7 +1139,9 @@ export default function QuotationBarcodeEntry() {
       } catch (error) {
         console.error("Error parsing updated item:", error);
       }
-    }
+    };
+
+    applyEditedItem();
   }, [updatedItem, itemIndex]);
 
   useEffect(() => {
@@ -1277,10 +1276,10 @@ const handleSearchTextChange = (text: string) => {
     const newItem = {
       ...selectedProduct,
       quantity: selectedQuantity,
-      cost: selectedProduct.cost ?? selectedProduct.bmrp ?? 0,
-      eCost: (selectedProduct.cost ?? selectedProduct.bmrp ?? 0) * selectedQuantity,
+            cost: selectedProduct.cost ?? selectedProduct.bmrp ?? 0,
+            eCost: selectedProduct.bmrp ?? selectedProduct.cost ?? 0,
       currentStock: selectedProduct.quantity ?? 0,
-      batchSupplier: selectedProduct.batch_supplier ?? supplier,
+      batchSupplier: supplier,
       scannedAt: new Date().getTime(),
       isManualEntry: 0,
       text1: selectedProduct.text1 || '',
@@ -1306,9 +1305,9 @@ const handleSearchTextChange = (text: string) => {
       ...product,
       quantity: 1, // Default quantity is 1
       cost: product.cost ?? product.bmrp ?? 0,
-      eCost: (product.cost ?? product.bmrp ?? 0) * 1,
+      eCost: (product.bmrp ?? product.cost ?? 0) * 1,
       currentStock: product.quantity ?? 0,
-      batchSupplier: product.batch_supplier ?? supplier,
+      batchSupplier: supplier,
       scannedAt: new Date().getTime(),
       isManualEntry: 0,
       text1: product.text1 || '',
@@ -1440,7 +1439,7 @@ moreoption: product.text1 || product.moreoption || '',    };
       bmrp: mrp,
       cost: cost,
       quantity: quantity,
-      eCost: cost * quantity,
+     eCost: cost,
       currentStock: quantity,
       batchSupplier: supplier,
       scannedAt: new Date().getTime(),
@@ -1695,14 +1694,14 @@ moreoption: product.text1 || product.moreoption || '',    };
 
   const handleEditItem = (item: any, index: number) => {
     router.push({
-      pathname: "/edit-product",
+      pathname: "/quotation-edit-product",
       params: {
         supplier: supplier || "",
         supplier_code: supplier_code || "",
-        item: JSON.stringify(item),
+        itemData: JSON.stringify(item),
         itemIndex: index.toString(),
       },
-    });
+    } as any);
   };
 
   const updateQuantities = async () => {
@@ -1743,7 +1742,9 @@ const quotationData = {
   itemcode: isManual ? (manualHasBarcode ? item.barcode : "") : (item.code || item.barcode || ""),
   barcode: isManual ? (manualHasBarcode ? item.barcode : "") : (item.barcode || ""),
   quantity: item.quantity,
-  rate: item.cost || 0,
+  // The quotation's E.Rate is the rate displayed to the user for this item.
+  // Save it in the quotation rate field so the upload sends the same value.
+  rate: item.eCost ?? item.cost ?? 0,
   mrp: item.bmrp || 0,
   order_date: today,
   product_name: item.name,
@@ -2138,8 +2139,7 @@ const quotationData = {
 
       <View style={styles.header}>
       <Text style={styles.supplierTitle}>
-        {supplier}
-      </Text>
+        {(supplier || "").toUpperCase()}{customerPlace ? ` - ${customerPlace}` : ""}      </Text>
 
        <View style={styles.toggleContainer}>
         <TouchableOpacity
@@ -2284,9 +2284,9 @@ const quotationData = {
                     </View>
 
                     <View style={styles.productDetails}>
-                      <View>
-                        <Text style={styles.detailText}>
-                          Supplier: <Text style={styles.supplierText}>{item.batchSupplier || 'N/A'}</Text>
+                                            <View style={{ marginRight: 56 }}>
+                        <Text style={styles.detailText} numberOfLines={1}>
+                          Customer: <Text style={styles.supplierText}>{item.batchSupplier || 'N/A'}</Text>
                         </Text>
                       </View>
 
@@ -2307,7 +2307,7 @@ const quotationData = {
                           E.Qty: <Text style={styles.eQtyText}>{item.quantity}</Text>
                         </Text>
                         <Text style={styles.detailText}>
-                          E.Cost: <Text style={styles.eCostText}>₹{item.eCost || 0}</Text>
+                          E.Rate: <Text style={styles.eCostText}>₹{item.eCost || 0}</Text>
                         </Text>
                         <Text style={styles.detailText}>
                           Size: <Text style={styles.eQtyText}>{item.text1 || 'Null'}</Text>

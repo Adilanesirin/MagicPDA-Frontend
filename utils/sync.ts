@@ -1188,21 +1188,23 @@ export const saveMasterDataFast = async (data: any[]) => {
   const startTime = Date.now();
   const validData = data.filter(item => item.code && item.name);
   try {
-    try { await db.execAsync('ROLLBACK;'); } catch (_) { }
-    await db.execAsync('DELETE FROM master_data;');
+ 
+    await db.withTransactionAsync(async () => {
+      await db.execAsync('DELETE FROM master_data;');
 
-    const CHUNK_SIZE = 500;
-    for (let i = 0; i < validData.length; i += CHUNK_SIZE) {
-      const chunk = validData.slice(i, i + CHUNK_SIZE);
-      let valueRows = chunk.map((item: any) =>
-        `(${escape(item.code)},${escape(item.name)},${escape(item.place)})`
-    ).join(',');
-      await db.execAsync(
-        `INSERT OR REPLACE INTO master_data (code, name, place) VALUES ${valueRows};`
-      );
-      valueRows = ''; // free string immediately after insert
-      console.log(`📊 Master fast progress: ${Math.min(i + CHUNK_SIZE, validData.length)}/${validData.length}`);
-    }
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < validData.length; i += CHUNK_SIZE) {
+        const chunk = validData.slice(i, i + CHUNK_SIZE);
+        let valueRows = chunk.map((item: any) =>
+          `(${escape(item.code)},${escape(item.name)},${escape(item.place)})`
+        ).join(',');
+        await db.execAsync(
+          `INSERT OR REPLACE INTO master_data (code, name, place) VALUES ${valueRows};`
+        );
+        valueRows = '';
+        console.log(`📊 Master fast progress: ${Math.min(i + CHUNK_SIZE, validData.length)}/${validData.length}`);
+      }
+    });
 
     const verifyResult = await db.getFirstAsync('SELECT COUNT(*) as count FROM master_data') as { count: number };
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -1225,32 +1227,33 @@ export const saveProductDataFast = async (data: any[]) => {
 
 
   try {
-    try { await db.execAsync('ROLLBACK;'); } catch (_) { }
-    await db.execAsync('DELETE FROM product_data;');
+    await db.withTransactionAsync(async () => {
+      await db.execAsync('DELETE FROM product_data;');
 
-    const CHUNK_SIZE = 500;
-    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-      const chunk = data.slice(i, i + CHUNK_SIZE);
-      let valueRows = chunk.map((item: any) => {
-        const code = escape(item.code || item.product_code);
-        const name = escape(item.name || item.product_name || 'Unknown');
-        const barcode = escape(item.barcode || `CODE_${item.code}`);
-        const qty = escape(typeof item.quantity === 'number' ? item.quantity : 0);
-       const sp = escape(typeof item.salesprice === 'number' ? item.salesprice : 0);
-        const bmrp = escape(typeof item.bmrp === 'number' ? item.bmrp : 0);
-        const cost = escape(typeof item.cost === 'number' ? item.cost : 0);
-        const batch = escape(item.batch_supplier);
-        const pricesArray = item.prices || [];
-        const S1 = escape(getPriceByCode(pricesArray, 'S1'));
-        const S2 = escape(getPriceByCode(pricesArray, 'S2'));
-        return `(${code},${name},${barcode},${qty},${sp},${bmrp},${cost},${batch},${S1},${S2})`;
-        }).join(',');
-        await db.execAsync(
-          `INSERT OR REPLACE INTO product_data (code, name, barcode, quantity, salesprice, bmrp, cost, batch_supplier, S1, S2) VALUES ${valueRows};`
-        );
-      valueRows = ''; // free string immediately after insert
-      console.log(`📊 Product fast progress: ${Math.min(i + CHUNK_SIZE, data.length)}/${data.length}`);
-    }
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+        const chunk = data.slice(i, i + CHUNK_SIZE);
+        let valueRows = chunk.map((item: any) => {
+          const code = escape(item.code || item.product_code);
+          const name = escape(item.name || item.product_name || 'Unknown');
+          const barcode = escape(item.barcode || `CODE_${item.code}`);
+          const qty = escape(typeof item.quantity === 'number' ? item.quantity : 0);
+         const sp = escape(typeof item.salesprice === 'number' ? item.salesprice : 0);
+          const bmrp = escape(typeof item.bmrp === 'number' ? item.bmrp : 0);
+          const cost = escape(typeof item.cost === 'number' ? item.cost : 0);
+          const batch = escape(item.batch_supplier);
+          const pricesArray = item.prices || [];
+          const S1 = escape(getPriceByCode(pricesArray, 'S1'));
+          const S2 = escape(getPriceByCode(pricesArray, 'S2'));
+          return `(${code},${name},${barcode},${qty},${sp},${bmrp},${cost},${batch},${S1},${S2})`;
+          }).join(',');
+          await db.execAsync(
+            `INSERT OR REPLACE INTO product_data (code, name, barcode, quantity, salesprice, bmrp, cost, batch_supplier, S1, S2) VALUES ${valueRows};`
+          );
+        valueRows = ''; // free string immediately after insert
+        console.log(`📊 Product fast progress: ${Math.min(i + CHUNK_SIZE, data.length)}/${data.length}`);
+      }
+    });
 
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);

@@ -12,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import LottieView from "lottie-react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Toast from "react-native-toast-message";
 
@@ -26,8 +26,24 @@ export default function DownloadPage() {
   // Progress tracking states
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState("");
-  const [downloadedMaster, setDownloadedMaster] = useState(0);
+   const [downloadedMaster, setDownloadedMaster] = useState(0);
   const [downloadedProducts, setDownloadedProducts] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startTimer = () => {
+    setElapsedSeconds(0);
+    timerRef.current = setInterval(() => {
+      setElapsedSeconds(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -40,13 +56,14 @@ export default function DownloadPage() {
     }
   };
 
-  const resetDownloadUIState = () => {
+   const resetDownloadUIState = () => {
     setLoading(false);
     setShowSuccess(false);
     setDownloadProgress(0);
     setCurrentStep("");
     setDownloadedMaster(0);
     setDownloadedProducts(0);
+    setElapsedSeconds(0);
   };
 
   const updateProgress = (progress: number, step: string, masterCount = 0, productCount = 0) => {
@@ -103,6 +120,7 @@ export default function DownloadPage() {
     try {
       resetDownloadUIState();
       setLoading(true);
+      startTimer();
       
       // Check authentication first
       await checkAuthBeforeDownload();
@@ -163,7 +181,6 @@ clearInterval(progressInterval);
       // Reload stats from database to get the actual stored counts
       await loadStats();
       
-      // Complete progress
       updateProgress(100, "Download complete!");
       
       // Brief delay to show completion
@@ -183,10 +200,11 @@ clearInterval(progressInterval);
         });
       }
       
-    } catch (error: any) {
+      } catch (error: any) {
       console.error("❌ Download failed:", error.message);
       handleDownloadError(error);
     } finally {
+      stopTimer();
       setLoading(false);
     }
   };
@@ -195,6 +213,7 @@ clearInterval(progressInterval);
   try {
     resetDownloadUIState();
     setLoading(true);
+    startTimer();
 
     await checkAuthBeforeDownload();
     await prepareForDownload();
@@ -245,6 +264,7 @@ clearInterval(progressInterval);
     console.error("❌ Fast download failed:", error.message);
     handleDownloadError(error);
   } finally {
+    stopTimer();
     setLoading(false);
   }
 };
@@ -289,9 +309,10 @@ clearInterval(progressInterval);
     router.push('/');
   };
 
-  useEffect(() => {
+    useEffect(() => {
     resetDownloadUIState();
     loadStats();
+    return () => stopTimer();
   }, []);
 
   useFocusEffect(
@@ -344,6 +365,9 @@ clearInterval(progressInterval);
             <Text className="text-sm text-gray-500 mb-4">
               This may take a few moments
             </Text>
+            <Text className="text-base font-semibold text-blue-600 mb-4">
+              ⏱ {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, '0')}
+            </Text>
             
             {/* Progress Bar */}
             <View className="w-full mb-4">
@@ -383,12 +407,14 @@ clearInterval(progressInterval);
               </View>
             )}
             
-            <LottieView
-              source={require("@/assets/lottie/download.json")}
-              autoPlay
-              loop
-              style={{ width: 180, height: 180 }}
-            />
+           <LottieView
+            source={require("@/assets/lottie/download.json")}
+            autoPlay
+            loop
+            renderMode="SOFTWARE"
+            hardwareAccelerationAndroid={false}
+            style={{ width: 180, height: 180 }}
+          />
             {downloadStatus.isInProgress && (
               <Text className="text-xs text-gray-400 mt-2">Download in progress...</Text>
             )}

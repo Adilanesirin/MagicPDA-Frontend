@@ -2,7 +2,7 @@
   "expo": {
     "name": "TaskPMS",
     "slug": "IMCSync",
-    "owner": "adila2005.2",
+    "owner": "demoadila",
     "version": "3.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/task-pms-adaptive-foreground-1024.png",
@@ -95,7 +95,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ee603ddc-2674-4167-aea0-dabe67fd77e3"
+        "projectId": "044839a0-0b0b-4ee3-b37d-db9080d33cae"
       }
     }
   }

@@ -77,6 +77,8 @@ export default function StockTrackerScreen() {
   const [isInitialized, setIsInitialized] = useState(false);
 const [godownList, setGodownList] = useState<{goddownid: string, name: string}[]>([]);
 const [priceModalVisible, setPriceModalVisible] = useState(false); // controls the price popup opened via the eye icon
+const [s2Visible, setS2Visible] = useState(false);
+const [s3Visible, setS3Visible] = useState(false);
 const [godownLoading, setGodownLoading] = useState(false);
 const [apiProductsCache, setApiProductsCache] = useState<any[]>([]);
   const inputRef = useRef<TextInput>(null);
@@ -1033,99 +1035,102 @@ const getPriceValue = (priceCode: string): number => {
                   </View>
                 </View>
 
-                             {/* Price Details Section - tap the eye icon to view prices in a popup */}
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Price Details</Text>
-                    <TouchableOpacity onPress={() => setPriceModalVisible(true)}>
-                      <Ionicons name="eye-outline" size={22} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.detailsContainer}>
-                    <Text style={styles.noPriceHint}>Tap the eye icon above to view price details</Text>
-                  </View>
-                </View>
+                                   {/* Price Details Section - MRP & S1 shown directly, S2 hidden behind its own eye icon */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Price Details</Text>
+          </View>
+          <View style={styles.detailsContainer}>
+            {(() => {
+              const hasPricesArray = productData.prices && productData.prices.length > 0;
+              const CO = productData.CO || 0;
+              const MR = productData.MR || 0;
+              const S1 = productData.S1 || 0;
+              const S2 = productData.S2 || 0;
+              const hasIndividualPrices = CO > 0 || MR > 0 || S1 > 0 || S2 > 0;
 
-                {/* Price Popup Modal */}
-                <Modal
-                  visible={priceModalVisible}
-                  transparent
-                  animationType="fade"
-                  onRequestClose={() => setPriceModalVisible(false)}
-                >
-                  <View style={styles.priceModalOverlay}>
-                    <View style={styles.priceModalCard}>
-                      <View style={styles.priceModalHeader}>
-                        <Text style={styles.priceModalTitle}>Price Details</Text>
-                        <TouchableOpacity onPress={() => setPriceModalVisible(false)}>
-                          <Ionicons name="close" size={24} color="#111827" />
+              if (hasPricesArray) {
+                return productData.prices
+                  .filter(price => !(userRole === "Level 1" && price.price_code === "CO"))
+                  .filter(price => !(price.price_code === "CO" && !coVisible))
+                                    .map((price, index) => {
+                    const isS2 = price.price_code === "S2";
+                    const isS3 = price.price_code === "S3";
+                    const isHidden = isS2 || isS3;
+                    const isVisible = isS2 ? s2Visible : s3Visible;
+                    const toggleVisible = isS2 ? setS2Visible : setS3Visible;
+                    return (
+                      <View key={index} style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>{price.price_name}:</Text>
+                        {isHidden ? (
+                      <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        {isVisible && (
+                          <Text style={[styles.detailValue, { flex: 0, marginRight: 8 }]}>
+                            ₹{parseFloat(price.value).toFixed(2)}
+                          </Text>
+                        )}
+                        <TouchableOpacity onPress={() => toggleVisible(prev => !prev)}>
+                          <Ionicons name={isVisible ? "eye-off-outline" : "eye-outline"} size={20} color="#2E7D7A" />
                         </TouchableOpacity>
                       </View>
-
-                      {(() => {
-                        const hasPricesArray = productData.prices && productData.prices.length > 0;
-                        const CO = productData.CO || 0;
-                        const MR = productData.MR || 0;
-                        const S1 = productData.S1 || 0;
-                        const S2 = productData.S2 || 0;
-                        const hasIndividualPrices = CO > 0 || MR > 0 || S1 > 0 || S2 > 0;
-
-                          if (hasPricesArray) {
-                          return productData.prices
-                          .filter(price => !(userRole === "Level 1" && price.price_code === "CO"))
-                          .filter(price => !(price.price_code === "CO" && !coVisible))
-                          .map((price, index) => (
-                            <View key={index} style={styles.detailRow}>
-                              <Text style={styles.detailLabel}>{price.price_name}:</Text>
-                              <Text style={styles.detailValue}>₹{parseFloat(price.value).toFixed(2)}</Text>
-                            </View>
-                          ));
-                        } else if (hasIndividualPrices) {
-                          return (
-                            <>
-                        {userRole !== "Level 1" && coVisible && CO > 0 && (
-                          <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>COST (CO):</Text>
-                            <Text style={styles.detailValue}>₹{CO.toFixed(2)}</Text>
-                          </View>
-                        )}
-                              {MR > 0 && (
-                                <View style={styles.detailRow}>
-                                  <Text style={styles.detailLabel}>MRP (MR):</Text>
-                                  <Text style={styles.detailValue}>₹{MR.toFixed(2)}</Text>
-                                </View>
-                              )}
-                              {S1 > 0 && (
-                                <View style={styles.detailRow}>
-                                  <Text style={styles.detailLabel}>RETAIL (S1):</Text>
-                                  <Text style={styles.detailValue}>₹{S1.toFixed(2)}</Text>
-                                </View>
-                              )}
-                              {S2 > 0 && (
-                                <View style={styles.detailRow}>
-                                  <Text style={styles.detailLabel}>D.P (S2):</Text>
-                                  <Text style={styles.detailValue}>₹{S2.toFixed(2)}</Text>
-                                </View>
-                              )}
-                            </>
-                          );
-                        } else {
-                          return (
-                            <View style={styles.noPriceContainer}>
-                              <Ionicons name="warning" size={32} color="#F57C00" style={{marginBottom: 12}} />
-                              <Text style={styles.noPriceText}>No price data available</Text>
-                              <Text style={styles.noPriceHint}>Click the refresh button (↻) at the top to sync prices from server</Text>
-                              <TouchableOpacity onPress={syncWithAPI} style={styles.syncNowButton}>
-                                <Ionicons name="refresh" size={18} color="#FFFFFF" />
-                                <Text style={styles.syncNowButtonText}>Sync Now</Text>
-                              </TouchableOpacity>
-                            </View>
-                          );
-                        }
-                      })()}
-                    </View>
+                    ) : (
+                      <Text style={styles.detailValue}>₹{parseFloat(price.value).toFixed(2)}</Text>
+                    )}
+                      </View>
+                    );
+                  });
+              } else if (hasIndividualPrices) {
+                return (
+                  <>
+                    {userRole !== "Level 1" && coVisible && CO > 0 && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>COST (CO):</Text>
+                        <Text style={styles.detailValue}>₹{CO.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    {MR > 0 && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>MRP (MR):</Text>
+                        <Text style={styles.detailValue}>₹{MR.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    {S1 > 0 && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>RETAIL (S1):</Text>
+                        <Text style={styles.detailValue}>₹{S1.toFixed(2)}</Text>
+                      </View>
+                    )}
+                                        {S2 > 0 && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>D.P (S2):</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          {s2Visible && (
+                            <Text style={styles.detailValue}>₹{S2.toFixed(2)}</Text>
+                          )}
+                          <TouchableOpacity onPress={() => setS2Visible(prev => !prev)}>
+                            <Ionicons name={s2Visible ? "eye-off-outline" : "eye-outline"} size={20} color="#2E7D7A" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  </>
+                );
+              } else {
+                return (
+                  <View style={styles.noPriceContainer}>
+                    <Ionicons name="warning" size={32} color="#F57C00" style={{marginBottom: 12}} />
+                    <Text style={styles.noPriceText}>No price data available</Text>
+                    <Text style={styles.noPriceHint}>Click the refresh button (↻) at the top to sync prices from server</Text>
+                    <TouchableOpacity onPress={syncWithAPI} style={styles.syncNowButton}>
+                      <Ionicons name="refresh" size={18} color="#FFFFFF" />
+                      <Text style={styles.syncNowButtonText}>Sync Now</Text>
+                    </TouchableOpacity>
                   </View>
-                </Modal>
+                );
+              }
+            })()}
+          </View>
+        </View>
               
                 {/* Godown Stock Section */}
                {(godownLoading || (productData.goddown_stock && productData.goddown_stock.length > 0)) && (
