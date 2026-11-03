@@ -2,7 +2,11 @@
   "expo": {
     "name": "TaskPMS",
     "slug": "IMCSync",
+<<<<<<< HEAD
     "owner": "demoadila",
+=======
+    "owner": "taskpms",
+>>>>>>> origin/main
     "version": "3.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/task-pms-adaptive-foreground-1024.png",
@@ -82,12 +86,16 @@
             "usesCleartextTraffic": true
           }
         }
+<<<<<<< HEAD
       ],
       "expo-font",
       "expo-web-browser",
       "expo-image",
       "expo-splash-screen",
       "expo-status-bar"
+=======
+      ]
+>>>>>>> origin/main
     ],
     "experiments": {
       "typedRoutes": true
@@ -95,7 +103,11 @@
     "extra": {
       "router": {},
       "eas": {
+<<<<<<< HEAD
         "projectId": "044839a0-0b0b-4ee3-b37d-db9080d33cae"
+=======
+        "projectId": "b5d8e93d-acc7-4a7c-952d-faae2342c563"
+>>>>>>> origin/main
       }
     }
   }

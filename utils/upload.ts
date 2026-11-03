@@ -449,14 +449,39 @@ else {
       upload_sequence: 'chronological'
     });
 
-    console.log("✅ GRN Upload response:", res.data);
+    console.log("✅ GRN Upload response status:", res.status, "data:", res.data);
+
+    // ✅ Detect expired/invalid token — server returns 401 but axios won't throw
+    // because validateStatus allows it. We must check manually.
+    if (res.status === 401) {
+      const sessionError = new Error("Session expired. Please login again.");
+      (sessionError as any).code = "SESSION_EXPIRED";
+      throw sessionError;
+    }
+
+    // ✅ Also check response body for auth-failure messages
+    const resDataStr = typeof res.data === "string" ? res.data : JSON.stringify(res.data || "");
+    const resLower = resDataStr.toLowerCase();
+    if (
+      res.status === 403 ||
+      resLower.includes("session expired") ||
+      resLower.includes("token expired") ||
+      resLower.includes("invalid token") ||
+      resLower.includes("missing token") ||
+      resLower.includes("unauthorized")
+    ) {
+      const sessionError = new Error("Session expired. Please login again.");
+      (sessionError as any).code = "SESSION_EXPIRED";
+      throw sessionError;
+    }
 
     if (res.data?.success === true) {
       return {
         success: true,
         message: res.data.message || "GRN orders uploaded successfully",
         uploaded_count: res.data.uploaded_count || sortedOrders.length,
-        original_order_preserved: true
+        original_order_preserved: true,
+        rawResponse: res.data
       };
     }
     if (res.data?.status === "success") {
@@ -464,7 +489,8 @@ else {
         success: true,
         message: res.data.message || "GRN orders uploaded successfully",
         uploaded_count: sortedOrders.length,
-        original_order_preserved: true
+        original_order_preserved: true,
+        rawResponse: res.data
       };
     }
     if (typeof res.data === "string" && res.data.includes("success")) {
@@ -472,23 +498,28 @@ else {
         success: true,
         message: res.data,
         uploaded_count: sortedOrders.length,
-        original_order_preserved: true
+        original_order_preserved: true,
+        rawResponse: res.data
       };
     }
 
-    return {
-      success: true,
-      message: "GRN orders processed by server",
-      uploaded_count: sortedOrders.length,
-      original_order_preserved: true
-    };
+    // ✅ Any other non-success response body — treat as a real server error,
+    // not a silent success. Do NOT mark as synced.
+    throw new Error(res.data?.message || res.data?.detail || `Server returned status ${res.status}. Data may not have been saved.`);
 
     
   } catch (error: any) {
     console.error("❌ GRN Upload error:", error.response?.data || error.message);
-    
+
+    // Re-throw session expired errors as-is for the screen to handle
+    if (error.code === "SESSION_EXPIRED") {
+      throw error;
+    }
+
     if (error.response?.status === 401) {
-      throw new Error("Authentication failed. Please login again.");
+      const sessionError = new Error("Session expired. Please login again.");
+      (sessionError as any).code = "SESSION_EXPIRED";
+      throw sessionError;
     } else if (error.response?.status === 400) {
       throw new Error("Invalid data format: " + (error.response.data?.message || "Check your data"));
     } else if (error.code === "NETWORK_ERROR") {

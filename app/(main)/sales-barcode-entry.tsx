@@ -2,8 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
+<<<<<<< HEAD
 import * as SQLite from "expo-sqlite";
 import { useEffect, useRef, useState } from "react";
+=======
+import { getDatabase } from "@/utils/database";
+import React, { useEffect, useRef, useState } from "react";
+>>>>>>> origin/main
 import {
   Alert,
   FlatList,
@@ -21,7 +26,6 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import SalesCartDrawer from "./SalesCartDrawer";
-const db = SQLite.openDatabaseSync("magicpedia.db");
 
 const styles = StyleSheet.create({
   container: {
@@ -801,7 +805,7 @@ cartEmptyText: {
 
 const initPendingSalesItemsTable = async () => {
   try {
-    await db.execAsync(`
+    await getDatabase().execAsync(`
       CREATE TABLE IF NOT EXISTS pending_sales_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         barcode TEXT NOT NULL,
@@ -822,12 +826,12 @@ const initPendingSalesItemsTable = async () => {
       );
     `);
 
-    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(pending_sales_items)`);
+    const tableInfo: any[] = await getDatabase().getAllAsync(`PRAGMA table_info(pending_sales_items)`);
     const hasIsManualEntry = tableInfo.some((col: any) => col.name === 'isManualEntry');
 
     if (!hasIsManualEntry) {
-      await db.execAsync(`ALTER TABLE pending_sales_items RENAME TO pending_sales_items_old;`);
-      await db.execAsync(`
+      await getDatabase().execAsync(`ALTER TABLE pending_sales_items RENAME TO pending_sales_items_old;`);
+      await getDatabase().execAsync(`
         CREATE TABLE pending_sales_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           barcode TEXT NOT NULL,
@@ -845,18 +849,18 @@ const initPendingSalesItemsTable = async () => {
           S1 NUMERIC DEFAULT 0
         );
       `);
-      await db.execAsync(`
+      await getDatabase().execAsync(`
         INSERT INTO pending_sales_items
         (id, barcode, name, bmrp, cost, quantity, eCost, currentStock, scannedAt, product, brand, isManualEntry, S1)
         SELECT id, barcode, name, bmrp, cost, quantity, eCost, currentStock, scannedAt, product, brand, 0
         FROM pending_sales_items_old;
       `);
-      await db.execAsync(`DROP TABLE IF EXISTS pending_sales_items_old;`);
+      await getDatabase().execAsync(`DROP TABLE IF EXISTS pending_sales_items_old;`);
     }
 
    const hasCodeColumn = tableInfo.some((col: any) => col.name === 'code');
 if (!hasCodeColumn) {
-  await db.execAsync(`ALTER TABLE pending_sales_items ADD COLUMN code TEXT;`);
+  await getDatabase().execAsync(`ALTER TABLE pending_sales_items ADD COLUMN code TEXT;`);
 }
 
 const hasTaxcodeColumn = tableInfo.some((col: any) => col.name === 'taxcode');
@@ -866,15 +870,15 @@ if (!hasTaxcodeColumn) {
 
 const hasS1Column = tableInfo.some((col: any) => col.name === 'S1');
 if (!hasS1Column) {
-  await db.execAsync(`ALTER TABLE pending_sales_items ADD COLUMN S1 NUMERIC DEFAULT 0;`);
+  await getDatabase().execAsync(`ALTER TABLE pending_sales_items ADD COLUMN S1 NUMERIC DEFAULT 0;`);
 }
 
   } catch (error: any) {
     console.error("❌ Error in initPendingSalesItemsTable:", error);
     if (error.message?.includes('no such table') || error.message?.includes('no such column')) {
       try {
-        await db.execAsync(`DROP TABLE IF EXISTS pending_sales_items;`);
-        await db.execAsync(`
+        await getDatabase().execAsync(`DROP TABLE IF EXISTS pending_sales_items;`);
+        await getDatabase().execAsync(`
           CREATE TABLE pending_sales_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             barcode TEXT NOT NULL,
@@ -914,7 +918,7 @@ const saveSalesOrderToSync = async (orderData: {
   salestax?: number;
 }) => {
   try {
-    await db.runAsync(
+    await getDatabase().runAsync(
       `INSERT INTO sales_to_sync
       (userid, itemcode, barcode, quantity, rate, mrp, taxcode, salestax, sales_date, sync_status, created_at, product_name, is_manual_entry)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?, ?)`,
@@ -940,8 +944,12 @@ const saveSalesOrderToSync = async (orderData: {
 
 const savePendingSalesItem = async (item: any) => {
   try {
+<<<<<<< HEAD
 // AFTER
 await db.runAsync(
+=======
+await getDatabase().runAsync(
+>>>>>>> origin/main
   `INSERT INTO pending_sales_items
 (barcode, name, code, bmrp, cost, quantity, eCost, currentStock, scannedAt, product, brand, isManualEntry, S1, taxcode)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -970,7 +978,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
 const deletePendingSalesItem = async (id: number) => {
   try {
-    await db.runAsync(`DELETE FROM pending_sales_items WHERE id = ?`, [id]);
+    await getDatabase().runAsync(`DELETE FROM pending_sales_items WHERE id = ?`, [id]);
   } catch (error) {
     console.error("Error deleting pending sales item:", error);
     throw error;
@@ -979,7 +987,7 @@ const deletePendingSalesItem = async (id: number) => {
 
 const debugSalesSave = async (barcode: string) => {
   try {
-    const saved = await db.getFirstAsync(
+    const saved = await getDatabase().getFirstAsync(
       "SELECT * FROM pending_sales_items WHERE barcode = ? ORDER BY scannedAt DESC LIMIT 1",
       [barcode]
     ) as any;
@@ -1062,7 +1070,7 @@ const [allowDuplicateSale, setAllowDuplicateSale] = useState(false);
     // Restore cart from DB so items survive navigation
     const userId = await SecureStore.getItemAsync("user_id") || "";
     const today = new Date().toISOString().split("T")[0];
-    const saved: any[] = await db.getAllAsync(
+    const saved: any[] = await getDatabase().getAllAsync(
       `SELECT * FROM pending_sales_items ORDER BY scannedAt DESC`
     );
     const enriched = saved.map(item => ({
@@ -1099,7 +1107,7 @@ const [allowDuplicateSale, setAllowDuplicateSale] = useState(false);
       const updatedItem = JSON.parse(params.updatedItem as string);
       const item = scannedItems[parseInt(params.itemIndex as string)];
       if (item?.id) {
-        db.runAsync(
+        getDatabase().runAsync(
           `UPDATE pending_sales_items
            SET quantity = ?, eCost = ?, cost = ?, bmrp = ?
            WHERE id = ?`,
@@ -1112,10 +1120,10 @@ const [allowDuplicateSale, setAllowDuplicateSale] = useState(false);
 
  const loadAllProducts = async () => {
   try {
-    const info = await db.getAllAsync(`PRAGMA table_info(product_data)`);
+    const info = await getDatabase().getAllAsync(`PRAGMA table_info(product_data)`);
     console.log("📋 product_data columns:", JSON.stringify(info, null, 2));
 
-    const products: any[] = await db.getAllAsync(
+    const products: any[] = await getDatabase().getAllAsync(
       "SELECT * FROM product_data ORDER BY name ASC"
     );
     setAllProducts(products);
@@ -1126,7 +1134,7 @@ const [allowDuplicateSale, setAllowDuplicateSale] = useState(false);
 
 const loadPendingSalesItems = async () => {
   try {
-    const items: any[] = await db.getAllAsync(
+    const items: any[] = await getDatabase().getAllAsync(
       `SELECT * FROM pending_sales_items ORDER BY scannedAt DESC`
     );
     if (items.length > 0) {
@@ -1285,9 +1293,9 @@ if (existing) {
 
   const searchBarcodeWithVariants = async (barcode: string) => {
     try {
-      const exactRows = await db.getAllAsync("SELECT * FROM product_data WHERE barcode = ?", [barcode]);
-      const variantRows1 = await db.getAllAsync("SELECT * FROM product_data WHERE barcode LIKE ?", [`${barcode} :%`]);
-      const variantRows2 = await db.getAllAsync("SELECT * FROM product_data WHERE barcode LIKE ?", [`${barcode}:%`]);
+      const exactRows = await getDatabase().getAllAsync("SELECT * FROM product_data WHERE barcode = ?", [barcode]);
+      const variantRows1 = await getDatabase().getAllAsync("SELECT * FROM product_data WHERE barcode LIKE ?", [`${barcode} :%`]);
+      const variantRows2 = await getDatabase().getAllAsync("SELECT * FROM product_data WHERE barcode LIKE ?", [`${barcode}:%`]);
       return [...exactRows, ...variantRows1, ...variantRows2];
     } catch (err) {
       console.error("Error searching barcode:", err);
@@ -1320,7 +1328,7 @@ if (existing) {
     if (parsedQuantity <= 0) { Alert.alert("Error", "Please enter a valid quantity"); return; }
 
     try {
-      const existingProduct = await db.getFirstAsync(
+      const existingProduct = await getDatabase().getFirstAsync(
         "SELECT * FROM product_data WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1",
         [name.trim()]
       ) as any;
@@ -1602,7 +1610,7 @@ const handleAddAllToCart = async () => {
                     if (item.code) {
                       itemCode = item.code;
                     } else {
-                      const productData = await db.getFirstAsync(
+                      const productData = await getDatabase().getFirstAsync(
                         "SELECT code FROM product_data WHERE barcode = ?",
                         [item.barcode]
                       ) as { code?: string } | null;
@@ -1625,12 +1633,12 @@ const handleAddAllToCart = async () => {
                 });
 
                   if (!isManualEntry) {
-                    const productExists = await db.getFirstAsync(
+                    const productExists = await getDatabase().getFirstAsync(
                       "SELECT 1 FROM product_data WHERE barcode = ?",
                       [item.barcode]
                     );
                     if (productExists) {
-                      await db.runAsync(
+                      await getDatabase().runAsync(
                         "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
                         [item.quantity, finalCost, item.barcode]
                       );
@@ -1643,7 +1651,7 @@ const handleAddAllToCart = async () => {
                 }
               }
 
-              await db.runAsync(`DELETE FROM pending_sales_items`);
+              await getDatabase().runAsync(`DELETE FROM pending_sales_items`);
               await loadPendingSalesItems();
               Alert.alert(
                 "Success",
@@ -2080,7 +2088,7 @@ const handleAddAllToCart = async () => {
       onRemoveItem={(index) => setCartItems(prev => prev.filter((_, i) => i !== index))}
       onUploadSuccess={async () => {
         setCartItems([]);
-        await db.runAsync(`DELETE FROM pending_sales_items`);
+        await getDatabase().runAsync(`DELETE FROM pending_sales_items`);
         await loadPendingSalesItems();
       }}  
         />  

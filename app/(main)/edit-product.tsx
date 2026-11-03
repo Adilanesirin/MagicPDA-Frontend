@@ -23,6 +23,7 @@ export default function EditProduct() {
 
   const [product, setProduct] = useState<any>({});
   const [editedCost, setEditedCost] = useState("");
+  const [editedMrp, setEditedMrp] = useState("");
   const [editedQuantity, setEditedQuantity] = useState("");
   const [editedSupplier, setEditedSupplier] = useState("");
 
@@ -34,8 +35,10 @@ export default function EditProduct() {
         console.log("📦 Parsed Product Data:", parsedItem);
         setProduct(parsedItem);
         
-        // Keep cost as 0 initially
-        setEditedCost("0");
+        // Pre-fill with existing eCost if set, otherwise cost
+        const currentCost = (parsedItem.eCost && parsedItem.eCost !== 0) ? parsedItem.eCost : (parsedItem.cost || 0);
+        setEditedCost(currentCost.toString());
+        setEditedMrp((parsedItem.bmrp || 0).toString());
         
         // Use the saved quantity value if it exists, otherwise empty string
         setEditedQuantity(parsedItem.quantity ? parsedItem.quantity.toString() : "");
@@ -50,8 +53,9 @@ export default function EditProduct() {
   const handleSave = () => {
     const updatedItem = {
       ...product,
-      cost: product.cost, // Keep original cost unchanged
-      eCost: parseFloat(editedCost) || 0, // Save edited cost as eCost
+      cost: product.cost,
+      eCost: parseFloat(editedCost) || 0,
+      bmrp: parseFloat(editedMrp) || 0,
       quantity: parseInt(editedQuantity) || 0,
       batchSupplier: editedSupplier,
     };
@@ -178,19 +182,30 @@ export default function EditProduct() {
               </View>
             </View>
 
-            {/* E.Cost */}
-            <View>
-              <Text className="text-sm text-gray-700 mb-2 font-medium">E.Cost (₹)</Text>
-              <TextInput
-                value={editedCost}
-                onChangeText={setEditedCost}
-                keyboardType="decimal-pad"
-                placeholder="0.00"
-                className="bg-teal-50 border border-teal-300 rounded-md px-3 py-3.5 font-semibold text-center text-teal-700"
-                style={{ 
-                  fontSize: 18,
-                }}
-              />
+            {/* E.Cost and MRP row */}
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <Text className="text-sm text-gray-700 mb-2 font-medium">E.Cost (₹)</Text>
+                <TextInput
+                  value={editedCost}
+                  onChangeText={setEditedCost}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  className="bg-teal-50 border border-teal-300 rounded-md px-3 py-3.5 font-semibold text-center text-teal-700"
+                  style={{ fontSize: 18 }}
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm text-gray-700 mb-2 font-medium">MRP (₹)</Text>
+                <TextInput
+                  value={editedMrp}
+                  onChangeText={setEditedMrp}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  className="bg-green-50 border border-green-300 rounded-md px-3 py-3.5 font-semibold text-center text-green-700"
+                  style={{ fontSize: 18 }}
+                />
+              </View>
             </View>
 
           </View>

@@ -3,8 +3,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import * as SecureStore from "expo-secure-store";
+<<<<<<< HEAD
 import * as SQLite from "expo-sqlite";
 import { useEffect, useRef, useState } from 'react';
+=======
+import { getDatabase } from "@/utils/database";
+import React, { useEffect, useRef, useState } from 'react';
+>>>>>>> origin/main
 import {
   ActivityIndicator,
   Alert,
@@ -24,7 +29,6 @@ import {
 } from 'react-native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const db = SQLite.openDatabaseSync("magicpedia.db");
 
 interface PriceData {
   price_code: string;
@@ -99,13 +103,13 @@ const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const fixDatabaseColumns = async () => {
       try {
         // Check if catagory column is empty
-        const result = await db.getFirstAsync(
+        const result = await getDatabase().getFirstAsync(
           "SELECT COUNT(*) as count FROM product_data WHERE catagory IS NULL OR catagory = ''"
         ) as { count: number };
         
         if (result.count > 0) {
           console.log(`🔧 Fixing ${result.count} products: copying category → catagory`);
-          await db.runAsync('UPDATE product_data SET catagory = category WHERE catagory IS NULL OR catagory = ""');
+          await getDatabase().runAsync('UPDATE product_data SET catagory = category WHERE catagory IS NULL OR catagory = ""');
           console.log("✅ Database fix complete!");
         }
       } catch (error) {
@@ -234,7 +238,7 @@ useEffect(() => {
     try {
       console.log('📊 Loading products from database...');
       
-      const rows = await db.getAllAsync("SELECT * FROM product_data");
+      const rows = await getDatabase().getAllAsync("SELECT * FROM product_data");
       
       if (rows.length === 0) {
         console.log('📭 Database is empty');
@@ -406,17 +410,17 @@ setProductData(validatedProduct);
 
   const searchBarcodeWithVariants = async (barcode: string): Promise<ProductData[]> => {
     try {
-      const exactRows = await db.getAllAsync(
+      const exactRows = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode = ?",
         [barcode]
       );
 
-      const variantRows1 = await db.getAllAsync(
+      const variantRows1 = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode LIKE ?",
         [`${barcode} :%`]
       );
 
-      const variantRows2 = await db.getAllAsync(
+      const variantRows2 = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode LIKE ?",
         [`${barcode}:%`]
       );

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import * as SQLite from "expo-sqlite";
+import { getDatabase } from "@/utils/database";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -42,7 +42,6 @@ function plog(level: LogLevel, msg: string) {
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
 const { width } = Dimensions.get("window");
-const db = SQLite.openDatabaseSync("magicpedia.db");
 
 const C = {
   primary:   "#131f3d",
@@ -180,13 +179,13 @@ const [cardTapCounts, setCardTapCounts] = useState<Record<number, number>>({});
   const loadData = async () => {
     try {
       setLoading(true);
-      const pc = await db.getFirstAsync("SELECT COUNT(*) as count FROM pending_sales_items") as { count: number } | null;
-      const sc = await db.getFirstAsync("SELECT COUNT(*) as count FROM sales_to_sync WHERE sync_status = 'synced'") as { count: number } | null;
+      const pc = await getDatabase().getFirstAsync("SELECT COUNT(*) as count FROM pending_sales_items") as { count: number } | null;
+      const sc = await getDatabase().getFirstAsync("SELECT COUNT(*) as count FROM sales_to_sync WHERE sync_status = 'synced'") as { count: number } | null;
       setPendingCount(pc?.count || 0);
       setSyncedCount(sc?.count || 0);
 
       if (filter === "pending") {
-        const rows = await db.getAllAsync(
+        const rows = await getDatabase().getAllAsync(
           `SELECT id, barcode, name, quantity,
             COALESCE(bmrp,0) as bmrp, COALESCE(cost,0) as cost,
             COALESCE(eCost,0) as eCost, COALESCE(S1,0) as S1,
@@ -197,7 +196,7 @@ const [cardTapCounts, setCardTapCounts] = useState<Record<number, number>>({});
         ) as any[];
         setItems((rows || []).map(r => ({ ...r, type: "pending" as const })));
       } else {
-        const rows = await db.getAllAsync(
+        const rows = await getDatabase().getAllAsync(
           `SELECT id, barcode, COALESCE(product_name, barcode) as name,
             quantity, COALESCE(rate,0) as rate, COALESCE(mrp,0) as mrp,
             COALESCE(sale_date,'') as sale_date, COALESCE(created_at,'') as created_at,
@@ -223,7 +222,7 @@ const [cardTapCounts, setCardTapCounts] = useState<Record<number, number>>({});
     const newQty = parseInt(editQty);
     if (isNaN(newQty) || newQty < 1) return;
     const table = filter === "pending" ? "pending_sales_items" : "sales_to_sync";
-    await db.runAsync(`UPDATE ${table} SET quantity = ? WHERE id = ?`, [newQty, editingItem.id]);
+    await getDatabase().runAsync(`UPDATE ${table} SET quantity = ? WHERE id = ?`, [newQty, editingItem.id]);
     setEditingItem(null);
     loadData();
   };

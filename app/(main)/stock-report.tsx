@@ -2,7 +2,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import * as SQLite from "expo-sqlite";
+import { getDatabase } from "@/utils/database";
 import React, { useEffect, useState } from "react";
 import {
     ActivityIndicator,
@@ -19,7 +19,6 @@ import {
 } from "react-native";
 
 const { width } = Dimensions.get("window");
-const db = SQLite.openDatabaseSync("magicpedia.db");
 
 // ── same theme as stock-barcode ──────────────────────────────────────────────
 const C = {
@@ -79,7 +78,7 @@ export default function StockReportScreen() {
     try {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 7);
-      await db.runAsync(
+      await getDatabase().runAsync(
      "DELETE FROM stock_count_to_sync WHERE created_at < ? AND sync_status = 'synced'",
         [cutoff.toISOString()]
       );
@@ -91,10 +90,10 @@ export default function StockReportScreen() {
       setLoading(true);
 
       // counts for tab labels
-      const uc = (await db.getFirstAsync(
+      const uc = (await getDatabase().getFirstAsync(
 "SELECT COUNT(*) as count FROM stock_count_to_sync WHERE sync_status = 'pending'"
       )) as { count: number } | null;
-      const sc = (await db.getFirstAsync(
+      const sc = (await getDatabase().getFirstAsync(
 "SELECT COUNT(*) as count FROM stock_count_to_sync WHERE sync_status = 'synced'"
       )) as { count: number } | null;
       setUnsyncedCount(uc?.count || 0);
@@ -102,7 +101,7 @@ export default function StockReportScreen() {
 
       // rows for selected tab
       const statusVal = filter === "unsynced" ? "pending" : "synced";
-      const rows = await db.getAllAsync(
+      const rows = await getDatabase().getAllAsync(
         `SELECT id, barcode, COALESCE(product_name, barcode) as name,
         quantity, rate, mrp, created_at
         FROM stock_count_to_sync
@@ -136,7 +135,7 @@ export default function StockReportScreen() {
     if (!editingItem) return;
     const newQty = parseInt(editQty);
     if (isNaN(newQty) || newQty < 1) return;
-    await db.runAsync(
+    await getDatabase().runAsync(
       "UPDATE stock_count_to_sync SET quantity = ? WHERE id = ?",
       [newQty, editingItem.id]
     );

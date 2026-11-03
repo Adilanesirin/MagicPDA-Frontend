@@ -51,22 +51,21 @@ export default function GRNScreen() {
     try {
       const orders = await getPendingGRNOrders();
       const ordersArray = Array.isArray(orders) ? orders : [];
-      
-      console.log("📊 Pending GRN orders:", ordersArray.length);
-      console.log("📦 Sample GRN order:", ordersArray[0]);
-      
       setPendingCount(ordersArray.length);
-      
-      const totalItems = ordersArray.reduce((acc, order) => {
-        const qty = parseInt(order.quantity) || 0;
-        console.log(`GRN Order ${order.id}: quantity = ${qty}`);
-        return acc + qty;
-      }, 0);
-      
-      console.log("📊 Total pending GRN items:", totalItems);
+      const totalItems = ordersArray.reduce((acc, order) => acc + (parseInt(order.quantity) || 0), 0);
       setPendingItems(totalItems);
-    } catch (error) {
-      console.error("Error loading pending GRN count:", error);
+    } catch (error: any) {
+      if (error?.message?.includes('NullPointerException') || error?.message?.includes('prepareAsync')) {
+        const { resetDatabase } = await import('@/utils/database');
+        resetDatabase();
+        try {
+          const orders = await getPendingGRNOrders();
+          const ordersArray = Array.isArray(orders) ? orders : [];
+          setPendingCount(ordersArray.length);
+          setPendingItems(ordersArray.reduce((acc, o) => acc + (parseInt(o.quantity) || 0), 0));
+          return;
+        } catch { }
+      }
       setPendingCount(0);
       setPendingItems(0);
     }

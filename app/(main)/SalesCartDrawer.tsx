@@ -307,8 +307,7 @@ const SalesCartDrawer: React.FC<SalesCartDrawerProps> = ({
 
     try {
       const today = new Date().toISOString().split("T")[0];
-      const db = getDatabase();
-      await db.runAsync(`DELETE FROM sales_to_sync WHERE sync_status = 'pending'`);
+            await getDatabase().runAsync(`DELETE FROM sales_to_sync WHERE sync_status = 'pending'`);
 
       const clientId = (await AsyncStorage.getItem("clientId")) || "";
 

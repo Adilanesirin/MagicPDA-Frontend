@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import * as SQLite from "expo-sqlite";
+import { getDatabase } from "@/utils/database";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -21,7 +21,6 @@ import {
   View
 } from "react-native";
 
-const db = SQLite.openDatabaseSync("magicpedia.db");
 
 const styles = StyleSheet.create({
   container: {
@@ -652,7 +651,7 @@ const styles = StyleSheet.create({
 
 const initGRNTable = async () => {
   try {
-    await db.execAsync(`
+    await getDatabase().execAsync(`
       CREATE TABLE IF NOT EXISTS grn_to_sync (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_code TEXT NOT NULL DEFAULT '',
@@ -673,7 +672,7 @@ const initGRNTable = async () => {
     `);
 
     // Safely patch any missing columns on existing installs
-    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(grn_to_sync)`);
+    const tableInfo: any[] = await getDatabase().getAllAsync(`PRAGMA table_info(grn_to_sync)`);
     const cols = tableInfo.map((col: any) => col.name);
 
     const migrations = [
@@ -691,7 +690,7 @@ const initGRNTable = async () => {
       if (!cols.includes(m.col)) {
         console.log(`⚠️ Adding missing column to grn_to_sync: ${m.col}`);
         try {
-          await db.execAsync(m.def);
+          await getDatabase().execAsync(m.def);
         } catch (e) {
           console.warn(`Could not add column ${m.col}:`, e);
         }
@@ -706,7 +705,7 @@ const initGRNTable = async () => {
 
 const initPendingGRNItemsTable = async () => {
   try {
-   await db.execAsync(`
+   await getDatabase().execAsync(`
       CREATE TABLE IF NOT EXISTS pending_grn_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_code TEXT,
@@ -729,13 +728,13 @@ const initPendingGRNItemsTable = async () => {
       );
     `);
 
-    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(pending_grn_items)`);
+    const tableInfo: any[] = await getDatabase().getAllAsync(`PRAGMA table_info(pending_grn_items)`);
     const hasIsManualEntry = tableInfo.some((col: any) => col.name === 'isManualEntry');
     
     if (!hasIsManualEntry) {
       console.log("⚠️ Adding isManualEntry column to pending_grn_items...");
-      await db.execAsync(`ALTER TABLE pending_grn_items RENAME TO pending_grn_items_old;`);
-      await db.execAsync(`
+      await getDatabase().execAsync(`ALTER TABLE pending_grn_items RENAME TO pending_grn_items_old;`);
+      await getDatabase().execAsync(`
         CREATE TABLE pending_grn_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           supplier_code TEXT,
@@ -755,14 +754,14 @@ const initPendingGRNItemsTable = async () => {
           isManualEntry INTEGER DEFAULT 0
         );
       `);
-      await db.execAsync(`
+      await getDatabase().execAsync(`
         INSERT INTO pending_grn_items 
         (id, supplier_code, barcode, name, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, isManualEntry)
         SELECT 
           id, supplier_code, barcode, name, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, 0
         FROM pending_grn_items_old;
       `);
-      await db.execAsync(`DROP TABLE IF EXISTS pending_grn_items_old;`);
+      await getDatabase().execAsync(`DROP TABLE IF EXISTS pending_grn_items_old;`);
       console.log("✅ Successfully added isManualEntry column to pending_grn_items");
     }
 
@@ -771,17 +770,17 @@ const initPendingGRNItemsTable = async () => {
     const hasCodeColumn = tableInfo.some((col: any) => col.name === 'code');
     if (!hasCodeColumn) {
       console.log("⚠️ Adding 'code' column to pending_grn_items...");
-      await db.execAsync(`ALTER TABLE pending_grn_items ADD COLUMN code TEXT;`);
+      await getDatabase().execAsync(`ALTER TABLE pending_grn_items ADD COLUMN code TEXT;`);
       console.log("✅ 'code' column added");
     }
     const hasMoreoption = tableInfo.some((col: any) => col.name === 'moreoption');
     if (!hasMoreoption) {
-      await db.execAsync(`ALTER TABLE pending_grn_items ADD COLUMN moreoption TEXT DEFAULT ''`);
+      await getDatabase().execAsync(`ALTER TABLE pending_grn_items ADD COLUMN moreoption TEXT DEFAULT ''`);
       console.log("✅ 'moreoption' column added to pending_grn_items");
     }
     const hasText1 = tableInfo.some((col: any) => col.name === 'text1');
     if (!hasText1) {
-      await db.execAsync(`ALTER TABLE pending_grn_items ADD COLUMN text1 TEXT DEFAULT ''`);
+      await getDatabase().execAsync(`ALTER TABLE pending_grn_items ADD COLUMN text1 TEXT DEFAULT ''`);
       console.log("✅ 'text1' column added to pending_grn_items");
     }
 
@@ -792,8 +791,8 @@ const initPendingGRNItemsTable = async () => {
     if (error.message?.includes('no such table') || error.message?.includes('no such column')) {
       console.log("🔧 Creating fresh pending_grn_items table...");
       try {
-        await db.execAsync(`DROP TABLE IF EXISTS pending_grn_items;`);
-        await db.execAsync(`
+        await getDatabase().execAsync(`DROP TABLE IF EXISTS pending_grn_items;`);
+        await getDatabase().execAsync(`
           CREATE TABLE pending_grn_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             supplier_code TEXT,
@@ -825,19 +824,19 @@ const debugManualGRNEntry = async (barcode: string) => {
   console.log("\n🔍 === DEBUGGING MANUAL GRN ENTRY ===");
   
   try {
-    const pendingItem = await db.getFirstAsync(
+    const pendingItem = await getDatabase().getFirstAsync(
       `SELECT barcode, name, isManualEntry, supplier_code FROM pending_grn_items WHERE barcode = ?`,
       [barcode]
     ) as any;
     console.log("1️⃣ pending_grn_items table:", JSON.stringify(pendingItem, null, 2));
     
-    const syncOrder = await db.getFirstAsync(
+    const syncOrder = await getDatabase().getFirstAsync(
       `SELECT barcode, product_name, is_manual_entry, itemcode FROM grn_to_sync WHERE barcode = ? ORDER BY created_at DESC LIMIT 1`,
       [barcode]
     ) as any;
     console.log("2️⃣ grn_to_sync table:", JSON.stringify(syncOrder, null, 2));
     
-    const tableInfo = await db.getAllAsync(`PRAGMA table_info(pending_grn_items)`);
+    const tableInfo = await getDatabase().getAllAsync(`PRAGMA table_info(pending_grn_items)`);
     console.log("3️⃣ pending_grn_items schema:");
     tableInfo.forEach((col: any) => {
       console.log(`   - ${col.name} (${col.type})`);
@@ -867,7 +866,7 @@ const saveGRNOrderToSync = async (orderData: {
     console.log("\n💾 === SAVING GRN ORDER TO SYNC ===");
     console.log("📋 Input orderData:", JSON.stringify(orderData, null, 2));
     
-   await db.runAsync(
+   await getDatabase().runAsync(
       `INSERT INTO grn_to_sync 
       (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, grn_date, sync_status, created_at, product_name, is_manual_entry, description, text1)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?, ?, ?, ?)`,
@@ -887,7 +886,7 @@ const saveGRNOrderToSync = async (orderData: {
       ]
     );
     
-    const savedOrder = await db.getFirstAsync(
+    const savedOrder = await getDatabase().getFirstAsync(
       `SELECT * FROM grn_to_sync WHERE barcode = ? ORDER BY created_at DESC LIMIT 1`,
       [orderData.barcode]
     );
@@ -900,7 +899,7 @@ const saveGRNOrderToSync = async (orderData: {
 
 const savePendingGRNItem = async (item: any) => {
   try {
-   await db.runAsync(
+   await getDatabase().runAsync(
       `INSERT INTO pending_grn_items 
 (supplier_code, barcode, name, code, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, isManualEntry, moreoption, text1)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -932,7 +931,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
 const deletePendingGRNItem = async (id: number) => {
   try {
-    await db.runAsync(`DELETE FROM pending_grn_items WHERE id = ?`, [id]);
+    await getDatabase().runAsync(`DELETE FROM pending_grn_items WHERE id = ?`, [id]);
   } catch (error) {
     console.error("Error deleting pending GRN item:", error);
     throw error;
@@ -942,7 +941,7 @@ const deletePendingGRNItem = async (id: number) => {
 // 👇 ADD THIS DEBUG FUNCTION HERE
 const debugGRNSave = async (barcode: string) => {
   try {
-    const saved = await db.getFirstAsync(
+    const saved = await getDatabase().getFirstAsync(
       "SELECT * FROM pending_grn_items WHERE barcode = ? ORDER BY scannedAt DESC LIMIT 1",
       [barcode]
     ) as any;
@@ -954,7 +953,7 @@ const debugGRNSave = async (barcode: string) => {
       supplier_code: saved?.supplier_code
     });
     
-    const syncItem = await db.getFirstAsync(
+    const syncItem = await getDatabase().getFirstAsync(
       "SELECT * FROM grn_to_sync WHERE barcode = ? ORDER BY created_at DESC LIMIT 1",
       [barcode]
     ) as any;
@@ -1074,7 +1073,7 @@ useEffect(() => {
       const item = scannedItems[parseInt(params.itemIndex as string)];
 
       if (item?.id) {
-        db.runAsync(
+        getDatabase().runAsync(
           `UPDATE pending_grn_items 
            SET quantity = ?, eCost = ?, cost = ?, bmrp = ?, batchSupplier = ? 
            WHERE id = ?`,
@@ -1090,7 +1089,7 @@ useEffect(() => {
 
   const loadPendingGRNItems = async () => {
     try {
-      const items: any[] = await db.getAllAsync(
+      const items: any[] = await getDatabase().getAllAsync(
         `SELECT * FROM pending_grn_items WHERE supplier_code = ? ORDER BY scannedAt DESC`,
         [supplier_code || '']
       );
@@ -1114,7 +1113,7 @@ useEffect(() => {
   
   if (searchMode === 'name' && text.trim().length >= 2) {
     try {
-      const results: any[] = await db.getAllAsync(
+      const results: any[] = await getDatabase().getAllAsync(
         `SELECT * FROM product_data 
          WHERE name LIKE ? OR brand LIKE ? OR product LIKE ? 
          ORDER BY name ASC LIMIT 50`,
@@ -1138,7 +1137,7 @@ useEffect(() => {
   
   if (text.trim().length >= 1) {
     try {
-      const results: any[] = await db.getAllAsync(
+      const results: any[] = await getDatabase().getAllAsync(
         `SELECT DISTINCT name FROM product_data 
          WHERE name LIKE ? 
          ORDER BY name ASC LIMIT 20`,
@@ -1273,17 +1272,17 @@ const handleSelectSuggestion = (product: any) => {
 
   const searchBarcodeWithVariants = async (barcode: string) => {
     try {
-      const exactRows = await db.getAllAsync(
+      const exactRows = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode = ?",
         [barcode]
       );
 
-      const variantRows1 = await db.getAllAsync(
+      const variantRows1 = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode LIKE ?",
         [`${barcode} :%`]
       );
 
-      const variantRows2 = await db.getAllAsync(
+      const variantRows2 = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode LIKE ?",
         [`${barcode}:%`]
       );
@@ -1352,7 +1351,7 @@ const handleSaveManualEntry = async () => {
 
   try {
     // 🔍 Search for existing product by name (case-insensitive)
-    const existingProduct = await db.getFirstAsync(
+    const existingProduct = await getDatabase().getFirstAsync(
       "SELECT * FROM product_data WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1",
       [name.trim()]
     ) as any;
@@ -1748,7 +1747,7 @@ const handleSaveManualEntry = async () => {
                       if (item.code) {
                         itemCode = item.code;
                       } else {
-                        const productData = await db.getFirstAsync(
+                        const productData = await getDatabase().getFirstAsync(
                           "SELECT code FROM product_data WHERE barcode = ?",
                           [item.barcode]
                         ) as { code?: string } | null;
@@ -1780,13 +1779,13 @@ const handleSaveManualEntry = async () => {
                   });
 
                   if (!isManualEntry) {
-                    const productExists = await db.getFirstAsync(
+                    const productExists = await getDatabase().getFirstAsync(
                       "SELECT 1 FROM product_data WHERE barcode = ?",
                       [item.barcode]
                     );
                     
                     if (productExists) {
-                      await db.runAsync(
+                      await getDatabase().runAsync(
                         "UPDATE product_data SET quantity = ?, cost = ? WHERE barcode = ?",
                         [item.quantity, finalCost, item.barcode]
                       );
@@ -1806,7 +1805,7 @@ const handleSaveManualEntry = async () => {
               
               console.log(`\n📊 GRN Results: ${successCount} success, ${errorCount} errors`);
               
-              await db.runAsync(`DELETE FROM pending_grn_items WHERE supplier_code = ?`, [supplier_code || '']);
+              await getDatabase().runAsync(`DELETE FROM pending_grn_items WHERE supplier_code = ?`, [supplier_code || '']);
               
               await loadPendingGRNItems();
               

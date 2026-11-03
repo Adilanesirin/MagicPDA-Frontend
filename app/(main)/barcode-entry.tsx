@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import * as SQLite from "expo-sqlite";
+import { getDatabase } from "@/utils/database";
 
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -20,7 +20,6 @@ import {
   View
 } from "react-native";
 
-const db = SQLite.openDatabaseSync("magicpedia.db");
 
 const styles = StyleSheet.create({
   container: {
@@ -236,13 +235,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: -50,
+    marginBottom: 8,
   },
   productHeaderManual: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: -30,
+    marginBottom: 8,
   },
   productInfo: {
     flex: 1,
@@ -731,7 +730,7 @@ const styles = StyleSheet.create({
 
 const initOrdersTable = async () => {
   try {
-    await db.execAsync(`
+    await getDatabase().execAsync(`
       CREATE TABLE IF NOT EXISTS orders_to_sync (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_code TEXT NOT NULL DEFAULT '',
@@ -751,7 +750,7 @@ const initOrdersTable = async () => {
     `);
 
     // Safely patch any missing columns on existing installs
-    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(orders_to_sync)`);
+    const tableInfo: any[] = await getDatabase().getAllAsync(`PRAGMA table_info(orders_to_sync)`);
     const cols = tableInfo.map((col: any) => col.name);
 
     const migrations = [
@@ -768,7 +767,7 @@ const initOrdersTable = async () => {
       if (!cols.includes(m.col)) {
         console.log(`⚠️ Adding missing column to orders_to_sync: ${m.col}`);
         try {
-          await db.execAsync(m.def);
+          await getDatabase().execAsync(m.def);
         } catch (e) {
           console.warn(`Could not add column ${m.col}:`, e);
         }
@@ -783,7 +782,7 @@ const initOrdersTable = async () => {
 
 const initPendingItemsTable = async () => {
   try {
-    await db.execAsync(`
+    await getDatabase().execAsync(`
       CREATE TABLE IF NOT EXISTS pending_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_code TEXT,
@@ -806,7 +805,7 @@ const initPendingItemsTable = async () => {
     `);
 
     // Check existing columns and add any that are missing (handles old installs)
-    const tableInfo: any[] = await db.getAllAsync(`PRAGMA table_info(pending_items)`);
+    const tableInfo: any[] = await getDatabase().getAllAsync(`PRAGMA table_info(pending_items)`);
     const cols = tableInfo.map((col: any) => col.name);
 
     const migrations = [
@@ -819,7 +818,7 @@ const initPendingItemsTable = async () => {
     for (const m of migrations) {
       if (!cols.includes(m.col)) {
         console.log(`⚠️ Adding missing column: ${m.col}`);
-        await db.execAsync(m.def);
+        await getDatabase().execAsync(m.def);
         console.log(`✅ Added column: ${m.col}`);
       }
     }
@@ -834,19 +833,19 @@ const debugManualEntry = async (barcode: string) => {
   console.log("\n🔍 === DEBUGGING MANUAL ENTRY ===");
   
   try {
-    const pendingItem = await db.getFirstAsync(
+    const pendingItem = await getDatabase().getFirstAsync(
       `SELECT barcode, name, isManualEntry, supplier_code FROM pending_items WHERE barcode = ?`,
       [barcode]
     ) as any;
     console.log("1️⃣ pending_items table:", JSON.stringify(pendingItem, null, 2));
     
-    const syncOrder = await db.getFirstAsync(
+    const syncOrder = await getDatabase().getFirstAsync(
       `SELECT barcode, product_name, is_manual_entry, itemcode FROM orders_to_sync WHERE barcode = ? ORDER BY created_at DESC LIMIT 1`,
       [barcode]
     ) as any;
     console.log("2️⃣ orders_to_sync table:", JSON.stringify(syncOrder, null, 2));
     
-    const tableInfo = await db.getAllAsync(`PRAGMA table_info(pending_items)`);
+    const tableInfo = await getDatabase().getAllAsync(`PRAGMA table_info(pending_items)`);
     console.log("3️⃣ pending_items schema:");
     tableInfo.forEach((col: any) => {
       console.log(`   - ${col.name} (${col.type})`);
@@ -875,7 +874,7 @@ const saveOrderToSync = async (orderData: {
     console.log("\n💾 === SAVING ORDER TO SYNC ===");
     console.log("📋 Input orderData:", JSON.stringify(orderData, null, 2));
     
-    await db.runAsync(
+    await getDatabase().runAsync(
   `INSERT INTO orders_to_sync 
   (supplier_code, userid, itemcode, barcode, quantity, rate, mrp, order_date, sync_status, created_at, product_name, is_manual_entry, text1)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?, ?, ?)`,
@@ -894,7 +893,7 @@ const saveOrderToSync = async (orderData: {
   ]
 );
     
-    const saved = await db.getFirstAsync(
+    const saved = await getDatabase().getFirstAsync(
       `SELECT barcode, product_name, is_manual_entry FROM orders_to_sync WHERE barcode = ? ORDER BY id DESC LIMIT 1`,
       [orderData.barcode]
     );
@@ -980,7 +979,7 @@ export default function BarcodeEntry() {
   const loadPendingItems = async () => {
     try {
       // Query with all required columns
-      const rows = await db.getAllAsync(
+      const rows = await getDatabase().getAllAsync(
         `SELECT 
           id,
           supplier_code,
@@ -1013,7 +1012,7 @@ export default function BarcodeEntry() {
       // Fallback: Try without supplier_code filter
       try {
         console.log("⚠️ Attempting fallback query without supplier filter...");
-        const rows = await db.getAllAsync(
+        const rows = await getDatabase().getAllAsync(
           `SELECT 
             id,
             supplier_code,
@@ -1049,7 +1048,7 @@ export default function BarcodeEntry() {
       console.log("\n💾 === SAVING PENDING ITEM ===");
       console.log("Item data:", JSON.stringify(item, null, 2));
       
-      await db.runAsync(
+      await getDatabase().runAsync(
        `INSERT INTO pending_items 
         (supplier_code, barcode, name, bmrp, cost, quantity, eCost, currentStock, batchSupplier, scannedAt, batch_supplier, product, brand, isManualEntry, moreoption, text1)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1073,7 +1072,7 @@ export default function BarcodeEntry() {
         ]
       );
       
-      const saved = await db.getFirstAsync(
+      const saved = await getDatabase().getFirstAsync(
         `SELECT barcode, name, isManualEntry FROM pending_items WHERE barcode = ? ORDER BY id DESC LIMIT 1`,
         [item.barcode]
       );
@@ -1087,7 +1086,7 @@ export default function BarcodeEntry() {
 
   const deletePendingItem = async (itemId: number) => {
     try {
-      await db.runAsync(
+      await getDatabase().runAsync(
         "DELETE FROM pending_items WHERE id = ?",
         [itemId]
       );
@@ -1099,11 +1098,11 @@ export default function BarcodeEntry() {
 
   const updatePendingItem = async (itemId: number, item: any) => {
     try {
-      await db.runAsync(
+      await getDatabase().runAsync(
         `UPDATE pending_items 
-        SET quantity = ?, eCost = ?, cost = ?, batchSupplier = ?, supplier_code = ?
+        SET quantity = ?, eCost = ?, cost = ?, bmrp = ?, batchSupplier = ?, supplier_code = ?
         WHERE id = ?`,
-        [item.quantity, item.eCost, item.cost, item.batchSupplier, supplier_code, itemId]
+        [item.quantity, item.eCost, item.cost, item.bmrp, item.batchSupplier, supplier_code, itemId]
       );
       console.log(`✏️ Updated pending item: ${itemId}`);
     } catch (error) {
@@ -1117,7 +1116,7 @@ export default function BarcodeEntry() {
 
   const loadAllProducts = async () => {
     try {
-      const rows = await db.getAllAsync("SELECT * FROM product_data");
+      const rows = await getDatabase().getAllAsync("SELECT * FROM product_data");
       setAllProducts(rows);
     } catch (error) {
       console.error("Error loading products:", error);
@@ -1334,17 +1333,17 @@ moreoption: product.text1 || product.moreoption || '',    };
 
   const searchBarcodeWithVariants = async (barcode: string) => {
     try {
-      const exactRows = await db.getAllAsync(
+      const exactRows = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode = ?",
         [barcode]
       );
 
-      const variantRows1 = await db.getAllAsync(
+      const variantRows1 = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode LIKE ?",
         [`${barcode} :%`]
       );
 
-      const variantRows2 = await db.getAllAsync(
+      const variantRows2 = await getDatabase().getAllAsync(
         "SELECT * FROM product_data WHERE barcode LIKE ?",
         [`${barcode}:%`]
       );
@@ -1751,10 +1750,9 @@ const orderData = {
   itemcode: isManual ? (manualHasBarcode ? item.barcode : "") : (item.code || item.barcode || ""),
   barcode: isManual ? (manualHasBarcode ? item.barcode : "") : (item.barcode || ""),
   quantity: item.quantity,
-  rate: item.cost || 0,
+  rate: (item.eCost && item.eCost !== 0) ? item.eCost : (item.cost || 0),
   mrp: item.bmrp || 0,
   order_date: today,
-  product_name: item.name,
   is_manual_entry: item.isManualEntry || 0,
   text1: item.text1 || item.moreoption || (item.barcode?.includes(':') ? item.barcode.split(':').pop()?.trim() : '') || '',
 };
